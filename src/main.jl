@@ -225,16 +225,46 @@ function setup_and_solve(K,N)
     Analysis
     ==============================================================================#
 
-    u_exact = vec(sin.(2(x .- a*finaltime)))
-    u_calc_final = vec(chi_v * u_hat)
+    #u_exact = vec(sin.(2(x .- a*finaltime)))
+    #u_calc_final = vec(chi_v * u_hat)
+    #L2_err = sqrt( sum( (u_calc_final .- u_exact).^2)/K)
 
-    L2_err = sqrt( sum( (u_calc_final .- u_exact).^2)/K)
+    Np_overint = Np+10
+    r_overint, w_overint = FastGaussQuadrature.gausslobatto(Np_overint)
+    x_overint = ones(length(r_overint)) * VX[va]' + 0.5 * (r_overint .+ 1) * (VX[vb]-VX[va])'
+    chi_overint = vandermonde1D(r_overint,r_basis)
+    W_overint = LinearAlgebra.diagm(w_overint) # diagonal matrix holding quadrature weights
+    J_overint = LinearAlgebra.diagm(ones(size(r_overint))*jacobian)
 
-    Plots.plot(vec(x), [u_calc_final,u_exact])
+    u_exact_overint = sin.(2(x_overint .- a*finaltime))
+    u_calc_final_overint = chi_overint * u_hat
+    u_diff = u_calc_final_overint .- u_exact_overint
+
+    ##################### Check later -- Why do I need to use diag?
+    # I think it's because I'm doing all elements aggregate but should check..
+    L2_error = sqrt(sum(LinearAlgebra.diag((u_diff') * W_overint * J_overint * (u_diff))))
+    #display(L2_error)
+
+    #L2_err = sqrt( sum( (vec(u_calc_final_overint) .- vec(u_exact_overint)).^2)/K)
+    #display(L2_err)
+
+
+    u0_overint = chi_overint * u_hat0
+
+    energy_initial = sum(LinearAlgebra.diag((u0_overint') * W_overint * J_overint * (u0_overint)))
+    #display(energy_initial) #should be pi
+    energy_final_exact = sum(LinearAlgebra.diag((u_exact_overint') * W_overint * J_overint * (u_exact_overint)))
+    #display(energy_final_exact) #should also be pi 
+    energy_final_calc = sum(LinearAlgebra.diag((u_calc_final_overint') * W_overint * J_overint * (u_calc_final_overint)))
+    display(energy_final_calc) #should be something converging to pi
+    energy_change = energy_initial - energy_final_calc
+
+    Plots.plot(vec(x_overint), [vec(u_calc_final_overint),vec(u_exact_overint)])
     pltname = string("plt", K, ".pdf")
     Plots.savefig(pltname)
 
-    return L2_err
+
+    return L2_error, energy_change
 end
 
 #==============================================================================
@@ -248,29 +278,30 @@ Discretize into elements
 function main()
 
     # Polynomial order
-    N = 3
+    N = 3 
 
     K_range = [4 8 16 32 64 128 256]
     L2_err_store = zeros(length(K_range))
+    energy_change_store = zeros(length(K_range))
 
     for i=1:length(K_range)
-
 
         # Number of elements
         K =  K_range[i]
 
-        L2_err_store[i] = setup_and_solve(K,N)
+        L2_err_store[i],energy_change_store[i] = setup_and_solve(K,N)
     end
 
     Printf.@printf("N =  %d \n", N)
 
+    Printf.@printf(" K             Error     Error rate     Energy change \n")
     for i = 1:length(K_range)
             conv_rate = 0.0
             if i>1
                 conv_rate = log(L2_err_store[i]/L2_err_store[i-1]) / log(K_range[i]/K_range[i-1])
             end
 
-            Printf.@printf("    %d    %.6f    %.2f\n", K_range[i], L2_err_store[i], conv_rate)
+            Printf.@printf("%d \t%.16f \t%.2f \t%.16f\n", K_range[i], L2_err_store[i], conv_rate, energy_change_store[i])
     end
 end
 
