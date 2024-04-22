@@ -40,22 +40,56 @@ include("physics.jl")
 include("FE_basis.jl")
 include("FE_mapping.jl")
 
-function calculate_face_term(chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_f)
+function calculate_face_flux_nonconservative(chi_face, u_hat)
+    return 0.5 * (chi_face * u_hat) .* (chi_face * u_hat)
+end
+
+function calculate_face_term(chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_f, alpha_split, u_hat)
 
 
     f_numerical = calculate_numerical_flux(uM_face,uP_face,n_face, a)
 
-    face_term = chi_face' * W_f * n_face * (f_numerical .- f_f)
+    if alpha_split < 1
+        face_flux_nonconservative .+= resize(calculate_face_terms_nonconservative(chi_face, u_hat), size(f_f))
+        face_flux = alpha_split * f_f + (1-alpha_split) * face_flux_nonconservative
+    end
+    
+    face_term = chi_face' * W_f * n_face * (f_numerical .- face_flux)
+
     return face_term
 end
 
-function assemble_residual(u_hat, M_inv, S_xi, Nfaces, chi_f, W_f, nx, a, Pi, chi_v, vmapM, vmapP)
+function calculate_volume_terms(S_xi, f_hat)
+
+    return S_xi * f_hat
+end
+
+function calculate_volume_terms_nonconservative(u, S_noncons, chi_v, u_hat) 
+    #step_1 = chi_v' * LinearAlgebra.diagm(u)
+    #step_2 = step_1 * S_noncons
+    #step_3 = step_2 * u_hat
+    #display(u)
+    #display((S_noncons * u_hat))
+    return chi_v' * ((u) .* (S_noncons * u_hat))
+end
+
+function assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fmask, nx, a, Pi, chi_v, vmapM, vmapP, alpha_split)
     rhs = zeros(Float64, size(u_hat))
 
     u = chi_v * u_hat # modal solution
-    f_hat,f_f = calculate_flux(u, Pi, a)
+    f_hat,f_f = calculate_flux(u, Pi, a, Fmask)
 
     volume_terms = calculate_volume_terms(S_xi, f_hat)
+    #display("conservative:")
+    #display(volume_terms)
+    if alpha_split < 1
+        volume_terms_nonconservative = calculate_volume_terms_nonconservative(u, S_noncons, chi_v, u_hat)
+        #display("nonconservative: ")
+        #display(volume_terms_nonconservative)
+        volume_terms = alpha_split * volume_terms + (1-alpha_split) * volume_terms_nonconservative
+        #display("weighted sum:")
+        #display(volume_terms)
+    end
 
     face_terms = zeros(Float64, size(u_hat))
     uM = reshape(u[vmapM], (Nfaces,(size(u_hat))[2])) # size Nfaces * Nfp=1 x K.
@@ -123,7 +157,6 @@ function setup_and_solve(K,N)
 
     # Define Vandermonde matrices
     chi_v = vandermonde1D(r_volume,r_basis)
-    #invV = inv(V)
     d_chi_v_d_xi = gradvandermonde1D(r_volume,r_basis)
     chi_f = assembleFaceVandermonde1D(r_f_L,r_f_R,r_basis)
     
@@ -138,6 +171,7 @@ function setup_and_solve(K,N)
     M = chi_v' * W * J * chi_v
     M_inv = inv(M)
     S_xi = chi_v' * W * d_chi_v_d_xi
+    S_noncons = W * d_chi_v_d_xi
     M_nojac = chi_v' * W * chi_v
     Pi = inv(M_nojac)*chi_v'*W
 
@@ -185,9 +219,9 @@ function setup_and_solve(K,N)
     ODE Solver 
     ==============================================================================#
 
-    finaltime = π
+    finaltime = 0.3
 
-    u0 = sin.(2x)
+    u0 = sin.(2x) .+ 1.001
     #display(u0)
     u_hat0 = Pi * u0
     a = 2π
@@ -195,6 +229,8 @@ function setup_and_solve(K,N)
     alpha = 0 #upwind
     #alpha = 1 #central
 
+    #alpha_split = 1 #conservative
+    alpha_split = 2.0/3.0 #energy-stable split form
 
     #timestep size according to CFL
     CFL = 0.75
@@ -213,7 +249,7 @@ function setup_and_solve(K,N)
 
             #####assemble residual
 
-            rhs = assemble_residual(u_hat, M_inv, S_xi, Nfaces, chi_f, W_f, nx, a, Pi, chi_v, vmapM, vmapP)
+            rhs = assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fmask, nx, a, Pi, chi_v, vmapM, vmapP, alpha_split)
 
             residual = rk4a[iRKstage] * residual .+ dt * rhs
             u_hat += rk4b[iRKstage] * residual
@@ -224,10 +260,6 @@ function setup_and_solve(K,N)
     #==============================================================================
     Analysis
     ==============================================================================#
-
-    #u_exact = vec(sin.(2(x .- a*finaltime)))
-    #u_calc_final = vec(chi_v * u_hat)
-    #L2_err = sqrt( sum( (u_calc_final .- u_exact).^2)/K)
 
     Np_overint = Np+10
     r_overint, w_overint = FastGaussQuadrature.gausslobatto(Np_overint)
@@ -243,11 +275,6 @@ function setup_and_solve(K,N)
     ##################### Check later -- Why do I need to use diag?
     # I think it's because I'm doing all elements aggregate but should check..
     L2_error = sqrt(sum(LinearAlgebra.diag((u_diff') * W_overint * J_overint * (u_diff))))
-    #display(L2_error)
-
-    #L2_err = sqrt( sum( (vec(u_calc_final_overint) .- vec(u_exact_overint)).^2)/K)
-    #display(L2_err)
-
 
     u0_overint = chi_overint * u_hat0
 
@@ -257,7 +284,7 @@ function setup_and_solve(K,N)
     #display(energy_final_exact) #should also be pi 
     energy_final_calc = sum(LinearAlgebra.diag((u_calc_final_overint') * W_overint * J_overint * (u_calc_final_overint)))
     display(energy_final_calc) #should be something converging to pi
-    energy_change = energy_initial - energy_final_calc
+    energy_change = energy_final_calc - energy_initial
 
     Plots.plot(vec(x_overint), [vec(u_calc_final_overint),vec(u_exact_overint)])
     pltname = string("plt", K, ".pdf")

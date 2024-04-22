@@ -96,9 +96,3 @@ function BuildMaps1D(EtoE, EtoF, K, Np, Nfp, Nfaces, Fmask,x)
 
     return (vmapM, vmapP,vmapB,mapB,mapI,mapO,vmapI,vmapO)
 end
-
-function calculate_volume_terms(S_xi, f_hat)
-
-    return S_xi * f_hat
-end
-
