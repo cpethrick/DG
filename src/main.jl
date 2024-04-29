@@ -40,21 +40,20 @@ include("physics.jl")
 include("FE_basis.jl")
 include("FE_mapping.jl")
 
-function calculate_face_flux_nonconservative(chi_face, u_hat)
-    return 0.5 * (chi_face * u_hat) .* (chi_face * u_hat)
-end
-
 function calculate_face_term(chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_f, alpha_split, u_hat)
 
 
     f_numerical = calculate_numerical_flux(uM_face,uP_face,n_face, a)
-
-    if alpha_split < 1
-        face_flux_nonconservative .+= resize(calculate_face_terms_nonconservative(chi_face, u_hat), size(f_f))
-        face_flux = alpha_split * f_f + (1-alpha_split) * face_flux_nonconservative
-    end
+    face_flux = f_f # For now, don't use face splitting and instead assume we always use collocated GLL nodes.
+    #face_flux = alpha_split * f_f
+    #if alpha_split < 1
+    #    face_flux_nonconservative = reshape(calculate_face_terms_nonconservative(chi_face, u_hat), size(f_f))
+    #    face_flux .+= (1-alpha_split) * face_flux_nonconservative
+    #end
     
     face_term = chi_face' * W_f * n_face * (f_numerical .- face_flux)
+    #display("face term")
+    #display(face_term)
 
     return face_term
 end
@@ -73,21 +72,23 @@ function calculate_volume_terms_nonconservative(u, S_noncons, chi_v, u_hat)
     return chi_v' * ((u) .* (S_noncons * u_hat))
 end
 
-function assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fmask, nx, a, Pi, chi_v, vmapM, vmapP, alpha_split)
+function assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fmask, nx, a, Pi, chi_v, vmapM, vmapP, alpha_split, x, t)
     rhs = zeros(Float64, size(u_hat))
 
-    u = chi_v * u_hat # modal solution
+    u = chi_v * u_hat # nodal solution
+    #display("u")
+    #display(u)
     f_hat,f_f = calculate_flux(u, Pi, a, Fmask)
 
     volume_terms = calculate_volume_terms(S_xi, f_hat)
-    #display("conservative:")
+    #display("volume terms cons.")
     #display(volume_terms)
     if alpha_split < 1
         volume_terms_nonconservative = calculate_volume_terms_nonconservative(u, S_noncons, chi_v, u_hat)
-        #display("nonconservative: ")
+        #display("volume terms noncons.")
         #display(volume_terms_nonconservative)
         volume_terms = alpha_split * volume_terms + (1-alpha_split) * volume_terms_nonconservative
-        #display("weighted sum:")
+        #display("volume terms w. avg.")
         #display(volume_terms)
     end
 
@@ -99,17 +100,28 @@ function assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fm
         # hard code normal for now
         if f == 1
             n_face = -1
+            #display("left face")
         else
             n_face = 1
+            #display("right face")
         end
         uM_face = reshape(uM[f,:],(1,(size(u_hat))[2])) # size 1 x K
+        #display("u-")
+        #display(uM_face)
         uP_face = reshape(uP[f,:],(1,(size(u_hat))[2]))
+        #display("u+")
+        #display(uP_face)
         f_face = reshape(f_f[f,:],(1,(size(u_hat))[2]))
+        #display("f_face")
+        #display(f_face)
         
-        face_terms .+= calculate_face_term(chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_face)
+        face_terms .+= calculate_face_term(chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_face, alpha_split, u_hat)
     end
 
-    rhs = -1 * M_inv * ( volume_terms .+ face_terms)
+    source_terms = calculate_source_terms(x,t)
+
+    rhs = -1* M_inv * (volume_terms .+ face_terms) + source_terms
+    #display(rhs)
     return rhs
 end
 
@@ -119,7 +131,9 @@ function setup_and_solve(K,N)
     
     # Limits of computational domain
     x_Llim = 0.0
-    x_Rlim = 2.0*π
+    x_Rlim = 2.0
+    #display("dx")
+    #display(x_Rlim / (K * (N+1)))
 
     # Array of points defining the extremes of each element
     VX = range(x_Llim,x_Rlim, K+1) |> collect
@@ -145,11 +159,14 @@ function setup_and_solve(K,N)
 
     # Solution nodes - GLL
     # must choose GLL nodes unless I modify the selection of uP and uP for numerical flux.
+    # Also will need to change splitting on the face.
     r_volume,w = FastGaussQuadrature.gausslobatto(Np)
     #r will be size N+1
 
-    # Integration nodes - GL
-    r_basis,w_basis=FastGaussQuadrature.gaussjacobi(Np,0.0,0.0)
+    # Basis function nodes - GLL
+    # Note: must choose GLL due to face flux splitting.
+    #r_basis,w_basis=FastGaussQuadrature.gaussjacobi(Np,0.0,0.0)
+    r_basis,w_basis=FastGaussQuadrature.gausslobatto(Np)
 
     #reference coordinates of L and R faces
     r_f_L::Float64 = -1
@@ -214,28 +231,34 @@ function setup_and_solve(K,N)
         2526269341429.0/6820363962896.0,
         2006345519317.0/3224310063776.0,
         2802321613138.0/2924317926251.0];
+    nRKStage=5
+    #===
+    rk4a=[0]
+    rk4b=[1]
+    rk4c=[0]
+    nRKStage=1
+    ====#
 
     #==============================================================================
     ODE Solver 
     ==============================================================================#
 
-    finaltime = 0.3
+    finaltime = 1.0
 
-    u0 = sin.(2x) .+ 1.001
+    #u0 = sin.(π * x) .+ 0.01
+    u0 = cos.(π * x)
     #display(u0)
     u_hat0 = Pi * u0
     a = 2π
 
-    alpha = 0 #upwind
-    #alpha = 1 #central
-
-    #alpha_split = 1 #conservative
+    #alpha_split = 1 #Discretization of conservative form
     alpha_split = 2.0/3.0 #energy-stable split form
 
     #timestep size according to CFL
-    CFL = 0.75
-    xmin = minimum(abs.(x[1,:] .- x[2,:]))
-    dt = abs(CFL / a * xmin /2)
+    #CFL = 0.75
+    #xmin = minimum(abs.(x[1,:] .- x[2,:]))
+    #dt = abs(CFL / a * xmin /2)
+    dt = 1E-4
     Nsteps::Int64 = ceil(finaltime/dt)
     dt = finaltime/Nsteps
 
@@ -244,12 +267,12 @@ function setup_and_solve(K,N)
     residual = zeros(Np, K)
     rhs = zeros(Np, K)
     for tstep = 1:Nsteps
-        for iRKstage = 1:5
+        for iRKstage = 1:nRKStage
             rktime = current_time + rk4c[iRKstage] * dt
 
             #####assemble residual
 
-            rhs = assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fmask, nx, a, Pi, chi_v, vmapM, vmapP, alpha_split)
+            rhs = assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fmask, nx, a, Pi, chi_v, vmapM, vmapP, alpha_split,x,rktime)
 
             residual = rk4a[iRKstage] * residual .+ dt * rhs
             u_hat += rk4b[iRKstage] * residual
@@ -268,7 +291,8 @@ function setup_and_solve(K,N)
     W_overint = LinearAlgebra.diagm(w_overint) # diagonal matrix holding quadrature weights
     J_overint = LinearAlgebra.diagm(ones(size(r_overint))*jacobian)
 
-    u_exact_overint = sin.(2(x_overint .- a*finaltime))
+    #u_exact_overint = sin.(2(x_overint .- a*finaltime))
+    u_exact_overint = cos.(π*(x_overint.-finaltime))
     u_calc_final_overint = chi_overint * u_hat
     u_diff = u_calc_final_overint .- u_exact_overint
 
@@ -283,15 +307,16 @@ function setup_and_solve(K,N)
     energy_final_exact = sum(LinearAlgebra.diag((u_exact_overint') * W_overint * J_overint * (u_exact_overint)))
     #display(energy_final_exact) #should also be pi 
     energy_final_calc = sum(LinearAlgebra.diag((u_calc_final_overint') * W_overint * J_overint * (u_calc_final_overint)))
-    display(energy_final_calc) #should be something converging to pi
+    #display(energy_final_calc) #should be something converging to pi
     energy_change = energy_final_calc - energy_initial
 
-    Plots.plot(vec(x_overint), [vec(u_calc_final_overint),vec(u_exact_overint)])
+    Plots.vline(VX, color="lightgray", linewidth=0.75, label="grid")
+    Plots.plot!(vec(x_overint), [vec(u_exact_overint), vec(u_calc_final_overint)], label=["exact" "calculated"])
     pltname = string("plt", K, ".pdf")
     Plots.savefig(pltname)
 
 
-    return L2_error, energy_change
+    return L2_error, energy_change#, solution
 end
 
 #==============================================================================
@@ -305,9 +330,15 @@ Discretize into elements
 function main()
 
     # Polynomial order
-    N = 3 
+    N = 4 
 
-    K_range = [4 8 16 32 64 128 256]
+    K_range = [4 8 16 32 64 128 256]# 512 1024]
+    #K_range = [8]
+    #K_fine_grid = 1024 #fine grid for getting reference solution
+
+    #_,_,reference_fine_grid_solution = setup_and_solve(K_fine_grid,N)
+    
+
     L2_err_store = zeros(length(K_range))
     energy_change_store = zeros(length(K_range))
 
