@@ -43,15 +43,16 @@ include("FE_mapping.jl")
 function calculate_face_term(chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_f, alpha_split, u_hat)
 
 
-    f_numerical = calculate_numerical_flux(uM_face,uP_face,n_face, a)
-    face_flux = f_f # For now, don't use face splitting and instead assume we always use collocated GLL nodes.
-    #face_flux = alpha_split * f_f
-    #if alpha_split < 1
-    #    face_flux_nonconservative = reshape(calculate_face_terms_nonconservative(chi_face, u_hat), size(f_f))
-    #    face_flux .+= (1-alpha_split) * face_flux_nonconservative
-    #end
+    f_numerical_dot_n = calculate_numerical_flux(uM_face,uP_face,n_face, a)
+    face_flux_dot_n = f_f # For now, don't use face splitting and instead assume we always use collocated GLL nodes.
+    face_flux_dot_n = alpha_split * f_f
+    if alpha_split < 1
+        face_flux_nonconservative = reshape(calculate_face_terms_nonconservative(chi_face, u_hat), size(f_f))
+        face_flux_dot_n .+= (1-alpha_split) * face_flux_nonconservative
+    end
+    face_flux_dot_n .*= n_face
     
-    face_term = chi_face' * W_f * n_face * (f_numerical .- face_flux)
+    face_term = chi_face' * W_f * (f_numerical_dot_n .- face_flux_dot_n)
     #display("face term")
     #display(face_term)
 
@@ -216,28 +217,30 @@ function setup_and_solve(K,N)
     RK scheme
     ==============================================================================#
 
-    rk4a = [ 0.0,
-        -567301805773.0/1357537059087.0,
-        -2404267990393.0/2016746695238.0,
-        -3550918686646.0/2091501179385.0,
-        -1275806237668.0/842570457699.0];
-    rk4b = [ 1432997174477.0/9575080441755.0,
-        5161836677717.0/13612068292357.0,
-        1720146321549.0/2090206949498.0,
-        3134564353537.0/4481467310338.0,
-        2277821191437.0/14882151754819.0];
-    rk4c = [ 0.0,
-        1432997174477.0/9575080441755.0,
-        2526269341429.0/6820363962896.0,
-        2006345519317.0/3224310063776.0,
-        2802321613138.0/2924317926251.0];
-    nRKStage=5
-    #===
-    rk4a=[0]
-    rk4b=[1]
-    rk4c=[0]
-    nRKStage=1
-    ====#
+    if true 
+        rk4a = [ 0.0,
+            -567301805773.0/1357537059087.0,
+            -2404267990393.0/2016746695238.0,
+            -3550918686646.0/2091501179385.0,
+            -1275806237668.0/842570457699.0];
+        rk4b = [ 1432997174477.0/9575080441755.0,
+            5161836677717.0/13612068292357.0,
+            1720146321549.0/2090206949498.0,
+            3134564353537.0/4481467310338.0,
+            2277821191437.0/14882151754819.0];
+        rk4c = [ 0.0,
+            1432997174477.0/9575080441755.0,
+            2526269341429.0/6820363962896.0,
+            2006345519317.0/3224310063776.0,
+            2802321613138.0/2924317926251.0];
+        nRKStage=5
+    end
+    if false
+        rk4a=[0]
+        rk4b=[1]
+        rk4c=[0]
+        nRKStage=1
+    end
 
     #==============================================================================
     ODE Solver 
@@ -255,7 +258,7 @@ function setup_and_solve(K,N)
     alpha_split = 2.0/3.0 #energy-stable split form
 
     #timestep size according to CFL
-    #CFL = 0.75
+    #CFL = 0.01
     #xmin = minimum(abs.(x[1,:] .- x[2,:]))
     #dt = abs(CFL / a * xmin /2)
     dt = 1E-4
@@ -278,6 +281,21 @@ function setup_and_solve(K,N)
             u_hat += rk4b[iRKstage] * residual
         end
         current_time += dt
+        
+    #    Np_overint = Np+10
+    #    r_overint, w_overint = FastGaussQuadrature.gausslobatto(Np_overint)
+    #    x_overint = ones(length(r_overint)) * VX[va]' + 0.5 * (r_overint .+ 1) * (VX[vb]-VX[va])'
+    #    chi_overint = vandermonde1D(r_overint,r_basis)
+    #    W_overint = LinearAlgebra.diagm(w_overint) # diagonal matrix holding quadrature weights
+    #    J_overint = LinearAlgebra.diagm(ones(size(r_overint))*jacobian)
+
+    #    #u_exact_overint = sin.(2(x_overint .- a*finaltime))
+    #    u_calc_overint = chi_overint * u_hat
+    #    Plots.vline(VX, color="lightgray", linewidth=0.75, label="grid")
+    #    Plots.plot(vec(x_overint), [vec(u_calc_overint)], label=["calculated"])
+    #    pltname = string("plt", K, ".pdf")
+    #    Plots.savefig(pltname)
+    #    sleep(0.02)
     end
 
     #==============================================================================
@@ -302,12 +320,10 @@ function setup_and_solve(K,N)
 
     u0_overint = chi_overint * u_hat0
 
-    energy_initial = sum(LinearAlgebra.diag((u0_overint') * W_overint * J_overint * (u0_overint)))
-    #display(energy_initial) #should be pi
-    energy_final_exact = sum(LinearAlgebra.diag((u_exact_overint') * W_overint * J_overint * (u_exact_overint)))
-    #display(energy_final_exact) #should also be pi 
-    energy_final_calc = sum(LinearAlgebra.diag((u_calc_final_overint') * W_overint * J_overint * (u_calc_final_overint)))
-    #display(energy_final_calc) #should be something converging to pi
+    # use non-overintegrated qties to calculate energy difference
+    energy_initial = sum(LinearAlgebra.diag((u0') * W * J * (u0)))
+    u_final = chi_v * u_hat
+    energy_final_calc =  sum(LinearAlgebra.diag((u_final') * W * J * (u_final)))
     energy_change = energy_final_calc - energy_initial
 
     Plots.vline(VX, color="lightgray", linewidth=0.75, label="grid")
@@ -333,7 +349,7 @@ function main()
     N = 4 
 
     K_range = [4 8 16 32 64 128 256]# 512 1024]
-    #K_range = [8]
+    #K_range = [4]
     #K_fine_grid = 1024 #fine grid for getting reference solution
 
     #_,_,reference_fine_grid_solution = setup_and_solve(K_fine_grid,N)
@@ -350,9 +366,9 @@ function main()
         L2_err_store[i],energy_change_store[i] = setup_and_solve(K,N)
     end
 
-    Printf.@printf("N =  %d \n", N)
+    Printf.@printf("P =  %d \n", N)
 
-    Printf.@printf(" K             Error     Error rate     Energy change \n")
+    Printf.@printf("n cells           Error     Error rate     Energy change \n")
     for i = 1:length(K_range)
             conv_rate = 0.0
             if i>1
