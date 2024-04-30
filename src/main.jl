@@ -246,10 +246,10 @@ function setup_and_solve(K,N)
     ODE Solver 
     ==============================================================================#
 
-    finaltime = 1.0
+    finaltime = 4.0
 
-    #u0 = sin.(π * x) .+ 0.01
-    u0 = cos.(π * x)
+    u0 = sin.(π * x) .+ 0.01
+    #u0 = cos.(π * x)
     #display(u0)
     u_hat0 = Pi * u0
     a = 2π

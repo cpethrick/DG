@@ -5,7 +5,7 @@
 
 function calculate_numerical_flux(uM_face,uP_face,n_face,a)
 
-    LxF = true 
+    LxF =  false
     #alpha = 0 #upwind
     #alpha = 1 #central
     #
@@ -57,6 +57,6 @@ function calculate_face_terms_nonconservative(chi_face, u_hat)
 end
 
 function calculate_source_terms(x,t)
-    #return zeros(size(x)) 
-    return π*sin.(π*(x .- t)).*(1 .- cos.(π*(x .- t)))
+    return zeros(size(x)) 
+    #return π*sin.(π*(x .- t)).*(1 .- cos.(π*(x .- t)))
 end
