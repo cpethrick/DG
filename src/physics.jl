@@ -3,6 +3,12 @@
 # Currently solves Linear Advection.
 ==============================================================================#
 
+struct PhysicsAndFluxParams
+    numerical_flux_type::AbstractString
+    pde_type::AbstractString
+    include_source::Bool
+end
+
 function calculate_numerical_flux(uM_face,uP_face,n_face,a)
 
     LxF =  false
@@ -57,6 +63,6 @@ function calculate_face_terms_nonconservative(chi_face, u_hat)
 end
 
 function calculate_source_terms(x,t)
-    return zeros(size(x)) 
-    #return π*sin.(π*(x .- t)).*(1 .- cos.(π*(x .- t)))
+    #return zeros(size(x)) 
+    return π*sin.(π*(x .- t)).*(1 .- cos.(π*(x .- t)))
 end

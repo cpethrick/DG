@@ -39,106 +39,26 @@ Load external files
 include("physics.jl")
 include("FE_basis.jl")
 include("FE_mapping.jl")
+include("build_dg_residual.jl")
+include("set_up_dg.jl")
 
-function calculate_face_term(chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_f, alpha_split, u_hat)
-
-
-    f_numerical_dot_n = calculate_numerical_flux(uM_face,uP_face,n_face, a)
-    face_flux_dot_n = f_f # For now, don't use face splitting and instead assume we always use collocated GLL nodes.
-    face_flux_dot_n = alpha_split * f_f
-    if alpha_split < 1
-        face_flux_nonconservative = reshape(calculate_face_terms_nonconservative(chi_face, u_hat), size(f_f))
-        face_flux_dot_n .+= (1-alpha_split) * face_flux_nonconservative
-    end
-    face_flux_dot_n .*= n_face
-    
-    face_term = chi_face' * W_f * (f_numerical_dot_n .- face_flux_dot_n)
-    #display("face term")
-    #display(face_term)
-
-    return face_term
-end
-
-function calculate_volume_terms(S_xi, f_hat)
-
-    return S_xi * f_hat
-end
-
-function calculate_volume_terms_nonconservative(u, S_noncons, chi_v, u_hat) 
-    return chi_v' * ((u) .* (S_noncons * u_hat))
-end
-
-function assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fmask, nx, a, Pi, chi_v, vmapM, vmapP, alpha_split, x, t)
-    rhs = zeros(Float64, size(u_hat))
-
-    u = chi_v * u_hat # nodal solution
-    #display("u")
-    #display(u)
-    f_hat,f_f = calculate_flux(u, Pi, a, Fmask)
-
-    volume_terms = calculate_volume_terms(S_xi, f_hat)
-    #display("volume terms cons.")
-    #display(volume_terms)
-    if alpha_split < 1
-        volume_terms_nonconservative = calculate_volume_terms_nonconservative(u, S_noncons, chi_v, u_hat)
-        #display("volume terms noncons.")
-        #display(volume_terms_nonconservative)
-        volume_terms = alpha_split * volume_terms + (1-alpha_split) * volume_terms_nonconservative
-        #display("volume terms w. avg.")
-        #display(volume_terms)
-    end
-
-    face_terms = zeros(Float64, size(u_hat))
-    uM = reshape(u[vmapM], (Nfaces,(size(u_hat))[2])) # size Nfaces * Nfp=1 x N_elem.
-    uP = reshape(u[vmapP], (Nfaces,(size(u_hat))[2])) # size Nfaces * Nfp=1 x N_elem.
-    for f in 1:Nfaces
-        chi_face = chi_f[:,:,f]
-        # hard code normal for now
-        if f == 1
-            n_face = -1
-            #display("left face")
-        else
-            n_face = 1
-            #display("right face")
-        end
-        uM_face = reshape(uM[f,:],(1,(size(u_hat))[2])) # size 1 x N_elem
-        #display("u-")
-        #display(uM_face)
-        uP_face = reshape(uP[f,:],(1,(size(u_hat))[2]))
-        #display("u+")
-        #display(uP_face)
-        f_face = reshape(f_f[f,:],(1,(size(u_hat))[2]))
-        #display("f_face")
-        #display(f_face)
-        
-        face_terms .+= calculate_face_term(chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_face, alpha_split, u_hat)
-    end
-
-    source_terms = calculate_source_terms(x,t)
-
-    rhs = -1* M_inv * (volume_terms .+ face_terms) + source_terms
-    #display(rhs)
-    return rhs
-end
-
-function setup_and_solve(N_elem,N)
+function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
     # N_elem is number of elements
     # N is poly order
     
     # Limits of computational domain
     x_Llim = 0.0
     x_Rlim = 2.0
-    #display("dx")
-    #display(x_Rlim / (N_elem * (N+1)))
 
+    dg = init_DG(P, 1, N_elem, [x_Llim,x_Rlim])
 
     #==============================================================================
     Start Up
     ==============================================================================#
 
-
+#==
     # Number of local grid points
-    Np = N+1
+    Np = P+1
 
     # Number of faces
     Nfaces = 2
@@ -150,11 +70,10 @@ function setup_and_solve(N_elem,N)
     
     # Array of points defining the extremes of each element
     VX = range(x_Llim,x_Rlim, N_elem+1) |> collect
-    #display(VX)
+    display(VX)
 
     # Vertex ID of left (1st col) and right (2nd col) extreme of element
     EtoV = collect(hcat((1:N_elem), 2:N_elem+1))
-    #display(EtoV)
     
     # Index is global ID, values are local IDs
     GIDtoLID = mod.(0:(Np*N_elem.-1),Np).+1
@@ -162,13 +81,11 @@ function setup_and_solve(N_elem,N)
     # Index of first dimension is element ID, index of second dimension is element ID
     # values are global ID
     EIDLIDtoGID = reshape(1:Np*N_elem, (Np,N_elem))' #note transpose
-    #display(EIDLIDtoGID)
 
     # Index is local ID, value is local face ID
     # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
     LIDtoLFID = zeros(Int64,Np)
     LIDtoLFID[[1,Np]] .= 1:Nfaces
-    #display(LIDtoLFID)
 
     LFIDtoNormal = [-1,1] # normal of left face is 1, normal of right face is 1.
     
@@ -177,7 +94,7 @@ function setup_and_solve(N_elem,N)
     # values are global ID of the exterior node associated with the LID. Zero is not a face.
     # Possible future improvement - add some sort of numbering for the face nodes such that we store fewer zeros.
     EIDLIDtoGIDofexterior = zeros(Int64,N_elem,Np)
-    EIDLIDtoGIDofexterior[:,1] = (1:N_elem)*Np
+    EIDLIDtoGIDofexterior[:,1] = (0:N_elem-1)*Np
     EIDLIDtoGIDofexterior[:,Np] = (1:N_elem)*Np .+ 1  
     #manually assign periodic boundaries
     EIDLIDtoGIDofexterior[1,1]= N_elem*Np
@@ -251,7 +168,7 @@ function setup_and_solve(N_elem,N)
 
 
     #vmapM,vmapP,vmapB,mapB,mapI,mapO,vmapI,vmapO = BuildMaps1D(EtoE, EtoF, N_elem, length(r_volume), Nfp, Nfaces, Fmask,x)
-
+==#
     #==============================================================================
     RK scheme
     ==============================================================================#
@@ -288,23 +205,19 @@ function setup_and_solve(N_elem,N)
     finaltime = 1.0
 
     #u0 = sin.(π * x) .+ 0.01
-    u0 = cos.(π * x_vector)
-    u_old = cos.(π * x)
-    #display(u0)
-    #display(u_old)
-    u_hat0 = zeros(N_elem*Np)
-    u_local = zeros(Np)
+    u0 = cos.(π * dg.x)
+    #u_old = cos.(π * x)
+    u_hat0 = zeros(N_elem*dg.Np)
+    u_local = zeros(dg.Np)
     for ielem = 1:N_elem
-        for inode = 1:Np
-            u_local[inode] = u0[EIDLIDtoGID[ielem,inode]]
+        for inode = 1:dg.Np
+            u_local[inode] = u0[dg.EIDLIDtoGID[ielem,inode]]
         end
-        u_hat_local = Pi*u_local
+        u_hat_local = dg.Pi*u_local
         display(u_hat_local)
-        u_hat0[EIDLIDtoGID[ielem,:]] = u_hat_local
+        u_hat0[dg.EIDLIDtoGID[ielem,:]] = u_hat_local
         display(u_hat0)
     end
-    #u_hat0 = Pi * u_old
-    #display(u_hat0)
     a = 2π
 
     #alpha_split = 1 #Discretization of conservative form
@@ -320,16 +233,15 @@ function setup_and_solve(N_elem,N)
 
     u_hat = u_hat0
     current_time = 0
-    residual = zeros(Np, N_elem)
-    rhs = zeros(Np, N_elem)
-    #===
+    residual = zeros(dg.Np, N_elem)
+    rhs = zeros(dg.Np, N_elem)
     for tstep = 1:Nsteps
         for iRKstage = 1:nRKStage
             rktime = current_time + rk4c[iRKstage] * dt
 
             #####assemble residual
 
-            rhs = assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fmask, nx, a, Pi, chi_v, vmapM, vmapP, alpha_split,x,rktime)
+            rhs = assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fmask, nx, a, Pi, chi_v, vmapM, vmapP, alpha_split,x,rktime, param)
 
             residual = rk4a[iRKstage] * residual .+ dt * rhs
             u_hat += rk4b[iRKstage] * residual
@@ -337,7 +249,6 @@ function setup_and_solve(N_elem,N)
         current_time += dt
         
     end
-    ===#
     #==============================================================================
     Analysis
     ==============================================================================#
@@ -386,7 +297,7 @@ Discretize into elements
 function main()
 
     # Polynomial order
-    N = 4 
+    P = 4 
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
     N_elem_range = [4]
@@ -394,6 +305,7 @@ function main()
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
     
+    param = PhysicsAndFluxParams("split", "burgers", true)
 
     L2_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))
@@ -403,7 +315,7 @@ function main()
         # Number of elements
         N_elem =  N_elem_range[i]
 
-        L2_err_store[i],energy_change_store[i] = setup_and_solve(N_elem,N)
+        L2_err_store[i],energy_change_store[i] = setup_and_solve(N_elem,P,param)
     end
 
     Printf.@printf("P =  %d \n", N)
