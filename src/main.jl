@@ -65,11 +65,6 @@ function calculate_volume_terms(S_xi, f_hat)
 end
 
 function calculate_volume_terms_nonconservative(u, S_noncons, chi_v, u_hat) 
-    #step_1 = chi_v' * LinearAlgebra.diagm(u)
-    #step_2 = step_1 * S_noncons
-    #step_3 = step_2 * u_hat
-    #display(u)
-    #display((S_noncons * u_hat))
     return chi_v' * ((u) .* (S_noncons * u_hat))
 end
 
@@ -94,8 +89,8 @@ function assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fm
     end
 
     face_terms = zeros(Float64, size(u_hat))
-    uM = reshape(u[vmapM], (Nfaces,(size(u_hat))[2])) # size Nfaces * Nfp=1 x K.
-    uP = reshape(u[vmapP], (Nfaces,(size(u_hat))[2])) # size Nfaces * Nfp=1 x K.
+    uM = reshape(u[vmapM], (Nfaces,(size(u_hat))[2])) # size Nfaces * Nfp=1 x N_elem.
+    uP = reshape(u[vmapP], (Nfaces,(size(u_hat))[2])) # size Nfaces * Nfp=1 x N_elem.
     for f in 1:Nfaces
         chi_face = chi_f[:,:,f]
         # hard code normal for now
@@ -106,7 +101,7 @@ function assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fm
             n_face = 1
             #display("right face")
         end
-        uM_face = reshape(uM[f,:],(1,(size(u_hat))[2])) # size 1 x K
+        uM_face = reshape(uM[f,:],(1,(size(u_hat))[2])) # size 1 x N_elem
         #display("u-")
         #display(uM_face)
         uP_face = reshape(uP[f,:],(1,(size(u_hat))[2]))
@@ -126,21 +121,16 @@ function assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fm
     return rhs
 end
 
-function setup_and_solve(K,N)
-    # K is number of elements
+function setup_and_solve(N_elem,N)
+    # N_elem is number of elements
     # N is poly order
     
     # Limits of computational domain
     x_Llim = 0.0
     x_Rlim = 2.0
     #display("dx")
-    #display(x_Rlim / (K * (N+1)))
+    #display(x_Rlim / (N_elem * (N+1)))
 
-    # Array of points defining the extremes of each element
-    VX = range(x_Llim,x_Rlim, K+1) |> collect
-
-    #Coordinates of vertices of each element
-    EtoV = collect(hcat((1:K), 2:K+1))
 
     #==============================================================================
     Start Up
@@ -157,6 +147,42 @@ function setup_and_solve(K,N)
 
     # Number of grid points on faces
     Nfp = 1
+    
+    # Array of points defining the extremes of each element
+    VX = range(x_Llim,x_Rlim, N_elem+1) |> collect
+    #display(VX)
+
+    # Vertex ID of left (1st col) and right (2nd col) extreme of element
+    EtoV = collect(hcat((1:N_elem), 2:N_elem+1))
+    #display(EtoV)
+    
+    # Index is global ID, values are local IDs
+    GIDtoLID = mod.(0:(Np*N_elem.-1),Np).+1
+    
+    # Index of first dimension is element ID, index of second dimension is element ID
+    # values are global ID
+    EIDLIDtoGID = reshape(1:Np*N_elem, (Np,N_elem))' #note transpose
+    #display(EIDLIDtoGID)
+
+    # Index is local ID, value is local face ID
+    # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
+    LIDtoLFID = zeros(Int64,Np)
+    LIDtoLFID[[1,Np]] .= 1:Nfaces
+    #display(LIDtoLFID)
+
+    LFIDtoNormal = [-1,1] # normal of left face is 1, normal of right face is 1.
+    
+    # Index of first dim is element ID, index of second dimension is LID of an EDGE node.
+    # 1D case: Nfp = 1.
+    # values are global ID of the exterior node associated with the LID. Zero is not a face.
+    # Possible future improvement - add some sort of numbering for the face nodes such that we store fewer zeros.
+    EIDLIDtoGIDofexterior = zeros(Int64,N_elem,Np)
+    EIDLIDtoGIDofexterior[:,1] = (1:N_elem)*Np
+    EIDLIDtoGIDofexterior[:,Np] = (1:N_elem)*Np .+ 1  
+    #manually assign periodic boundaries
+    EIDLIDtoGIDofexterior[1,1]= N_elem*Np
+    EIDLIDtoGIDofexterior[N_elem,Np] = 1
+    #display(EIDLIDtoGIDofexterior)
 
     # Solution nodes - GLL
     # must choose GLL nodes unless I modify the selection of uP and uP for numerical flux.
@@ -186,6 +212,7 @@ function setup_and_solve(K,N)
     J = LinearAlgebra.diagm(ones(size(r_volume))*jacobian)
 
     # Mass and stiffness matrices as defined Eq. 9.5 Cicchino 2022
+    # All defined on a single element.
     M = chi_v' * W * J * chi_v
     M_inv = inv(M)
     S_xi = chi_v' * W * d_chi_v_d_xi
@@ -197,21 +224,33 @@ function setup_and_solve(K,N)
     va = EtoV[:,1]
     vb = EtoV[:,2]
     x = ones(length(r_volume)) * VX[va]' + 0.5 * (r_volume .+ 1) * (VX[vb]-VX[va])'
+    #display(x)
+    x_vector = ones(N_elem*Np)
+    for i_elem = 1:N_elem
+        left_vertex_ID = EtoV[i_elem,1]
+        right_vertex_ID = EtoV[i_elem,2]
+        left_vertex_coord_phys = VX[left_vertex_ID]
+        right_vertex_coord_phys = VX[right_vertex_ID]
+        dx_local = right_vertex_coord_phys - left_vertex_coord_phys
+        x_local = left_vertex_coord_phys .+ 0.5 * (r_volume .+ 1) * dx_local
+        x_vector[EIDLIDtoGID[i_elem,1:Np]] .= x_local
+    end
+    display(x_vector) # matches old x.
 
     # Masks for edge nodes
-    fmask1 = findall( <(NODETOL), abs.(r_volume.+1))
-    fmask2 = findall( <(NODETOL), abs.(r_volume.-1))
-    Fmask = hcat(fmask1, fmask2)
-    Fx = x[Fmask[:],:]
+    #fmask1 = findall( <(NODETOL), abs.(r_volume.+1))
+    #fmask2 = findall( <(NODETOL), abs.(r_volume.-1))
+    #Fmask = hcat(fmask1, fmask2)
+    #Fx = x[Fmask[:],:]
 
     # Surface normals
-    nx = Normals1D(Nfp, Nfaces, K)
+    #nx = Normals1D(Nfp, Nfaces, N_elem)
 
     # Connectivity matrix
-    EtoE, EtoF = Connect1D(EtoV, Nfaces, K)
+    #EtoE, EtoF = Connect1D(EtoV, Nfaces, N_elem)
 
 
-    vmapM,vmapP,vmapB,mapB,mapI,mapO,vmapI,vmapO = BuildMaps1D(EtoE, EtoF, K, length(r_volume), Nfp, Nfaces, Fmask,x)
+    #vmapM,vmapP,vmapB,mapB,mapI,mapO,vmapI,vmapO = BuildMaps1D(EtoE, EtoF, N_elem, length(r_volume), Nfp, Nfaces, Fmask,x)
 
     #==============================================================================
     RK scheme
@@ -246,12 +285,26 @@ function setup_and_solve(K,N)
     ODE Solver 
     ==============================================================================#
 
-    finaltime = 4.0
+    finaltime = 1.0
 
-    u0 = sin.(π * x) .+ 0.01
-    #u0 = cos.(π * x)
+    #u0 = sin.(π * x) .+ 0.01
+    u0 = cos.(π * x_vector)
+    u_old = cos.(π * x)
     #display(u0)
-    u_hat0 = Pi * u0
+    #display(u_old)
+    u_hat0 = zeros(N_elem*Np)
+    u_local = zeros(Np)
+    for ielem = 1:N_elem
+        for inode = 1:Np
+            u_local[inode] = u0[EIDLIDtoGID[ielem,inode]]
+        end
+        u_hat_local = Pi*u_local
+        display(u_hat_local)
+        u_hat0[EIDLIDtoGID[ielem,:]] = u_hat_local
+        display(u_hat0)
+    end
+    #u_hat0 = Pi * u_old
+    #display(u_hat0)
     a = 2π
 
     #alpha_split = 1 #Discretization of conservative form
@@ -267,8 +320,9 @@ function setup_and_solve(K,N)
 
     u_hat = u_hat0
     current_time = 0
-    residual = zeros(Np, K)
-    rhs = zeros(Np, K)
+    residual = zeros(Np, N_elem)
+    rhs = zeros(Np, N_elem)
+    #===
     for tstep = 1:Nsteps
         for iRKstage = 1:nRKStage
             rktime = current_time + rk4c[iRKstage] * dt
@@ -282,22 +336,8 @@ function setup_and_solve(K,N)
         end
         current_time += dt
         
-    #    Np_overint = Np+10
-    #    r_overint, w_overint = FastGaussQuadrature.gausslobatto(Np_overint)
-    #    x_overint = ones(length(r_overint)) * VX[va]' + 0.5 * (r_overint .+ 1) * (VX[vb]-VX[va])'
-    #    chi_overint = vandermonde1D(r_overint,r_basis)
-    #    W_overint = LinearAlgebra.diagm(w_overint) # diagonal matrix holding quadrature weights
-    #    J_overint = LinearAlgebra.diagm(ones(size(r_overint))*jacobian)
-
-    #    #u_exact_overint = sin.(2(x_overint .- a*finaltime))
-    #    u_calc_overint = chi_overint * u_hat
-    #    Plots.vline(VX, color="lightgray", linewidth=0.75, label="grid")
-    #    Plots.plot(vec(x_overint), [vec(u_calc_overint)], label=["calculated"])
-    #    pltname = string("plt", K, ".pdf")
-    #    Plots.savefig(pltname)
-    #    sleep(0.02)
     end
-
+    ===#
     #==============================================================================
     Analysis
     ==============================================================================#
@@ -328,7 +368,7 @@ function setup_and_solve(K,N)
 
     Plots.vline(VX, color="lightgray", linewidth=0.75, label="grid")
     Plots.plot!(vec(x_overint), [vec(u_exact_overint), vec(u_calc_final_overint)], label=["exact" "calculated"])
-    pltname = string("plt", K, ".pdf")
+    pltname = string("plt", N_elem, ".pdf")
     Plots.savefig(pltname)
 
 
@@ -348,34 +388,34 @@ function main()
     # Polynomial order
     N = 4 
 
-    K_range = [4 8 16 32 64 128 256]# 512 1024]
-    #K_range = [4]
-    #K_fine_grid = 1024 #fine grid for getting reference solution
+    #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
+    N_elem_range = [4]
+    #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
-    #_,_,reference_fine_grid_solution = setup_and_solve(K_fine_grid,N)
+    #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
     
 
-    L2_err_store = zeros(length(K_range))
-    energy_change_store = zeros(length(K_range))
+    L2_err_store = zeros(length(N_elem_range))
+    energy_change_store = zeros(length(N_elem_range))
 
-    for i=1:length(K_range)
+    for i=1:length(N_elem_range)
 
         # Number of elements
-        K =  K_range[i]
+        N_elem =  N_elem_range[i]
 
-        L2_err_store[i],energy_change_store[i] = setup_and_solve(K,N)
+        L2_err_store[i],energy_change_store[i] = setup_and_solve(N_elem,N)
     end
 
     Printf.@printf("P =  %d \n", N)
 
     Printf.@printf("n cells           Error     Error rate     Energy change \n")
-    for i = 1:length(K_range)
+    for i = 1:length(N_elem_range)
             conv_rate = 0.0
             if i>1
-                conv_rate = log(L2_err_store[i]/L2_err_store[i-1]) / log(K_range[i]/K_range[i-1])
+                conv_rate = log(L2_err_store[i]/L2_err_store[i-1]) / log(N_elem_range[i]/N_elem_range[i-1])
             end
 
-            Printf.@printf("%d \t%.16f \t%.2f \t%.16f\n", K_range[i], L2_err_store[i], conv_rate, energy_change_store[i])
+            Printf.@printf("%d \t%.16f \t%.2f \t%.16f\n", N_elem_range[i], L2_err_store[i], conv_rate, energy_change_store[i])
     end
 end
 
