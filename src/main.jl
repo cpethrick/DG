@@ -220,8 +220,6 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
     end
     a = 2π
 
-    #alpha_split = 1 #Discretization of conservative form
-    alpha_split = 2.0/3.0 #energy-stable split form
 
     #timestep size according to CFL
     #CFL = 0.01
@@ -241,7 +239,7 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
 
             #####assemble residual
 
-            rhs = assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fmask, nx, a, Pi, chi_v, vmapM, vmapP, alpha_split,x,rktime, param)
+            rhs = assemble_residual(u_hat, rktime, dg, param)
 
             residual = rk4a[iRKstage] * residual .+ dt * rhs
             u_hat += rk4b[iRKstage] * residual
@@ -305,7 +303,10 @@ function main()
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
     
-    param = PhysicsAndFluxParams("split", "burgers", true)
+    #alpha_split = 1 #Discretization of conservative form
+    alpha_split = 2.0/3.0 #energy-stable split form
+    
+    param = PhysicsAndFluxParams("split", "burgers", true, alpha_split)
 
     L2_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))

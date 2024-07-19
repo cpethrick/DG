@@ -2,6 +2,9 @@
 # Functions related to building the DG residual for an arbitrary problem.
 ==============================================================================#
 
+include("set_up_dg.jl")
+include("physics.jl")
+
 function calculate_face_term(chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_f, alpha_split, u_hat, param::PhysicsAndFluxParams)
 
     f_numerical_dot_n = calculate_numerical_flux(uM_face,uP_face,n_face, a, param)
@@ -14,8 +17,6 @@ function calculate_face_term(chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, 
     face_flux_dot_n .*= n_face
     
     face_term = chi_face' * W_f * (f_numerical_dot_n .- face_flux_dot_n)
-    #display("face term")
-    #display(face_term)
 
     return face_term
 end
@@ -28,24 +29,16 @@ function calculate_volume_terms_nonconservative(u, S_noncons, chi_v, u_hat)
     return chi_v' * ((u) .* (S_noncons * u_hat))
 end
 
-function assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fmask, nx, a, Pi, chi_v, vmapM, vmapP, alpha_split, x, t, param::PhysicsAndFluxParams)
+function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
     rhs = zeros(Float64, size(u_hat))
 
     u = chi_v * u_hat # nodal solution
-    #display("u")
-    #display(u)
-    f_hat,f_f = calculate_flux(u, Pi, a, Fmask)
+    f_hat,f_f = calculate_flux(u, Pi, Fmask)
 
     volume_terms = calculate_volume_terms(S_xi, f_hat)
-    #display("volume terms cons.")
-    #display(volume_terms)
     if alpha_split < 1
         volume_terms_nonconservative = calculate_volume_terms_nonconservative(u, S_noncons, chi_v, u_hat)
-        #display("volume terms noncons.")
-        #display(volume_terms_nonconservative)
         volume_terms = alpha_split * volume_terms + (1-alpha_split) * volume_terms_nonconservative
-        #display("volume terms w. avg.")
-        #display(volume_terms)
     end
 
     face_terms = zeros(Float64, size(u_hat))
@@ -62,14 +55,8 @@ function assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fm
             #display("right face")
         end
         uM_face = reshape(uM[f,:],(1,(size(u_hat))[2])) # size 1 x N_elem
-        #display("u-")
-        #display(uM_face)
         uP_face = reshape(uP[f,:],(1,(size(u_hat))[2]))
-        #display("u+")
-        #display(uP_face)
         f_face = reshape(f_f[f,:],(1,(size(u_hat))[2]))
-        #display("f_face")
-        #display(f_face)
         
         face_terms .+= calculate_face_term(chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_face, alpha_split, u_hat, param)
     end
@@ -78,6 +65,5 @@ function assemble_residual(u_hat, M_inv, S_xi, S_noncons, Nfaces, chi_f, W_f, Fm
     if param.include_source
         rhs+=calculate_source_terms(x,t)
     end
-    #display(rhs)
     return rhs
 end

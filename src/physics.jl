@@ -7,6 +7,7 @@ struct PhysicsAndFluxParams
     numerical_flux_type::AbstractString
     pde_type::AbstractString
     include_source::Bool
+    alpha_split::Float64
 end
 
 function calculate_numerical_flux(uM_face,uP_face,n_face,a)
@@ -46,7 +47,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face,a)
 
 end
 
-function calculate_flux(u, Pi, a, Fmask)
+function calculate_flux(u, Pi, Fmask)
     #f = a .* u # nodal flux for lin. adv.
     f = 0.5 .* (u.*u) # nodal flux
 
