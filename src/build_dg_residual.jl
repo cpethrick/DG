@@ -33,13 +33,20 @@ end
 
 function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
     rhs = zeros(Float64, size(u_hat))
-
+    u_hat_local = zeros(Float64, Np)
+    u_local = zeros(Float64, Np)
+    f_hat_local = zeros(Float64, Np)
     for ielem in 1:dg.N_elem_per_dim
         ## Extract local solution
         ## Make local rhs vector
         ## find local u and f hat
-        u = chi_v * u_hat # nodal solution
-        f_hat,f_f = calculate_flux(u, Pi, Fmask)
+
+        for inode = 1:dg.Np
+            u_hat_local[inode] = u_hat[dg.EIDLIDtoGID[ielem,inode]]
+        end
+
+        u_local = dg.chi_v * u_hat_local # nodal solution
+        f_hat_local,f_f = calculate_flux(u, dg.Pi, Fmask)
 
         volume_terms = calculate_volume_terms(S_xi, f_hat)
         if alpha_split < 1

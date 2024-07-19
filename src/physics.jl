@@ -52,6 +52,7 @@ function calculate_flux(u, Pi, Fmask)
     f = 0.5 .* (u.*u) # nodal flux
 
     f_f = f[Fmask[:],:] #since we use GLL solution nodes, can select first and last element for face flux values.
+    # what to do abt face? I don't use  Fmask anymore
     
     f_hat = Pi * f
 
