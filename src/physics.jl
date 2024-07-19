@@ -10,7 +10,7 @@ struct PhysicsAndFluxParams
     alpha_split::Float64
 end
 
-function calculate_numerical_flux(uM_face,uP_face,n_face,a)
+function calculate_numerical_flux(uM_face,uP_face,n_face,param::PhysicsAndFluxParams)
 
     LxF =  false
     #alpha = 0 #upwind
@@ -47,16 +47,16 @@ function calculate_numerical_flux(uM_face,uP_face,n_face,a)
 
 end
 
-function calculate_flux(u, Pi, Fmask)
+function calculate_flux(u, Pi, param::PhysicsAndFluxParams)
     #f = a .* u # nodal flux for lin. adv.
     f = 0.5 .* (u.*u) # nodal flux
 
-    f_f = f[Fmask[:],:] #since we use GLL solution nodes, can select first and last element for face flux values.
+    #f_f = f[Fmask[:],:] #since we use GLL solution nodes, can select first and last element for face flux values.
     # what to do abt face? I don't use  Fmask anymore
     
     f_hat = Pi * f
 
-    return f_hat,f_f
+    return f_hat#,f_f
 
 end
 
@@ -64,7 +64,11 @@ function calculate_face_terms_nonconservative(chi_face, u_hat)
     return 0.5 * (chi_face * u_hat) .* (chi_face * u_hat)
 end
 
-function calculate_source_terms(x,t)
+function calculate_source_terms(x,t, param::PhysicsAndFluxParams)
     #return zeros(size(x)) 
-    return π*sin.(π*(x .- t)).*(1 .- cos.(π*(x .- t)))
+    if param.include_source
+        return π*sin.(π*(x .- t)).*(1 .- cos.(π*(x .- t)))
+    else
+        return zeros(size(x))
+    end
 end
