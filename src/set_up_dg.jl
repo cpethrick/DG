@@ -18,10 +18,16 @@ mutable struct DG
                              # dimension is element ID. values are global ID.
     LIDtoLFID::Vector{Int} # Index is local ID, value is local face ID
                            # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
+    LFIDtoLID::AbstractMatrix{Int} # Index is local face ID, values are LID corresponding to that face
     LFIDtoNormal::Vector{Int} # normal of left face is 1, normal of right face is 1.
-    EIDLFIDtoGIDofexterior::AbstractMatrix{Int} # Linker to exterior value at a face.
-                                        # Index of first dim is element ID, index of second 
-                                        # dimension is LFID of the edge.
+    #EIDLFIDtoGIDofexterior::AbstractMatrix{Int} # Linker to exterior value at a face.
+    #                                    # Index of first dim is element ID, index of second 
+    #                                    # dimension is LFID of the edge.
+    EIDLFIDtoEIDofexterior::AbstractMatrix{Int} # Linker to exterior ELEM at a face.
+                                                # Index of first dim is element ID, index of second 
+                                                # dimension is LFID of the edge.
+                                                #
+
 
     r_volume::Vector{Float64}
     w::Vector{Float64}
@@ -80,8 +86,10 @@ function init_DG(P, dim, N_elem_per_dim,domain_x_limits)
     # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
     dg.LIDtoLFID = zeros(Int64,Np)
     dg.LIDtoLFID[[1,Np]] .= 1:dg.Nfaces
-
+    dg.LFIDtoLID = [1 1; 2 Np]
     dg.LFIDtoNormal = [-1,1] # normal of left face is 1, normal of right face is 1.
+
+    dg.EIDLFIDtoEIDofexterior = [circshift(1:N_elem_per_dim,1)';circshift(1:N_elem_per_dim,-1)']'
 
     # Solution nodes - GLL
     # must choose GLL nodes unless I modify the selection of uP and uP for numerical flux.
@@ -101,9 +109,9 @@ function init_DG(P, dim, N_elem_per_dim,domain_x_limits)
     dg.J = LinearAlgebra.diagm(ones(size(dg.r_volume))*jacobian)
 
     dg.x = ones(dg.N_elem_per_dim*dg.Np)
-    for i_elem = 1:N_elem_per_dim
-        x_local = dg.VX[i_elem] .+ 0.5* (dg.r_volume .+1) * dg.delta_x
-        dg.x[dg.EIDLIDtoGID[i_elem,1:dg.Np]] .= x_local
+    for ielem = 1:N_elem_per_dim
+        x_local = dg.VX[ielem] .+ 0.5* (dg.r_volume .+1) * dg.delta_x
+        dg.x[dg.EIDLIDtoGID[ielem,1:dg.Np]] .= x_local
     end
 
     # Define Vandermonde matrices
