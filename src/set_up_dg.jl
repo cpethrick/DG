@@ -18,7 +18,7 @@ mutable struct DG
                              # dimension is element ID. values are global ID.
     LIDtoLFID::Vector{Int} # Index is local ID, value is local face ID
                            # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
-    LFIDtoLID::AbstractMatrix{Int} # Index is local face ID, values are LID corresponding to that face
+    LFIDtoLID::Vector{Int} # Index is local face ID, values are LID corresponding to that face
     LFIDtoNormal::Vector{Int} # normal of left face is 1, normal of right face is 1.
     #EIDLFIDtoGIDofexterior::AbstractMatrix{Int} # Linker to exterior value at a face.
     #                                    # Index of first dim is element ID, index of second 
@@ -86,7 +86,7 @@ function init_DG(P, dim, N_elem_per_dim,domain_x_limits)
     # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
     dg.LIDtoLFID = zeros(Int64,Np)
     dg.LIDtoLFID[[1,Np]] .= 1:dg.Nfaces
-    dg.LFIDtoLID = [1 1; 2 Np]
+    dg.LFIDtoLID = [1,Np]
     dg.LFIDtoNormal = [-1,1] # normal of left face is 1, normal of right face is 1.
 
     dg.EIDLFIDtoEIDofexterior = [circshift(1:N_elem_per_dim,1)';circshift(1:N_elem_per_dim,-1)']'

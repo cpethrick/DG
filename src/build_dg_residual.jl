@@ -12,6 +12,7 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, dg::DG, param::Physics
 
     face_flux_dot_n::AbstractVector{Float64} = [(dg.chi_v * f_hat)[dg.LFIDtoLID[iface]]]
     if param.alpha_split < 1
+        face_flux_dot_n*=param.alpha_split
         #face_flux_nonconservative = reshape(calculate_face_terms_nonconservative(dg.chi_f[:,:,iface], u_hat), size(face_flux_dot_n))
         face_flux_nonconservative = calculate_face_terms_nonconservative(dg.chi_f[:,:,iface], u_hat)
         face_flux_dot_n .+= (1-param.alpha_split) * face_flux_nonconservative
@@ -96,9 +97,6 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
             # hard code normal for now
             #if f == 1
             #    n_face = -1
-                #display("left face")
-            #else
-            #    n_face = 1
                 #display("right face")
             #end
             #uM_face = reshape(uM[f,:],(1,(size(u_hat))[2])) # size 1 x N_elem
@@ -110,7 +108,6 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
             #How to get exterior values if those are all modal?? Would be doing double work...
             uM = get_solution_at_face(true, ielem, iface, u_hat, u_local, dg)
             uP = get_solution_at_face(false, ielem, iface, u_hat, u_local, dg)
-
 
             face_terms .+= calculate_face_term(iface, f_hat_local, u_hat_local, uM, uP, dg, param)
                                                #chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_face, alpha_split, u_hat, param)

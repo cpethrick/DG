@@ -204,8 +204,8 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
 
     finaltime = 1.0
 
-    #u0 = sin.(π * x) .+ 0.01
-    u0 = cos.(π * dg.x)
+    u0 = sin.(π * dg.x) .+ 0.01
+    #u0 = cos.(π * dg.x)
     #u_old = cos.(π * x)
     u_hat0 = zeros(N_elem*dg.Np)
     u_local = zeros(dg.Np)
@@ -216,7 +216,6 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
         u_hat_local = dg.Pi*u_local
         #display(u_hat_local)
         u_hat0[dg.EIDLIDtoGID[ielem,:]] = u_hat_local
-        #display(u_hat0)
     end
     a = 2π
 
@@ -235,17 +234,16 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
     rhs = zeros(size(u_hat))
     for tstep = 1:Nsteps
         for iRKstage = 1:nRKStage
+            
             rktime = current_time + rk4c[iRKstage] * dt
 
             #####assemble residual
-
             rhs = assemble_residual(u_hat, rktime, dg, param)
 
             residual = rk4a[iRKstage] * residual .+ dt * rhs
             u_hat += rk4b[iRKstage] * residual
         end
-        current_time += dt
-        
+        current_time += dt   
     end
     #==============================================================================
     Analysis
@@ -264,14 +262,20 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
     J_overint = LinearAlgebra.diagm(ones(size(r_overint))*dg.J[1]) #assume constant jacobian
 
     #u_exact_overint = sin.(2(x_overint .- a*finaltime))
-    u_exact_overint = cos.(π*(x_overint.-finaltime))
+    u_exact_overint = cos.(π*(x_overint.-current_time))
     u_calc_final_overint = zeros(size(x_overint))
+    u0_overint = zeros(size(x_overint))
+    u_calc_final = zeros(size(dg.x))
     for ielem = 1:dg.N_elem_per_dim
         u_hat_local = zeros(size(dg.r_volume)) 
+        u0_hat_local = zeros(size(dg.r_volume)) 
         for inode = 1:dg.Np
             u_hat_local[inode] = u_hat[dg.EIDLIDtoGID[ielem,inode]]
+            u0_hat_local[inode] = u_hat0[dg.EIDLIDtoGID[ielem,inode]]
         end
         u_calc_final_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u_hat_local
+        u0_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u0_hat_local
+        u_calc_final[(ielem-1)*dg.Np+1:(ielem)*dg.Np] .= dg.chi_v * u_hat_local
     end
     u_diff = u_calc_final_overint .- u_exact_overint
 
@@ -281,20 +285,18 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
     #display(W_overint)
     #display(J_overint)
     L2_error = 0
+    energy_final_calc = 0
+    energy_initial = 0
     for ielem = 1:dg.N_elem_per_dim
         L2_error += (sum((u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])))
+        # use non-overintegrated qties to calculate energy difference
+        energy_final_calc += sum(((u_calc_final[(ielem-1)*dg.Np+1:(ielem)*dg.Np]') * dg.W * dg.J * (u_calc_final[(ielem-1)*dg.Np+1:(ielem)*dg.Np])))
+        energy_initial += sum(((u0[(ielem-1)*dg.Np+1:(ielem)*dg.Np]') * dg.W * dg.J * (u0[(ielem-1)*dg.Np+1:(ielem)*dg.Np])))
     end
     L2_error = sqrt(L2_error)
-#==
-    u0_overint = chi_overint * u_hat0
 
-    # use non-overintegrated qties to calculate energy difference
-    energy_initial = sum(LinearAlgebra.diag((u0') * W * J * (u0)))
-    u_final = chi_v * u_hat
-    energy_final_calc =  sum(LinearAlgebra.diag((u_final') * W * J * (u_final)))
     energy_change = energy_final_calc - energy_initial
-==#
-    energy_change = 13
+
     Plots.vline(dg.VX, color="lightgray", linewidth=0.75, label="grid")
     Plots.plot!(vec(x_overint), [vec(u_exact_overint), vec(u_calc_final_overint)], label=["exact" "calculated"])
     pltname = string("plt", N_elem, ".pdf")
@@ -317,16 +319,16 @@ function main()
     # Polynomial order
     P = 4 
 
-    #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
-    N_elem_range = [4]
+    N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
+    #N_elem_range = [4]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
     
-    alpha_split = 1 #Discretization of conservative form
-    #alpha_split = 2.0/3.0 #energy-stable split form
+    #alpha_split = 1 #Discretization of conservative form
+    alpha_split = 2.0/3.0 #energy-stable split form
     
-    param = PhysicsAndFluxParams("split", "burgers", true, alpha_split)
+    param = PhysicsAndFluxParams("split", "burgers", false, alpha_split)
 
     L2_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))
