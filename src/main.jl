@@ -31,6 +31,7 @@ import SparseArrays
 import LinearAlgebra
 import Printf
 import Plots
+import PyPlot
 
 #==============================================================================
 Load external files
@@ -49,126 +50,20 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
     # Limits of computational domain
     x_Llim = 0.0
     x_Rlim = 2.0
-
-    dg = init_DG(P, 1, N_elem, [x_Llim,x_Rlim])
-
+    
+    dim = 1
     #==============================================================================
     Start Up
     ==============================================================================#
+    dg = init_DG(P, dim, N_elem, [x_Llim,x_Rlim])
 
-#==
-    # Number of local grid points
-    Np = P+1
+    #plot grid
+    pltname = string("grid", N_elem, ".pdf")
+    Plots.vline(dg.VX, color="black", linewidth=0.75, label="grid")
+    Plots.hline!(dg.VX, color="black", linewidth=0.75, label="grid")
+    Plots.plot!(dg.x, dg.y, label=["nodes"], seriestype=:scatter)
+    Plots.savefig(pltname)
 
-    # Number of faces
-    Nfaces = 2
-    
-    NODETOL = 1E-10
-
-    # Number of grid points on faces
-    Nfp = 1
-    
-    # Array of points defining the extremes of each element
-    VX = range(x_Llim,x_Rlim, N_elem+1) |> collect
-    display(VX)
-
-    # Vertex ID of left (1st col) and right (2nd col) extreme of element
-    EtoV = collect(hcat((1:N_elem), 2:N_elem+1))
-    
-    # Index is global ID, values are local IDs
-    GIDtoLID = mod.(0:(Np*N_elem.-1),Np).+1
-    
-    # Index of first dimension is element ID, index of second dimension is element ID
-    # values are global ID
-    EIDLIDtoGID = reshape(1:Np*N_elem, (Np,N_elem))' #note transpose
-
-    # Index is local ID, value is local face ID
-    # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
-    LIDtoLFID = zeros(Int64,Np)
-    LIDtoLFID[[1,Np]] .= 1:Nfaces
-
-    LFIDtoNormal = [-1,1] # normal of left face is 1, normal of right face is 1.
-    
-    # Index of first dim is element ID, index of second dimension is LID of an EDGE node.
-    # 1D case: Nfp = 1.
-    # values are global ID of the exterior node associated with the LID. Zero is not a face.
-    # Possible future improvement - add some sort of numbering for the face nodes such that we store fewer zeros.
-    EIDLIDtoGIDofexterior = zeros(Int64,N_elem,Np)
-    EIDLIDtoGIDofexterior[:,1] = (0:N_elem-1)*Np
-    EIDLIDtoGIDofexterior[:,Np] = (1:N_elem)*Np .+ 1  
-    #manually assign periodic boundaries
-    EIDLIDtoGIDofexterior[1,1]= N_elem*Np
-    EIDLIDtoGIDofexterior[N_elem,Np] = 1
-    #display(EIDLIDtoGIDofexterior)
-
-    # Solution nodes - GLL
-    # must choose GLL nodes unless I modify the selection of uP and uP for numerical flux.
-    # Also will need to change splitting on the face.
-    r_volume,w = FastGaussQuadrature.gausslobatto(Np)
-    #r will be size N+1
-
-    # Basis function nodes - GLL
-    # Note: must choose GLL due to face flux splitting.
-    #r_basis,w_basis=FastGaussQuadrature.gaussjacobi(Np,0.0,0.0)
-    r_basis,w_basis=FastGaussQuadrature.gausslobatto(Np)
-
-    #reference coordinates of L and R faces
-    r_f_L::Float64 = -1
-    r_f_R::Float64 = 1
-
-    # Define Vandermonde matrices
-    chi_v = vandermonde1D(r_volume,r_basis)
-    d_chi_v_d_xi = gradvandermonde1D(r_volume,r_basis)
-    chi_f = assembleFaceVandermonde1D(r_f_L,r_f_R,r_basis)
-    
-    W = LinearAlgebra.diagm(w) # diagonal matrix holding quadrature weights
-    W_f = 1
-    delta_x = VX[2]-VX[1]
-    # constant jacobian on all elements as they are evenly spaced
-    jacobian = delta_x/2 #reference element is 2 units long
-    J = LinearAlgebra.diagm(ones(size(r_volume))*jacobian)
-
-    # Mass and stiffness matrices as defined Eq. 9.5 Cicchino 2022
-    # All defined on a single element.
-    M = chi_v' * W * J * chi_v
-    M_inv = inv(M)
-    S_xi = chi_v' * W * d_chi_v_d_xi
-    S_noncons = W * d_chi_v_d_xi
-    M_nojac = chi_v' * W * chi_v
-    Pi = inv(M_nojac)*chi_v'*W
-
-    # coords of nodes
-    va = EtoV[:,1]
-    vb = EtoV[:,2]
-    x = ones(length(r_volume)) * VX[va]' + 0.5 * (r_volume .+ 1) * (VX[vb]-VX[va])'
-    #display(x)
-    x_vector = ones(N_elem*Np)
-    for  = 1:N_elem
-        left_vertex_ID = EtoV[,1]
-        right_vertex_ID = EtoV[,2]
-        left_vertex_coord_phys = VX[left_vertex_ID]
-        right_vertex_coord_phys = VX[right_vertex_ID]
-        dx_local = right_vertex_coord_phys - left_vertex_coord_phys
-        x_local = left_vertex_coord_phys .+ 0.5 * (r_volume .+ 1) * dx_local
-        x_vector[EIDLIDtoGID[,1:Np]] .= x_local
-    end
-    display(x_vector) # matches old x.
-
-    # Masks for edge nodes
-    #fmask1 = findall( <(NODETOL), abs.(r_volume.+1))
-    #fmask2 = findall( <(NODETOL), abs.(r_volume.-1))
-    #Fmask = hcat(fmask1, fmask2)
-    #Fx = x[Fmask[:],:]
-
-    # Surface normals
-    #nx = Normals1D(Nfp, Nfaces, N_elem)
-
-    # Connectivity matrix
-    #EtoE, EtoF = Connect1D(EtoV, Nfaces, N_elem)
-
-
-    #vmapM,vmapP,vmapB,mapB,mapI,mapO,vmapI,vmapO = BuildMaps1D(EtoE, EtoF, N_elem, length(r_volume), Nfp, Nfaces, Fmask,x)
-==#
     #==============================================================================
     RK scheme
     ==============================================================================#
@@ -204,8 +99,16 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
 
     finaltime = 1.0
 
-    u0 = sin.(π * dg.x) .+ 0.01
-    #u0 = cos.(π * dg.x)
+    if param.include_source
+        u0 = cos.(π * dg.x)
+    else
+        u0 = sin.(π * dg.x) .+ 0.01
+    end
+    if dim == 2
+        PyPlot.clf()
+        PyPlot.tricontourf(dg.x, dg.y, u0)
+        Plots.savefig(pltname)
+    end
     #u_old = cos.(π * x)
     u_hat0 = zeros(N_elem*dg.Np)
     u_local = zeros(dg.Np)
@@ -218,7 +121,6 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
         u_hat0[dg.EIDLIDtoGID[ielem,:]] = u_hat_local
     end
     a = 2π
-
 
     #timestep size according to CFL
     #CFL = 0.01
@@ -317,7 +219,7 @@ Discretize into elements
 function main()
 
     # Polynomial order
-    P = 4 
+    P = 2
 
     N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
     #N_elem_range = [4]
@@ -328,7 +230,7 @@ function main()
     #alpha_split = 1 #Discretization of conservative form
     alpha_split = 2.0/3.0 #energy-stable split form
     
-    param = PhysicsAndFluxParams("split", "burgers", false, alpha_split)
+    param = PhysicsAndFluxParams("split", "burgers", true, alpha_split)
 
     L2_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))
