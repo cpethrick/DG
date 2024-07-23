@@ -21,7 +21,7 @@ mutable struct DG
                              # dimension is element ID. values are global ID.
     #LIDtoLFID::Vector{Int} # Index is local ID, value is local face ID
     #                       # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
-    LFIDtoLID::Vector{Int} # Index is local face ID, values are LID corresponding to that face
+    LFIDtoLID::AbstractMatrix{Int} # Index is local face ID, values are LID corresponding to that face
     LFIDtoNormal::AbstractMatrix{Int} # Normal of LFID,
                                       # first column is x, second column is y
     #EIDLFIDtoGIDofexterior::AbstractMatrix{Int} # Linker to exterior value at a face.
@@ -42,6 +42,7 @@ mutable struct DG
     w_basis::Vector{Float64}
     chi_v::AbstractMatrix{Float64}
     d_chi_v_d_xi::AbstractMatrix{Float64}
+    d_chi_v_d_eta::AbstractMatrix{Float64}
     chi_f::AbstractArray{Float64}
     
     W::AbstractMatrix{Float64}
@@ -50,6 +51,7 @@ mutable struct DG
     M::AbstractMatrix{Float64}
     M_inv::AbstractMatrix{Float64}
     S_xi::AbstractMatrix{Float64}
+    S_eta::AbstractMatrix{Float64}
     S_noncons::AbstractMatrix{Float64}
     M_nojac::AbstractMatrix{Float64}
     Pi::AbstractMatrix{Float64}
@@ -100,11 +102,16 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
     #dg.LIDtoLFID = zeros(Int64,Np_per_dim)
     #dg.LIDtoLFID[[1,Np_per_dim]] .= 1:dg.Nfaces
-    dg.LFIDtoLID = [1,Np_per_dim]
     if dim == 1
         dg.LFIDtoNormal = [-1 1] # normal of left face is 1, normal of right face is 1.
+        dg.LFIDtoLID = [1;Np_per_dim]
     elseif dim == 2
         dg.LFIDtoNormal = [-1 0; 1 0; 0 -1; 0 1] #first col. is x, second col. is y
+        dg.LFIDtoLID = [(0:Np_per_dim-1)' *Np_per_dim.+1 ;
+                        (1:Np_per_dim)' *Np_per_dim;
+                        (1:Np_per_dim)';
+                        (1:Np_per_dim)' .+ (Np-Np_per_dim)
+                       ]
     end
 
     if dim == 1
@@ -161,8 +168,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], N_elem_per_dim+1) |> collect
     dg.delta_x = dg.VX[2]-dg.VX[1]
     # constant jacobian on all elements as they are evenly spaced
-    jacobian = dg.delta_x/2 #reference element is 2 units long
-    dg.J = LinearAlgebra.diagm(ones(size(dg.r_volume))*jacobian)
+    jacobian = dg.delta_x/(2.0^dim) #reference element is 2 units long
+    dg.J = LinearAlgebra.diagm(ones(length(dg.r_basis)^dim)*jacobian)
 
     
     dg.x = zeros(dg.N_elem*dg.Np)
@@ -195,15 +202,22 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     end
 
     # Define Vandermonde matrices
-    dg.chi_v = vandermonde1D(dg.r_volume,dg.r_basis)
-    dg.d_chi_v_d_xi = gradvandermonde1D(dg.r_volume,dg.r_basis)
-    #reference coordinates of L and R faces
-    r_f_L::Float64 = -1
-    r_f_R::Float64 = 1
-    dg.chi_f = assembleFaceVandermonde1D(r_f_L,r_f_R,dg.r_basis)
+    if dim == 1
+        dg.chi_v = vandermonde1D(dg.r_volume,dg.r_basis)
+        dg.d_chi_v_d_xi = gradvandermonde1D(dg.r_volume,dg.r_basis)
+        #reference coordinates of L and R faces
+        r_f_L::Float64 = -1
+        r_f_R::Float64 = 1
+        dg.chi_f = assembleFaceVandermonde1D(r_f_L,r_f_R,dg.r_basis)
 
-    dg.W = LinearAlgebra.diagm(dg.w) # diagonal matrix holding quadrature weights
-    dg.W_f = 1.0
+        dg.W = LinearAlgebra.diagm(dg.w_basis) # diagonal matrix holding quadrature weights
+        dg.W_f = 1.0
+    elseif dim == 2
+        dg.chi_v = vandermonde2D(dg.r_volume,dg.r_basis, dg)
+        dg.d_chi_v_d_xi = gradvandermonde2D(1, dg.r_volume,dg.r_basis, dg)
+        dg.d_chi_v_d_eta = gradvandermonde2D(2, dg.r_volume,dg.r_basis, dg)
+        dg.W = LinearAlgebra.diagm(vec(dg.w_basis*dg.w_basis'))
+    end
     
     # Mass and stiffness matrices as defined Eq. 9.5 Cicchino 2022
     # All defined on a single element.

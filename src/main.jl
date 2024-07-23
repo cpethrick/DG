@@ -51,7 +51,7 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
     x_Llim = 0.0
     x_Rlim = 2.0
     
-    dim = 1
+    dim = param.dim 
     #==============================================================================
     Start Up
     ==============================================================================#
@@ -219,10 +219,10 @@ Discretize into elements
 function main()
 
     # Polynomial order
-    P = 2
+    P = 3
 
-    N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
-    #N_elem_range = [4]
+    #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
+    N_elem_range = [4]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
@@ -230,7 +230,7 @@ function main()
     #alpha_split = 1 #Discretization of conservative form
     alpha_split = 2.0/3.0 #energy-stable split form
     
-    param = PhysicsAndFluxParams("split", "burgers", true, alpha_split)
+    param = PhysicsAndFluxParams(2,"split", "burgers", true, alpha_split)
 
     L2_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))

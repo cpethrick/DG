@@ -4,6 +4,7 @@
 ==============================================================================#
 
 struct PhysicsAndFluxParams
+    dim::Int64
     numerical_flux_type::AbstractString
     pde_type::AbstractString
     include_source::Bool
