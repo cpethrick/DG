@@ -123,13 +123,16 @@ function assembleFaceVandermonde1D(r_f_L::Float64, r_f_R::Float64, r_basis::Abst
     return V_f
 end
 
-function assembleFaceVandermonde2D(r_basis::AbstractVector, dg)
-    V_f = zeros(Float64, (length(dg.r_volume,length(r_basis)), 4)) #third dimension is face ID
-    V_f[:,:,1] = #assemble VdM with cubature points as ONLY points on the face of interest. Maybe extract from volume VDM matrix?
-    reference_coords_of_pts_on_face1 = [ones(length(r_basis)); r_basis]'
+function assembleFaceVandermonde2D(chi_v,r_basis::AbstractVector, dg)
+    V_f = zeros(Float64, (length(dg.r_volume),length(r_basis)^dg.dim, 4)) #third dimension is face ID
     
-    # steps: 
-    # extract xi_f using dg.LFIDtoLID
-    # evaluate all lagrange polynomials at those face points
-    # store matrix of dim (Np_per_dim, len(basis)) (i think)
+    #This implementation assumes that face points are a subset of volume points.
+    for iface = 1:dg.Nfaces
+        #get LID of points on LFID of iface
+        LID_iface = dg.LFIDtoLID[iface,:]
+        for ifacept = 1:dg.Nfp
+            V_f[ifacept,:,iface] = chi_v[LID_iface[ifacept], :]
+        end
+    end
+    return V_f
 end

@@ -43,7 +43,12 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
     #Find local solution of the element of interest if we seek an exterior value
     #Here, we assume that solution nodes are GLL when we pick the face value from the solution.
     if find_interior_values
+        #u_face = u_local[dg.LFIDtoLID[face, :]]
         u_face = u_local[dg.LFIDtoLID[face]]
+        #display("interior")
+        #display(ielem)
+        #display(iface)
+        #display(dg.LFIDtoLID[face])
     else
         u_hat_local_exterior_elem = zeros(size(u_local))
         for inode = 1:dg.Np
@@ -51,19 +56,29 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
         end
         u_local_exterior_elem = dg.chi_v * u_hat_local_exterior_elem # nodal solution
         u_face = u_local_exterior_elem[dg.LFIDtoLID[face]]
+        #display("exterior")
+        #display(ielem)
+        #display(iface)
+        #display(elem)
+        #display(face)
+        #display(dg.LFIDtoLID[face])
     end
     return u_face
 
 end
 
-function calculate_volume_terms(S_xi, f_hat)
-    # modify to be one element
-    return S_xi * f_hat
+function calculate_volume_terms(f_hat, dg)
+    if dg.dim == 1
+        return dg.S_xi * f_hat
+    else
+        #Should I use a third dimension to indicate the direction of f_hat?
+        return dg.S_xi * f_hat_xi + dg.S_eta * f_hat_eta
+    end
+        
 end
 
-function calculate_volume_terms_nonconservative(u, S_noncons, chi_v, u_hat) 
-    # modify to be one element
-    return chi_v' * ((u) .* (S_noncons * u_hat))
+function calculate_volume_terms_nonconservative(u, u_hat, dg) 
+    return dg.chi_v' * ((u) .* (dg.S_noncons_xi * u_hat))
 end
 
 function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
@@ -82,35 +97,22 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
 
         u_local = dg.chi_v * u_hat_local # nodal solution
         f_hat_local = calculate_flux(u_local, dg.Pi, param)
+        ## Flux needs to be higher-dim!!
 
-        volume_terms = calculate_volume_terms(dg.S_xi, f_hat_local)
+        volume_terms = calculate_volume_terms(f_hat_local, dg)
         if param.alpha_split < 1
-            volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, dg.S_noncons, dg.chi_v, u_hat_local)
+            volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local, dg)
             volume_terms = param.alpha_split * volume_terms + (1-param.alpha_split) * volume_terms_nonconservative
         end
 
         face_terms = zeros(Float64, size(u_hat_local))
-        #uM = reshape(u[vmapM], (Nfaces,(size(u_hat))[2])) # size Nfaces * Nfp=1 x N_elem.
-        #uP = reshape(u[vmapP], (Nfaces,(size(u_hat))[2])) # size Nfaces * Nfp=1 x N_elem.
         for iface in 1:dg.Nfaces
-            #chi_face = dg.chi_f[:,:,iface]
-            # hard code normal for now
-            #if f == 1
-            #    n_face = -1
-                #display("right face")
-            #end
-            #uM_face = reshape(uM[f,:],(1,(size(u_hat))[2])) # size 1 x N_elem
-            #uP_face = reshape(uP[f,:],(1,(size(u_hat))[2]))
-            #f_face = reshape(f_f[f,:],(1,(size(u_hat))[2]))
-            #
-            #
             
             #How to get exterior values if those are all modal?? Would be doing double work...
             uM = get_solution_at_face(true, ielem, iface, u_hat, u_local, dg)
             uP = get_solution_at_face(false, ielem, iface, u_hat, u_local, dg)
 
             face_terms .+= calculate_face_term(iface, f_hat_local, u_hat_local, uM, uP, dg, param)
-                                               #chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_face, alpha_split, u_hat, param)
         end
 
         rhs_local = -1* dg.M_inv * (volume_terms .+ face_terms)

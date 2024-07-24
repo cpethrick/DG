@@ -43,8 +43,8 @@ include("FE_mapping.jl")
 include("build_dg_residual.jl")
 include("set_up_dg.jl")
 
-function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
-    # N_elem is number of elements
+function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
+    # N_elem_per_dim is number of elements PER DIM
     # N is poly order
     
     # Limits of computational domain
@@ -55,10 +55,10 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
     #==============================================================================
     Start Up
     ==============================================================================#
-    dg = init_DG(P, dim, N_elem, [x_Llim,x_Rlim])
+    dg = init_DG(P, dim, N_elem_per_dim, [x_Llim,x_Rlim])
 
     #plot grid
-    pltname = string("grid", N_elem, ".pdf")
+    pltname = string("grid", N_elem_per_dim, ".pdf")
     Plots.vline(dg.VX, color="black", linewidth=0.75, label="grid")
     Plots.hline!(dg.VX, color="black", linewidth=0.75, label="grid")
     Plots.plot!(dg.x, dg.y, label=["nodes"], seriestype=:scatter)
@@ -94,7 +94,7 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
     end
 
     #==============================================================================
-    ODE Solver 
+    Initialization
     ==============================================================================#
 
     finaltime = 1.0
@@ -110,9 +110,9 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
         Plots.savefig(pltname)
     end
     #u_old = cos.(π * x)
-    u_hat0 = zeros(N_elem*dg.Np)
+    u_hat0 = zeros(dg.N_elem*dg.Np)
     u_local = zeros(dg.Np)
-    for ielem = 1:N_elem
+    for ielem = 1:dg.N_elem
         for inode = 1:dg.Np
             u_local[inode] = u0[dg.EIDLIDtoGID[ielem,inode]]
         end
@@ -129,6 +129,10 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
     dt = 1E-4
     Nsteps::Int64 = ceil(finaltime/dt)
     dt = finaltime/Nsteps
+
+    #==============================================================================
+    ODE Solver 
+    ==============================================================================#
 
     u_hat = u_hat0
     current_time = 0
@@ -201,7 +205,7 @@ function setup_and_solve(N_elem,P,param::PhysicsAndFluxParams)
 
     Plots.vline(dg.VX, color="lightgray", linewidth=0.75, label="grid")
     Plots.plot!(vec(x_overint), [vec(u_exact_overint), vec(u_calc_final_overint)], label=["exact" "calculated"])
-    pltname = string("plt", N_elem, ".pdf")
+    pltname = string("plt", N_elem_per_dim, ".pdf")
     Plots.savefig(pltname)
 
 
@@ -222,15 +226,19 @@ function main()
     P = 3
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
+    #N_elem_range = [4 8 16 32]
     N_elem_range = [4]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
     
-    #alpha_split = 1 #Discretization of conservative form
-    alpha_split = 2.0/3.0 #energy-stable split form
+    alpha_split = 1 #Discretization of conservative form
+    #alpha_split = 2.0/3.0 #energy-stable split form
     
-    param = PhysicsAndFluxParams(2,"split", "burgers", true, alpha_split)
+    dim=2
+    #fluxtype="split_with_LxF"
+    fluxtype="split"
+    param = PhysicsAndFluxParams(dim,"split_with_LxF", "burgers", true, alpha_split)
 
     L2_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))

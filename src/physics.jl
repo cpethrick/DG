@@ -13,7 +13,6 @@ end
 
 function calculate_numerical_flux(uM_face,uP_face,n_face,param::PhysicsAndFluxParams)
 
-    LxF =  false
     #alpha = 0 #upwind
     #alpha = 1 #central
     #
@@ -39,10 +38,10 @@ function calculate_numerical_flux(uM_face,uP_face,n_face,param::PhysicsAndFluxPa
     #return f_numerical
 
     f_numerical  = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) .* n_face # split
-    if LxF
+    if cmp(param.numerical_flux_type, "split_with_LxF")==0
         stacked_MP = [uM_face;uP_face]
-        max_eigenvalue = findmax(abs.(stacked_MP), dims=1)[1]
-        f_numerical .-= 0.5 .* max_eigenvalue .* (uP_face .- uM_face)
+        max_eigenvalue = findmax(abs.(stacked_MP))[1]
+        f_numerical -= 0.5 .* max_eigenvalue .* (uP_face .- uM_face)
     end
     return f_numerical
 

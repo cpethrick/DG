@@ -46,13 +46,14 @@ mutable struct DG
     chi_f::AbstractArray{Float64}
     
     W::AbstractMatrix{Float64}
-    W_f::Float64 # AbstractMatrix{Float64}
+    W_f::AbstractMatrix{Float64}
     J::AbstractMatrix{Float64}
     M::AbstractMatrix{Float64}
     M_inv::AbstractMatrix{Float64}
     S_xi::AbstractMatrix{Float64}
     S_eta::AbstractMatrix{Float64}
-    S_noncons::AbstractMatrix{Float64}
+    S_noncons_xi::AbstractMatrix{Float64}
+    S_noncons_eta::AbstractMatrix{Float64}
     M_nojac::AbstractMatrix{Float64}
     Pi::AbstractMatrix{Float64}
 
@@ -104,7 +105,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     #dg.LIDtoLFID[[1,Np_per_dim]] .= 1:dg.Nfaces
     if dim == 1
         dg.LFIDtoNormal = [-1 1] # normal of left face is 1, normal of right face is 1.
-        dg.LFIDtoLID = [1;Np_per_dim]
+        dg.LFIDtoLID = reshape([1,Np_per_dim], 2,1)
     elseif dim == 2
         dg.LFIDtoNormal = [-1 0; 1 0; 0 -1; 0 1] #first col. is x, second col. is y
         dg.LFIDtoLID = [(0:Np_per_dim-1)' *Np_per_dim.+1 ;
@@ -162,7 +163,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
 
     # Basis function nodes - GLL
     # Note: must choose GLL due to face flux splitting.
-    #r_basis,w_basis=FastGaussQuadrature.gaussjacobi(Np_per_dim,0.0,0.0)
+    #dg.r_basis,dg.w_basis=FastGaussQuadrature.gaussjacobi(Np_per_dim,0.0,0.0)
     dg.r_basis,dg.w_basis=FastGaussQuadrature.gausslobatto(dg.Np_per_dim)
 
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], N_elem_per_dim+1) |> collect
@@ -211,12 +212,14 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
         dg.chi_f = assembleFaceVandermonde1D(r_f_L,r_f_R,dg.r_basis)
 
         dg.W = LinearAlgebra.diagm(dg.w_basis) # diagonal matrix holding quadrature weights
-        dg.W_f = 1.0
+        dg.W_f = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
     elseif dim == 2
         dg.chi_v = vandermonde2D(dg.r_volume,dg.r_basis, dg)
         dg.d_chi_v_d_xi = gradvandermonde2D(1, dg.r_volume,dg.r_basis, dg)
         dg.d_chi_v_d_eta = gradvandermonde2D(2, dg.r_volume,dg.r_basis, dg)
         dg.W = LinearAlgebra.diagm(vec(dg.w_basis*dg.w_basis'))
+        dg.chi_f = assembleFaceVandermonde2D(dg.chi_v,dg.r_basis,dg)
+        dg.W_f = LinearAlgebra.diagm(dg.w_basis)
     end
     
     # Mass and stiffness matrices as defined Eq. 9.5 Cicchino 2022
@@ -224,11 +227,13 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     dg.M = dg.chi_v' * dg.W * dg.J * dg.chi_v
     dg.M_inv = inv(dg.M)
     dg.S_xi = dg.chi_v' * dg.W * dg.d_chi_v_d_xi
-    dg.S_noncons = dg.W * dg.d_chi_v_d_xi
+    dg.S_noncons_xi = dg.W * dg.d_chi_v_d_xi
+    if dim==2
+        dg.S_eta = dg.chi_v' * dg.W * dg.d_chi_v_d_eta
+        dg.S_noncons_eta = dg.W * dg.d_chi_v_d_eta
+    end
     dg.M_nojac = dg.chi_v' * dg.W * dg.chi_v
     dg.Pi = inv(dg.M_nojac)*dg.chi_v'*dg.W
-
-
 
     return dg
 
