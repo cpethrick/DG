@@ -104,7 +104,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     #dg.LIDtoLFID = zeros(Int64,Np_per_dim)
     #dg.LIDtoLFID[[1,Np_per_dim]] .= 1:dg.Nfaces
     if dim == 1
-        dg.LFIDtoNormal = [-1 1] # normal of left face is 1, normal of right face is 1.
+        dg.LFIDtoNormal = reshape([-1; 1], 2, 1) # normal of left face is 1, normal of right face is 1.
         dg.LFIDtoLID = reshape([1,Np_per_dim], 2,1)
     elseif dim == 2
         dg.LFIDtoNormal = [-1 0; 1 0; 0 -1; 0 1] #first col. is x, second col. is y

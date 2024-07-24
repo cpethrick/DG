@@ -11,7 +11,7 @@ struct PhysicsAndFluxParams
     alpha_split::Float64
 end
 
-function calculate_numerical_flux(uM_face,uP_face,n_face,param::PhysicsAndFluxParams)
+function calculate_numerical_flux(uM_face,uP_face,n_face, direction, param::PhysicsAndFluxParams)
 
     #alpha = 0 #upwind
     #alpha = 1 #central
@@ -37,24 +37,43 @@ function calculate_numerical_flux(uM_face,uP_face,n_face,param::PhysicsAndFluxPa
     #display(f_numerical)
     #return f_numerical
 
-    f_numerical  = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) .* n_face # split
-    if cmp(param.numerical_flux_type, "split_with_LxF")==0
-        stacked_MP = [uM_face;uP_face]
-        max_eigenvalue = findmax(abs.(stacked_MP))[1]
-        f_numerical -= 0.5 .* max_eigenvalue .* (uP_face .- uM_face)
+    f_numerical=zeros(size(uM_face))
+    #display("uM_face")
+    #display(uM_face)
+    if cmp(param.pde_type,"burgers1D")==0
+        if direction == 1
+            f_numerical  = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) .* n_face[direction] # split
+            if cmp(param.numerical_flux_type, "split_with_LxF")==0
+                stacked_MP = [uM_face;uP_face]
+                max_eigenvalue = findmax(abs.(stacked_MP))[1]
+                f_numerical -= 0.5 .* max_eigenvalue .* (uP_face .- uM_face)
+            end
+        elseif direction == 2
+            f_numerical .+= 0 #for 1D burgers, no numerical flux in the y direction,
+        end
     end
     return f_numerical
 
 end
 
-function calculate_flux(u, Pi, param::PhysicsAndFluxParams)
-    #f = a .* u # nodal flux for lin. adv.
-    f = 0.5 .* (u.*u) # nodal flux
+function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
+    f = zeros(dg.Np)
+            
+    if cmp(param.pde_type,"linear_advection")==0
+        a = 1 #placeholder - should modify to actually be linear advection if I need that.
+        f = a .* u # nodal flux for lin. adv.
+    elseif cmp(param.pde_type, "burgers_1D")==0
+        if direction == 1
+            f += 0.5 .* (u.*u) # nodal flux
+        elseif direction==2
+            f .+=0
+        end
+    end
 
     #f_f = f[Fmask[:],:] #since we use GLL solution nodes, can select first and last element for face flux values.
     # what to do abt face? I don't use  Fmask anymore
     
-    f_hat = Pi * f
+    f_hat = dg.Pi * f
 
     return f_hat#,f_f
 

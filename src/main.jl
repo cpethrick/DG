@@ -238,7 +238,8 @@ function main()
     dim=2
     #fluxtype="split_with_LxF"
     fluxtype="split"
-    param = PhysicsAndFluxParams(dim,"split_with_LxF", "burgers", true, alpha_split)
+    PDEtype = "burgers1D"
+    param = PhysicsAndFluxParams(dim,"split_with_LxF", PDEtype, true, alpha_split)
 
     L2_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))

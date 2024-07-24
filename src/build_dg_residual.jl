@@ -5,12 +5,13 @@
 include("set_up_dg.jl")
 include("physics.jl")
 
-function calculate_face_term(iface, f_hat, u_hat, uM, uP, dg::DG, param::PhysicsAndFluxParams)
+function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
         #chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_f, alpha_split, u_hat, param::PhysicsAndFluxParams)
     #modify to be one face and one element
-    f_numerical_dot_n = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface], param)
+    f_numerical_dot_n = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction, param)
 
-    face_flux_dot_n::AbstractVector{Float64} = [(dg.chi_v * f_hat)[dg.LFIDtoLID[iface]]]
+    #face_flux_dot_n::AbstractVector{Float64} = [(dg.chi_v * f_hat)[dg.LFIDtoLID[iface]]]
+    face_flux_dot_n::AbstractVector{Float64} = dg.chi_f[:,:,iface] * f_hat
     if param.alpha_split < 1
         face_flux_dot_n*=param.alpha_split
         #face_flux_nonconservative = reshape(calculate_face_terms_nonconservative(dg.chi_f[:,:,iface], u_hat), size(face_flux_dot_n))
@@ -18,6 +19,10 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, dg::DG, param::Physics
         face_flux_dot_n .+= (1-param.alpha_split) * face_flux_nonconservative
     end
     face_flux_dot_n .*= dg.LFIDtoNormal[iface]
+    #display("face_flux_dot_n")
+    #display(face_flux_dot_n)
+    #display("f_numerical_dot_n")
+    #display(f_numerical_dot_n)
     
     face_term = dg.chi_f[:,:,iface]' * dg.W_f * (f_numerical_dot_n .- face_flux_dot_n)
 
@@ -25,6 +30,7 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, dg::DG, param::Physics
 end
 
 function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_global, u_local, dg::DG)
+    #display("Function get_solution_at_face")
     
     # Select the appropriate face to find values from
     if find_interior_values
@@ -32,47 +38,42 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
         face = iface
     else
         elem = dg.EIDLFIDtoEIDofexterior[ielem,iface]
-        #assume that face 1 always interfaces with face 2.
-        if iface == 1
-            face = 2
-        else
-            face = 1
-        end
+        face =dg.LFIDtoLFIDofexterior[iface]
     end
 
     #Find local solution of the element of interest if we seek an exterior value
     #Here, we assume that solution nodes are GLL when we pick the face value from the solution.
     if find_interior_values
         #u_face = u_local[dg.LFIDtoLID[face, :]]
-        u_face = u_local[dg.LFIDtoLID[face]]
+        u_face = u_local[dg.LFIDtoLID[face, :]]
         #display("interior")
         #display(ielem)
         #display(iface)
-        #display(dg.LFIDtoLID[face])
+        #display(dg.LFIDtoLID[face, :])
     else
         u_hat_local_exterior_elem = zeros(size(u_local))
         for inode = 1:dg.Np
             u_hat_local_exterior_elem[inode] = u_hat_global[dg.EIDLIDtoGID[elem,inode]]
         end
         u_local_exterior_elem = dg.chi_v * u_hat_local_exterior_elem # nodal solution
-        u_face = u_local_exterior_elem[dg.LFIDtoLID[face]]
+        u_face = u_local_exterior_elem[dg.LFIDtoLID[face,:]]
         #display("exterior")
         #display(ielem)
         #display(iface)
         #display(elem)
         #display(face)
-        #display(dg.LFIDtoLID[face])
+        #display(dg.LFIDtoLID[face,:])
     end
+    #display("end Function get_solution_at_face")
     return u_face
 
 end
 
-function calculate_volume_terms(f_hat, dg)
-    if dg.dim == 1
+function calculate_volume_terms(f_hat, direction, dg)
+    if direction == 1
         return dg.S_xi * f_hat
-    else
-        #Should I use a third dimension to indicate the direction of f_hat?
-        return dg.S_xi * f_hat_xi + dg.S_eta * f_hat_eta
+    elseif direction==2
+        return dg.S_eta * f_hat
     end
         
 end
@@ -96,24 +97,32 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
         end
 
         u_local = dg.chi_v * u_hat_local # nodal solution
-        f_hat_local = calculate_flux(u_local, dg.Pi, param)
-        ## Flux needs to be higher-dim!!
-
-        volume_terms = calculate_volume_terms(f_hat_local, dg)
-        if param.alpha_split < 1
-            volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local, dg)
-            volume_terms = param.alpha_split * volume_terms + (1-param.alpha_split) * volume_terms_nonconservative
-        end
-
+        volume_terms = zeros(Float64, size(u_hat_local))
         face_terms = zeros(Float64, size(u_hat_local))
-        for iface in 1:dg.Nfaces
-            
-            #How to get exterior values if those are all modal?? Would be doing double work...
-            uM = get_solution_at_face(true, ielem, iface, u_hat, u_local, dg)
-            uP = get_solution_at_face(false, ielem, iface, u_hat, u_local, dg)
+        for idim = 1:dg.dim
+            f_hat_local = calculate_flux(u_local,idim, dg, param)
+            ## Flux needs to be higher-dim!!
 
-            face_terms .+= calculate_face_term(iface, f_hat_local, u_hat_local, uM, uP, dg, param)
+            volume_terms_dim = calculate_volume_terms(f_hat_local,idim, dg)
+            if param.alpha_split < 1
+                volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local, dg)
+                volume_terms_dim = param.alpha_split * volume_terms_dim + (1-param.alpha_split) * volume_terms_nonconservative
+            end
+            volume_terms += volume_terms_dim
+            for iface in 1:dg.Nfaces
+                
+                #How to get exterior values if those are all modal?? Would be doing double work...
+                # I'm also doing extra work here by calculating the external solution one per dim. Think about how to improve this.
+                uM = get_solution_at_face(true, ielem, iface, u_hat, u_local, dg)
+                #display("uM")
+                #display(uM)
+                uP = get_solution_at_face(false, ielem, iface, u_hat, u_local, dg)
+
+                face_terms .+= calculate_face_term(iface, f_hat_local, u_hat_local, uM, uP, idim, dg, param)
+
+            end
         end
+
 
         rhs_local = -1* dg.M_inv * (volume_terms .+ face_terms)
 
