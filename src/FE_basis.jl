@@ -35,9 +35,13 @@ function vandermonde2D(r_cubature::AbstractVector, r_basis::AbstractVector, dg::
 
     dim = 2
     V2D = zeros(Float64, (length(r_cubature)^dim, length(r_basis)^dim))
+    counter_cubature=1
     for iy_C = 1:length(r_cubature)
         for ix_C = 1:length(r_cubature)
-            i_LID_C = dg.LXIDLYIDtoLID[ix_C,iy_C]
+            #i_LID_C = dg.LXIDLYIDtoLID[ix_C,iy_C]
+            
+            i_LID_C = counter_cubature
+
 
             counter_basis = 1
             for iy_B = 1:length(r_basis)
@@ -47,6 +51,7 @@ function vandermonde2D(r_cubature::AbstractVector, r_basis::AbstractVector, dg::
                     counter_basis = counter_basis + 1
                 end
             end
+            counter_cubature+=1
         end
         
     end

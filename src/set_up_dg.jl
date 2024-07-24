@@ -68,6 +68,41 @@ mutable struct DG
 
 end
 
+function build_coords_vectors(ref_vec_1D, dg::DG)
+
+    x = zeros(dg.N_elem*(length(ref_vec_1D)^dg.dim))
+    y = zeros(dg.N_elem*(length(ref_vec_1D)^dg.dim))
+    Np=length(ref_vec_1D)^dg.dim
+    Np_per_dim=length(ref_vec_1D)
+    if dg.dim == 1
+        for ielem = 1:dg.N_elem
+            x_local = dg.VX[ielem] .+ 0.5* (ref_vec_1D .+1) * dg.delta_x
+            x[(ielem - 1) * Np+1:ielem*Np] .= x_local
+        end
+    elseif dg.dim == 2
+         for ielem = 1:dg.N_elem
+            x_index = mod(ielem-1,dg.N_elem_per_dim)+1
+            x_local_1D = dg.VX[x_index] .+ 0.5* (ref_vec_1D .+1) * dg.delta_x
+            x_local = zeros(Np)
+            for inode = 1:Np_per_dim
+                #slightly gross indexing because we don't want to use LXIDLYIDtoLID for generality of ref_vec_1D.
+                x_local[vec((1:Np_per_dim)' .+ (inode-1)*Np_per_dim)] .= x_local_1D
+            end
+            
+            y_index = Int(ceil(ielem/dg.N_elem_per_dim))
+            y_local_1D = dg.VX[y_index] .+ 0.5* (ref_vec_1D .+1) * dg.delta_x
+            y_local = zeros(size(x_local))
+            for inode = 1:Np_per_dim
+                y_local[(1:Np_per_dim).*Np_per_dim.-(Np_per_dim-inode)] .= y_local_1D
+            end
+
+            x[(ielem - 1) * Np+1:ielem*Np] .= x_local
+            y[(ielem - 1) * Np+1:ielem*Np] .= y_local
+         end
+    end
+    return (x,y)
+end
+
 # Outer constructor for DG object. Might be good to move to inner constructor at some point.
 function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{Float64})
     
@@ -75,7 +110,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     dg = DG(P, dim, N_elem_per_dim, domain_x_limits)
     dg.Np_per_dim = P+1
     
-    display(dg.P)
 
     if dim == 1
         dg.Np=dg.Np_per_dim
@@ -172,36 +206,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     jacobian = dg.delta_x/(2.0^dim) #reference element is 2 units long
     dg.J = LinearAlgebra.diagm(ones(length(dg.r_basis)^dim)*jacobian)
 
-    
-    dg.x = zeros(dg.N_elem*dg.Np)
-    dg.y = zeros(dg.N_elem*dg.Np)
-    if dim == 1
-        for ielem = 1:N_elem_per_dim
-            x_local = dg.VX[ielem] .+ 0.5* (dg.r_volume .+1) * dg.delta_x
-            dg.x[dg.EIDLIDtoGID[ielem,1:dg.Np_per_dim]] .= x_local
-        end
-        dg.y = zeros(size(dg.x)) # initialize y, only for plotting.
-    elseif dim == 2
-         for ielem = 1:dg.N_elem
-            x_index = mod(ielem-1,N_elem_per_dim)+1
-            x_local_1D = dg.VX[x_index] .+ 0.5* (dg.r_volume .+1) * dg.delta_x
-            x_local = zeros(dg.Np)
-            for inode = 1:Np_per_dim
-                x_local[dg.LXIDLYIDtoLID[:,inode]] .= x_local_1D
-            end
-            
-            y_index = Int(ceil(ielem/dg.N_elem_per_dim))
-            y_local_1D = dg.VX[y_index] .+ 0.5* (dg.r_volume .+1) * dg.delta_x
-            y_local = zeros(size(x_local))
-            for inode = 1:Np_per_dim
-                y_local[dg.LXIDLYIDtoLID[inode,:]] .= y_local_1D
-            end
-
-            dg.x[(ielem - 1) * dg.Np+1:ielem*dg.Np] .= x_local
-            dg.y[(ielem - 1) * dg.Np+1:ielem*dg.Np] .= y_local
-         end
-    end
-
+    (dg.x, dg.y) = build_coords_vectors(dg.r_volume, dg) 
     # Define Vandermonde matrices
     if dim == 1
         dg.chi_v = vandermonde1D(dg.r_volume,dg.r_basis)

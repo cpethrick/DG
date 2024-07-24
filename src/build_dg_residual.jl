@@ -46,9 +46,9 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
     if find_interior_values
         #u_face = u_local[dg.LFIDtoLID[face, :]]
         u_face = u_local[dg.LFIDtoLID[face, :]]
-        #display("interior")
-        #display(ielem)
-        #display(iface)
+        display("interior")
+        display(ielem)
+        display(iface)
         #display(dg.LFIDtoLID[face, :])
     else
         u_hat_local_exterior_elem = zeros(size(u_local))
@@ -57,11 +57,11 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
         end
         u_local_exterior_elem = dg.chi_v * u_hat_local_exterior_elem # nodal solution
         u_face = u_local_exterior_elem[dg.LFIDtoLID[face,:]]
-        #display("exterior")
-        #display(ielem)
-        #display(iface)
-        #display(elem)
-        #display(face)
+        display("exterior")
+        display(ielem)
+        display(iface)
+        display(elem)
+        display(face)
         #display(dg.LFIDtoLID[face,:])
     end
     #display("end Function get_solution_at_face")
@@ -87,7 +87,7 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
     u_hat_local = zeros(Float64, dg.Np)
     u_local = zeros(Float64, dg.Np)
     f_hat_local = zeros(Float64, dg.Np)
-    for ielem in 1:dg.N_elem_per_dim
+    for ielem in 1:dg.N_elem
         ## Extract local solution
         ## Make local rhs vector
         ## find local u and f hat

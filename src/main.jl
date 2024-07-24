@@ -57,13 +57,6 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     ==============================================================================#
     dg = init_DG(P, dim, N_elem_per_dim, [x_Llim,x_Rlim])
 
-    #plot grid
-    pltname = string("grid", N_elem_per_dim, ".pdf")
-    Plots.vline(dg.VX, color="black", linewidth=0.75, label="grid")
-    Plots.hline!(dg.VX, color="black", linewidth=0.75, label="grid")
-    Plots.plot!(dg.x, dg.y, label=["nodes"], seriestype=:scatter)
-    Plots.savefig(pltname)
-
     #==============================================================================
     RK scheme
     ==============================================================================#
@@ -105,9 +98,6 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         u0 = sin.(π * dg.x) .+ 0.01
     end
     if dim == 2
-        PyPlot.clf()
-        PyPlot.tricontourf(dg.x, dg.y, u0)
-        Plots.savefig(pltname)
     end
     #u_old = cos.(π * x)
     u_hat0 = zeros(dg.N_elem*dg.Np)
@@ -155,26 +145,27 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     Analysis
     ==============================================================================#
 
-    Np_overint = dg.Np+10
-    r_overint, w_overint = FastGaussQuadrature.gausslobatto(Np_overint)
-    x_overint = ones(dg.N_elem_per_dim*Np_overint)
-    for ielem = 1:dg.N_elem_per_dim
-        x_local = dg.VX[ielem] .+ 0.5* (r_overint .+1) * dg.delta_x
-        x_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= x_local
+    Np_overint_per_dim = dg.Np+10#dg.Np_per_dim+6
+    Np_overint = (Np_overint_per_dim)^dim
+    r_overint, w_overint = FastGaussQuadrature.gausslobatto(Np_overint_per_dim)
+    (x_overint, y_overint) = build_coords_vectors(r_overint, dg)
+    if dim==1
+        chi_overint = vandermonde1D(r_overint,dg.r_basis)
+        W_overint = LinearAlgebra.diagm(w_overint) # diagonal matrix holding quadrature weights
+        J_overint = LinearAlgebra.diagm(ones(size(r_overint))*dg.J[1]) #assume constant jacobian
+    elseif dim==2
+        chi_overint = vandermonde2D(r_overint, dg.r_basis, dg)
+        W_overint = LinearAlgebra.diagm(vec(w_overint*w_overint'))
+        J_overint = LinearAlgebra.diagm(ones(length(r_overint)^dim)*dg.J[1]) #assume constant jacobian
     end
-    #x_overint = ones(length(r_overint)) * dg.VX[va]' + 0.5 * (r_overint .+ 1) * (dg.VX[vb]-dg.VX[va])'
-    chi_overint = vandermonde1D(r_overint,dg.r_basis)
-    W_overint = LinearAlgebra.diagm(w_overint) # diagonal matrix holding quadrature weights
-    J_overint = LinearAlgebra.diagm(ones(size(r_overint))*dg.J[1]) #assume constant jacobian
-
-    #u_exact_overint = sin.(2(x_overint .- a*finaltime))
+        
     u_exact_overint = cos.(π*(x_overint.-current_time))
     u_calc_final_overint = zeros(size(x_overint))
     u0_overint = zeros(size(x_overint))
     u_calc_final = zeros(size(dg.x))
-    for ielem = 1:dg.N_elem_per_dim
-        u_hat_local = zeros(size(dg.r_volume)) 
-        u0_hat_local = zeros(size(dg.r_volume)) 
+    for ielem = 1:dg.N_elem
+        u_hat_local = zeros(length(dg.r_volume)^dim) 
+        u0_hat_local = zeros(size(u_hat_local)) 
         for inode = 1:dg.Np
             u_hat_local[inode] = u_hat[dg.EIDLIDtoGID[ielem,inode]]
             u0_hat_local[inode] = u_hat0[dg.EIDLIDtoGID[ielem,inode]]
@@ -185,15 +176,26 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     end
     u_diff = u_calc_final_overint .- u_exact_overint
 
-    ##################### Check later -- Why do I need to use diag?
-    # I think it's because I'm doing all elements aggregate but should check..
-    #display(u_diff)
-    #display(W_overint)
-    #display(J_overint)
+    x_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
+    u_calc_final_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
+    u0_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
+    u_exact_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
+    ctr = 1
+    for iglobalID = 1:length(y_overint)
+        if  y_overint[iglobalID] == 0
+            x_overint_1D[ctr] = x_overint[iglobalID]
+            u_calc_final_overint_1D[ctr] = u_calc_final_overint[iglobalID]
+            u0_overint_1D[ctr] = u0_overint[iglobalID]
+            u_exact_overint_1D[ctr] = u_exact_overint[iglobalID]
+            ctr+=1
+        end
+    end
+    print(x_overint_1D)
+
     L2_error = 0
     energy_final_calc = 0
     energy_initial = 0
-    for ielem = 1:dg.N_elem_per_dim
+    for ielem = 1:dg.N_elem
         L2_error += (sum((u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])))
         # use non-overintegrated qties to calculate energy difference
         energy_final_calc += sum(((u_calc_final[(ielem-1)*dg.Np+1:(ielem)*dg.Np]') * dg.W * dg.J * (u_calc_final[(ielem-1)*dg.Np+1:(ielem)*dg.Np])))
@@ -204,10 +206,39 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     energy_change = energy_final_calc - energy_initial
 
     Plots.vline(dg.VX, color="lightgray", linewidth=0.75, label="grid")
-    Plots.plot!(vec(x_overint), [vec(u_exact_overint), vec(u_calc_final_overint)], label=["exact" "calculated"])
+    Plots.plot!(vec(x_overint_1D), [vec(u_exact_overint_1D), vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["exact" "calculated"])
     pltname = string("plt", N_elem_per_dim, ".pdf")
     Plots.savefig(pltname)
+    
+    #plot grid
+    pltname = string("grid", N_elem_per_dim, ".pdf")
+    Plots.vline(dg.VX, color="black", linewidth=0.75, label="grid")
+    Plots.hline!(dg.VX, color="black", linewidth=0.75, label="grid")
+    Plots.plot!(x_overint, y_overint, label=["nodes-overint"], seriestype=:scatter)
+    Plots.plot!(dg.x, dg.y, label=["nodes"], seriestype=:scatter)
+    Plots.savefig(pltname)
 
+
+    if dim == 2
+        PyPlot.figure("Initial cond, no overintegrate")
+        PyPlot.clf()
+        PyPlot.tricontourf(dg.x, dg.y, u0, 20)
+        PyPlot.colorbar()
+        PyPlot.figure("Final soln, no overintegrate")
+        PyPlot.clf()
+        PyPlot.tricontourf(dg.x, dg.y, u_calc_final, 20)
+        PyPlot.colorbar()
+        PyPlot.figure("Initial cond, overintegrated")
+        PyPlot.clf()
+        PyPlot.tricontourf(x_overint, y_overint, u0_overint, 20)
+        PyPlot.colorbar()
+        Plots.savefig(pltname)
+        PyPlot.figure("Final soln, overintegrated")
+        PyPlot.clf()
+        PyPlot.tricontourf(x_overint, y_overint, u_calc_final_overint, 20)
+        PyPlot.colorbar()
+        Plots.savefig(pltname)
+    end
 
     return L2_error, energy_change#, solution
 end
@@ -226,7 +257,7 @@ function main()
     P = 3
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
-    #N_elem_range = [4 8 16 32]
+    #N_elem_range = [2 4 8]# 16 32]
     N_elem_range = [4]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
@@ -235,7 +266,7 @@ function main()
     alpha_split = 1 #Discretization of conservative form
     #alpha_split = 2.0/3.0 #energy-stable split form
     
-    dim=2
+    dim=1
     #fluxtype="split_with_LxF"
     fluxtype="split"
     PDEtype = "burgers1D"
@@ -246,6 +277,8 @@ function main()
 
     for i=1:length(N_elem_range)
 
+        display("P = "*string(P))
+        display("N_elem_per_dim = "*string(N_elem_range[i]))
         # Number of elements
         N_elem =  N_elem_range[i]
 

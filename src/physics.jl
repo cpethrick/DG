@@ -3,6 +3,8 @@
 # Currently solves Linear Advection.
 ==============================================================================#
 
+include("set_up_dg.jl")
+
 struct PhysicsAndFluxParams
     dim::Int64
     numerical_flux_type::AbstractString
