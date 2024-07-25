@@ -10,6 +10,8 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
     #modify to be one face and one element
     f_numerical_dot_n = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction, param)
 
+    #display("f_hat")
+    #display(f_hat)
     #face_flux_dot_n::AbstractVector{Float64} = [(dg.chi_v * f_hat)[dg.LFIDtoLID[iface]]]
     face_flux_dot_n::AbstractVector{Float64} = dg.chi_f[:,:,iface] * f_hat
     if param.alpha_split < 1
@@ -25,6 +27,8 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
     #display(f_numerical_dot_n)
     
     face_term = dg.chi_f[:,:,iface]' * dg.W_f * (f_numerical_dot_n .- face_flux_dot_n)
+    #display("face_term")
+    #display(face_term)
 
     return face_term
 end
@@ -46,9 +50,9 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
     if find_interior_values
         #u_face = u_local[dg.LFIDtoLID[face, :]]
         u_face = u_local[dg.LFIDtoLID[face, :]]
-        display("interior")
-        display(ielem)
-        display(iface)
+        #display("interior")
+        #display(ielem)
+        #display(iface)
         #display(dg.LFIDtoLID[face, :])
     else
         u_hat_local_exterior_elem = zeros(size(u_local))
@@ -57,11 +61,11 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
         end
         u_local_exterior_elem = dg.chi_v * u_hat_local_exterior_elem # nodal solution
         u_face = u_local_exterior_elem[dg.LFIDtoLID[face,:]]
-        display("exterior")
-        display(ielem)
-        display(iface)
-        display(elem)
-        display(face)
+        #display("exterior")
+        #display(ielem)
+        #display(iface)
+        #display(elem)
+        #display(face)
         #display(dg.LFIDtoLID[face,:])
     end
     #display("end Function get_solution_at_face")

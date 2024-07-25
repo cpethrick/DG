@@ -190,7 +190,6 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
             ctr+=1
         end
     end
-    print(x_overint_1D)
 
     L2_error = 0
     energy_final_calc = 0
@@ -256,15 +255,15 @@ function main()
     # Polynomial order
     P = 3
 
-    #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
+    N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
     #N_elem_range = [2 4 8]# 16 32]
-    N_elem_range = [4]
+    #N_elem_range = [4]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
     
-    alpha_split = 1 #Discretization of conservative form
-    #alpha_split = 2.0/3.0 #energy-stable split form
+    #alpha_split = 1 #Discretization of conservative form
+    alpha_split = 2.0/3.0 #energy-stable split form
     
     dim=1
     #fluxtype="split_with_LxF"

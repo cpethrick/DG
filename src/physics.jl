@@ -64,7 +64,7 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
     if cmp(param.pde_type,"linear_advection")==0
         a = 1 #placeholder - should modify to actually be linear advection if I need that.
         f = a .* u # nodal flux for lin. adv.
-    elseif cmp(param.pde_type, "burgers_1D")==0
+    elseif cmp(param.pde_type, "burgers1D")==0
         if direction == 1
             f += 0.5 .* (u.*u) # nodal flux
         elseif direction==2
