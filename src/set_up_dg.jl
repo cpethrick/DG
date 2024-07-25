@@ -9,6 +9,8 @@ mutable struct DG
     N_elem::Int
     Np_per_dim::Int # Number of points per direction per cell
     Np::Int # Total number of points per cell = Np^dim 
+    N_vol_per_dim::Int # Number of points per direction per cell
+    N_vol::Int # Total number of points per cell = Np^dim 
     Nfaces::Int
     Nfp::Int
     VX::Vector{Float64} # Array of points defining the extremes of each element along one dimension
@@ -17,7 +19,9 @@ mutable struct DG
     y::Vector{Float64} # physical y coords, index are global ID.
     
     GIDtoLID::Vector{Int} #Index is global ID, values are local IDs
-    EIDLIDtoGID::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
+    EIDLIDtoGID_basis::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
+                             # dimension is element ID. values are global ID.
+    EIDLIDtoGID_vol::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
                              # dimension is element ID. values are global ID.
     #LIDtoLFID::Vector{Int} # Index is local ID, value is local face ID
     #                       # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
@@ -125,13 +129,17 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     Np_per_dim=P+1 # for convenience
     N_elem = dg.N_elem
     Np = dg.Np
+    dg.N_vol_per_dim = dg.Np_per_dim# + 1 # for testing, assume overintegrate by 1.
+    dg.N_vol = dg.N_vol_per_dim^dim # for testing, assume overintegrate by 1.
+
     
     # Index is global ID, values are local IDs
     dg.GIDtoLID = mod.(0:(dg.Np*dg.N_elem.-1),dg.Np).+1
     
     # Index of first dimension is element ID, index of second dimension is element ID
     # values are global ID
-    dg.EIDLIDtoGID = reshape(1:Np*N_elem, (Np,N_elem))' #note transpose
+    dg.EIDLIDtoGID_basis = reshape(1:Np*N_elem, (Np,N_elem))' #note transpose
+    dg.EIDLIDtoGID_vol = reshape(1:dg.N_vol*N_elem, (dg.N_vol,N_elem))' #note transpose
 
     # Index is local ID, value is local face ID
     # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
@@ -192,31 +200,38 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     # Solution nodes - GLL
     # must choose GLL nodes unless I modify the selection of uP and uP for numerical flux.
     # Also will need to change splitting on the face.
-    dg.r_volume,dg.w = FastGaussQuadrature.gausslobatto(dg.Np_per_dim)
+    dg.r_volume,dg.w = FastGaussQuadrature.gausslobatto(dg.N_vol_per_dim)
+    #dg.r_volume,dg.w = FastGaussQuadrature.gaussjacobi(dg.N_vol_per_dim, 0.0,0.0)
+    display("r_volume")
+    display(dg.r_volume)
     #r will be size N+1
 
     # Basis function nodes - GLL
     # Note: must choose GLL due to face flux splitting.
     #dg.r_basis,dg.w_basis=FastGaussQuadrature.gaussjacobi(Np_per_dim,0.0,0.0)
     dg.r_basis,dg.w_basis=FastGaussQuadrature.gausslobatto(dg.Np_per_dim)
+    display("r_basis")
+    display(dg.r_basis)
 
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], N_elem_per_dim+1) |> collect
     dg.delta_x = dg.VX[2]-dg.VX[1]
     # constant jacobian on all elements as they are evenly spaced
     jacobian = dg.delta_x/(2.0^dim) #reference element is 2 units long
-    dg.J = LinearAlgebra.diagm(ones(length(dg.r_basis)^dim)*jacobian)
+    dg.J = LinearAlgebra.diagm(ones(length(dg.r_volume)^dim)*jacobian)
 
     (dg.x, dg.y) = build_coords_vectors(dg.r_volume, dg) 
     # Define Vandermonde matrices
     if dim == 1
         dg.chi_v = vandermonde1D(dg.r_volume,dg.r_basis)
+        display(dg.chi_v)
         dg.d_chi_v_d_xi = gradvandermonde1D(dg.r_volume,dg.r_basis)
+        display(dg.d_chi_v_d_xi)
         #reference coordinates of L and R faces
         r_f_L::Float64 = -1
         r_f_R::Float64 = 1
         dg.chi_f = assembleFaceVandermonde1D(r_f_L,r_f_R,dg.r_basis)
 
-        dg.W = LinearAlgebra.diagm(dg.w_basis) # diagonal matrix holding quadrature weights
+        dg.W = LinearAlgebra.diagm(dg.w) # diagonal matrix holding quadrature weights
         dg.W_f = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
     elseif dim == 2
         dg.chi_v = vandermonde2D(dg.r_volume,dg.r_basis, dg)
@@ -239,6 +254,10 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     end
     dg.M_nojac = dg.chi_v' * dg.W * dg.chi_v
     dg.Pi = inv(dg.M_nojac)*dg.chi_v'*dg.W
+
+    display(dg.Pi)
+    display("Next line is dg.chi_v*dg.Pi, which should be identity.")
+    display(dg.chi_v*dg.Pi) #should be identity
 
     return dg
 

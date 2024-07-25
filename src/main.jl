@@ -90,7 +90,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     Initialization
     ==============================================================================#
 
-    finaltime = 1.0
+    finaltime = param.finaltime
 
     if param.include_source
         u0 = cos.(π * dg.x)
@@ -101,14 +101,17 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     end
     #u_old = cos.(π * x)
     u_hat0 = zeros(dg.N_elem*dg.Np)
-    u_local = zeros(dg.Np)
+    u_local = zeros(dg.N_vol)
+   #display(u0)
     for ielem = 1:dg.N_elem
-        for inode = 1:dg.Np
-            u_local[inode] = u0[dg.EIDLIDtoGID[ielem,inode]]
+        for inode = 1:dg.N_vol
+            u_local[inode] = u0[dg.EIDLIDtoGID_vol[ielem,inode]]
         end
+       #display(u_local)
         u_hat_local = dg.Pi*u_local
-        #display(u_hat_local)
-        u_hat0[dg.EIDLIDtoGID[ielem,:]] = u_hat_local
+       #display(u_hat_local)
+       #display(dg.chi_v*u_hat_local)#Check that transformation to/from modal is okay.
+        u_hat0[dg.EIDLIDtoGID_basis[ielem,:]] = u_hat_local
     end
     a = 2π
 
@@ -129,6 +132,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     residual = zeros(size(u_hat))
     rhs = zeros(size(u_hat))
     for tstep = 1:Nsteps
+    #for tstep = 1:1
         for iRKstage = 1:nRKStage
             
             rktime = current_time + rk4c[iRKstage] * dt
@@ -145,7 +149,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     Analysis
     ==============================================================================#
 
-    Np_overint_per_dim = dg.Np+10#dg.Np_per_dim+6
+    Np_overint_per_dim = dg.Np_per_dim+10
     Np_overint = (Np_overint_per_dim)^dim
     r_overint, w_overint = FastGaussQuadrature.gausslobatto(Np_overint_per_dim)
     (x_overint, y_overint) = build_coords_vectors(r_overint, dg)
@@ -162,17 +166,17 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     u_exact_overint = cos.(π*(x_overint.-current_time))
     u_calc_final_overint = zeros(size(x_overint))
     u0_overint = zeros(size(x_overint))
-    u_calc_final = zeros(size(dg.x))
+    u_calc_final = zeros(dg.N_vol*dg.N_elem)
     for ielem = 1:dg.N_elem
-        u_hat_local = zeros(length(dg.r_volume)^dim) 
+        u_hat_local = zeros(length(dg.r_basis)^dim) 
         u0_hat_local = zeros(size(u_hat_local)) 
         for inode = 1:dg.Np
-            u_hat_local[inode] = u_hat[dg.EIDLIDtoGID[ielem,inode]]
-            u0_hat_local[inode] = u_hat0[dg.EIDLIDtoGID[ielem,inode]]
+            u_hat_local[inode] = u_hat[dg.EIDLIDtoGID_basis[ielem,inode]]
+            u0_hat_local[inode] = u_hat0[dg.EIDLIDtoGID_basis[ielem,inode]]
         end
         u_calc_final_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u_hat_local
         u0_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u0_hat_local
-        u_calc_final[(ielem-1)*dg.Np+1:(ielem)*dg.Np] .= dg.chi_v * u_hat_local
+        u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol] .= dg.chi_v * u_hat_local
     end
     u_diff = u_calc_final_overint .- u_exact_overint
 
@@ -190,7 +194,6 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
             ctr+=1
         end
     end
-    print(x_overint_1D)
 
     L2_error = 0
     energy_final_calc = 0
@@ -198,15 +201,15 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     for ielem = 1:dg.N_elem
         L2_error += (sum((u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])))
         # use non-overintegrated qties to calculate energy difference
-        energy_final_calc += sum(((u_calc_final[(ielem-1)*dg.Np+1:(ielem)*dg.Np]') * dg.W * dg.J * (u_calc_final[(ielem-1)*dg.Np+1:(ielem)*dg.Np])))
-        energy_initial += sum(((u0[(ielem-1)*dg.Np+1:(ielem)*dg.Np]') * dg.W * dg.J * (u0[(ielem-1)*dg.Np+1:(ielem)*dg.Np])))
+        energy_final_calc += sum(((u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.W * dg.J * (u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])))
+        energy_initial += sum(((u0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.W * dg.J * (u0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])))
     end
     L2_error = sqrt(L2_error)
 
     energy_change = energy_final_calc - energy_initial
 
     Plots.vline(dg.VX, color="lightgray", linewidth=0.75, label="grid")
-    Plots.plot!(vec(x_overint_1D), [vec(u_exact_overint_1D), vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["exact" "calculated"])
+    Plots.plot!(vec(x_overint_1D), [vec(u_exact_overint_1D), vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["exact" "calculated" "initial"])
     pltname = string("plt", N_elem_per_dim, ".pdf")
     Plots.savefig(pltname)
     
@@ -219,7 +222,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     Plots.savefig(pltname)
 
 
-    if dim == 2
+    if false#dim == 2
         PyPlot.figure("Initial cond, no overintegrate")
         PyPlot.clf()
         PyPlot.tricontourf(dg.x, dg.y, u0, 20)
@@ -254,31 +257,33 @@ Discretize into elements
 function main()
 
     # Polynomial order
-    P = 3
+    P = 4
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
-    #N_elem_range = [2 4 8]# 16 32]
-    N_elem_range = [4]
+    N_elem_range = [2 4 16 32]
+    #N_elem_range = [4]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
     
-    alpha_split = 1 #Discretization of conservative form
-    #alpha_split = 2.0/3.0 #energy-stable split form
+    #alpha_split = 1 #Discretization of conservative form
+    alpha_split = 2.0/3.0 #energy-stable split form
     
     dim=1
     #fluxtype="split_with_LxF"
     fluxtype="split"
     PDEtype = "burgers1D"
-    param = PhysicsAndFluxParams(dim,"split_with_LxF", PDEtype, true, alpha_split)
+
+    finaltime=1.0
+    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, true, alpha_split, finaltime)
 
     L2_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))
 
     for i=1:length(N_elem_range)
 
-        display("P = "*string(P))
-        display("N_elem_per_dim = "*string(N_elem_range[i]))
+       #display("P = "*string(P))
+       #display("N_elem_per_dim = "*string(N_elem_range[i]))
         # Number of elements
         N_elem =  N_elem_range[i]
 

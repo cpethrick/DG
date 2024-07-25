@@ -11,6 +11,7 @@ struct PhysicsAndFluxParams
     pde_type::AbstractString
     include_source::Bool
     alpha_split::Float64
+    finaltime::Float64
 end
 
 function calculate_numerical_flux(uM_face,uP_face,n_face, direction, param::PhysicsAndFluxParams)
@@ -40,6 +41,8 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction, param::Phys
     #return f_numerical
 
     f_numerical=zeros(size(uM_face))
+   #display("normal in the direction of interest")
+   #display(n_face[direction])
     #display("uM_face")
     #display(uM_face)
     if cmp(param.pde_type,"burgers1D")==0
@@ -59,12 +62,12 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction, param::Phys
 end
 
 function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
-    f = zeros(dg.Np)
+    f = zeros(dg.N_vol)
             
     if cmp(param.pde_type,"linear_advection")==0
         a = 1 #placeholder - should modify to actually be linear advection if I need that.
         f = a .* u # nodal flux for lin. adv.
-    elseif cmp(param.pde_type, "burgers_1D")==0
+    elseif cmp(param.pde_type, "burgers1D")==0
         if direction == 1
             f += 0.5 .* (u.*u) # nodal flux
         elseif direction==2

@@ -8,8 +8,14 @@ include("physics.jl")
 function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
         #chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_f, alpha_split, u_hat, param::PhysicsAndFluxParams)
     #modify to be one face and one element
+    #display("iface")
+    #display(iface)
+    #display("direction")
+    #display(direction)
     f_numerical_dot_n = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction, param)
 
+    #display("f_hat")
+    #display(f_hat)
     #face_flux_dot_n::AbstractVector{Float64} = [(dg.chi_v * f_hat)[dg.LFIDtoLID[iface]]]
     face_flux_dot_n::AbstractVector{Float64} = dg.chi_f[:,:,iface] * f_hat
     if param.alpha_split < 1
@@ -25,6 +31,8 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
     #display(f_numerical_dot_n)
     
     face_term = dg.chi_f[:,:,iface]' * dg.W_f * (f_numerical_dot_n .- face_flux_dot_n)
+    #display("face_term")
+    #display(face_term)
 
     return face_term
 end
@@ -46,22 +54,22 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
     if find_interior_values
         #u_face = u_local[dg.LFIDtoLID[face, :]]
         u_face = u_local[dg.LFIDtoLID[face, :]]
-        display("interior")
-        display(ielem)
-        display(iface)
+        #display("interior")
+        #display(ielem)
+        #display(iface)
         #display(dg.LFIDtoLID[face, :])
     else
-        u_hat_local_exterior_elem = zeros(size(u_local))
+        u_hat_local_exterior_elem = zeros(dg.Np)
         for inode = 1:dg.Np
-            u_hat_local_exterior_elem[inode] = u_hat_global[dg.EIDLIDtoGID[elem,inode]]
+            u_hat_local_exterior_elem[inode] = u_hat_global[dg.EIDLIDtoGID_basis[elem,inode]]
         end
         u_local_exterior_elem = dg.chi_v * u_hat_local_exterior_elem # nodal solution
         u_face = u_local_exterior_elem[dg.LFIDtoLID[face,:]]
-        display("exterior")
-        display(ielem)
-        display(iface)
-        display(elem)
-        display(face)
+        #display("exterior")
+        #display(ielem)
+        #display(iface)
+        #display(elem)
+        #display(face)
         #display(dg.LFIDtoLID[face,:])
     end
     #display("end Function get_solution_at_face")
@@ -71,6 +79,12 @@ end
 
 function calculate_volume_terms(f_hat, direction, dg)
     if direction == 1
+               #display("s_xi")
+       #display(dg.S_xi)
+       #display("f_hat")
+       #display(f_hat)
+       #display("prod")
+       #display(dg.S_xi * f_hat) 
         return dg.S_xi * f_hat
     elseif direction==2
         return dg.S_eta * f_hat
@@ -88,22 +102,28 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
     u_local = zeros(Float64, dg.Np)
     f_hat_local = zeros(Float64, dg.Np)
     for ielem in 1:dg.N_elem
+       #display("ielem")
+       #display(ielem)
         ## Extract local solution
         ## Make local rhs vector
         ## find local u and f hat
 
         for inode = 1:dg.Np
-            u_hat_local[inode] = u_hat[dg.EIDLIDtoGID[ielem,inode]]
+            u_hat_local[inode] = u_hat[dg.EIDLIDtoGID_basis[ielem,inode]]
         end
 
         u_local = dg.chi_v * u_hat_local # nodal solution
         volume_terms = zeros(Float64, size(u_hat_local))
         face_terms = zeros(Float64, size(u_hat_local))
         for idim = 1:dg.dim
+           #display("idim")
+           #display(idim)
             f_hat_local = calculate_flux(u_local,idim, dg, param)
             ## Flux needs to be higher-dim!!
 
             volume_terms_dim = calculate_volume_terms(f_hat_local,idim, dg)
+           #display("volume_terms_dim")
+           #display(volume_terms_dim)
             if param.alpha_split < 1
                 volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local, dg)
                 volume_terms_dim = param.alpha_split * volume_terms_dim + (1-param.alpha_split) * volume_terms_nonconservative
@@ -111,11 +131,13 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
             volume_terms += volume_terms_dim
             for iface in 1:dg.Nfaces
                 
+               #display("iface")
+               #display(iface)
                 #How to get exterior values if those are all modal?? Would be doing double work...
                 # I'm also doing extra work here by calculating the external solution one per dim. Think about how to improve this.
                 uM = get_solution_at_face(true, ielem, iface, u_hat, u_local, dg)
-                #display("uM")
-                #display(uM)
+               #display("uM")
+               #display(uM)
                 uP = get_solution_at_face(false, ielem, iface, u_hat, u_local, dg)
 
                 face_terms .+= calculate_face_term(iface, f_hat_local, u_hat_local, uM, uP, idim, dg, param)
@@ -128,16 +150,16 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
 
 
         if param.include_source
-            x_local = zeros(Float64, dg.Np)
-            for inode = 1:dg.Np
-                x_local[inode] = dg.x[dg.EIDLIDtoGID[ielem,inode]]
+            x_local = zeros(Float64, dg.N_vol)
+            for inode = 1:dg.N_vol
+                x_local[inode] = dg.x[dg.EIDLIDtoGID_vol[ielem,inode]]
             end
-            rhs_local+=calculate_source_terms(x_local,t, param)
+            rhs_local+=dg.Pi*calculate_source_terms(x_local,t, param)
         end
 
         # store local rhs in global rhs
         for inode in 1:dg.Np 
-            rhs[dg.EIDLIDtoGID[ielem,inode]] = rhs_local[inode]
+            rhs[dg.EIDLIDtoGID_basis[ielem,inode]] = rhs_local[inode]
         end
     end
     return rhs
