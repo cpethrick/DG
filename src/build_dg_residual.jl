@@ -6,7 +6,7 @@ include("set_up_dg.jl")
 include("physics.jl")
 
 function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
-        #chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_f, alpha_split, u_hat, param::PhysicsAndFluxParams)
+    #chi_face, W_f, n_face, f_hat, uM_face, uP_face, a, f_f, alpha_split, u_hat, param::PhysicsAndFluxParams)
     #modify to be one face and one element
     #display("iface")
     #display(iface)
@@ -37,7 +37,7 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
     return face_term
 end
 
-function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_global, u_local, dg::DG)
+function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_global, u_hat_local, dg::DG)
     #display("Function get_solution_at_face")
     
     # Select the appropriate face to find values from
@@ -53,7 +53,8 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
     #Here, we assume that solution nodes are GLL when we pick the face value from the solution.
     if find_interior_values
         #u_face = u_local[dg.LFIDtoLID[face, :]]
-        u_face = u_local[dg.LFIDtoLID[face, :]]
+        #u_face = u_local[dg.LFIDtoLID[face, :]]
+        u_face = dg.chi_f[:,:,face]*u_hat_local
         #display("interior")
         #display(ielem)
         #display(iface)
@@ -63,8 +64,9 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
         for inode = 1:dg.Np
             u_hat_local_exterior_elem[inode] = u_hat_global[dg.EIDLIDtoGID_basis[elem,inode]]
         end
-        u_local_exterior_elem = dg.chi_v * u_hat_local_exterior_elem # nodal solution
-        u_face = u_local_exterior_elem[dg.LFIDtoLID[face,:]]
+        #u_local_exterior_elem = dg.chi_v * u_hat_local_exterior_elem # nodal solution
+        #u_face = u_local_exterior_elem[dg.LFIDtoLID[face,:]]
+        u_face = dg.chi_f[:,:,face] * u_hat_local_exterior_elem
         #display("exterior")
         #display(ielem)
         #display(iface)
@@ -73,6 +75,7 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
         #display(dg.LFIDtoLID[face,:])
     end
     #display("end Function get_solution_at_face")
+    #display(u_face)
     return u_face
 
 end
@@ -135,10 +138,10 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
                #display(iface)
                 #How to get exterior values if those are all modal?? Would be doing double work...
                 # I'm also doing extra work here by calculating the external solution one per dim. Think about how to improve this.
-                uM = get_solution_at_face(true, ielem, iface, u_hat, u_local, dg)
+                uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg)
                #display("uM")
                #display(uM)
-                uP = get_solution_at_face(false, ielem, iface, u_hat, u_local, dg)
+                uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg)
 
                 face_terms .+= calculate_face_term(iface, f_hat_local, u_hat_local, uM, uP, idim, dg, param)
 

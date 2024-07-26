@@ -259,12 +259,12 @@ Discretize into elements
 function main()
 
     # Polynomial order
-    P = 4
+    P = 2
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
     N_elem_range = [2 4 16 32]
     #N_elem_range = [2 4 8]# 16 32]
-    #N_elem_range = [4]
+    #N_elem_range = [3]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
@@ -276,9 +276,9 @@ function main()
     #fluxtype="split_with_LxF"
     fluxtype="split"
     PDEtype = "burgers1D"
-    debugmode=true # if true, only solve one step using explicit Euler.
+    debugmode=false# if true, only solve one step using explicit Euler.
 
-    finaltime=1.0
+    finaltime=0.25
     param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, true, alpha_split, finaltime,debugmode)
 
     L2_err_store = zeros(length(N_elem_range))

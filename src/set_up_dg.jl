@@ -200,8 +200,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     # Solution nodes - GLL
     # must choose GLL nodes unless I modify the selection of uP and uP for numerical flux.
     # Also will need to change splitting on the face.
-    dg.r_volume,dg.w = FastGaussQuadrature.gausslobatto(dg.N_vol_per_dim)
-    #dg.r_volume,dg.w = FastGaussQuadrature.gaussjacobi(dg.N_vol_per_dim, 0.0,0.0)
+    #dg.r_volume,dg.w = FastGaussQuadrature.gausslobatto(dg.N_vol_per_dim)
+    dg.r_volume,dg.w = FastGaussQuadrature.gaussjacobi(dg.N_vol_per_dim, 0.0,0.0)
     display("r_volume")
     display(dg.r_volume)
     #r will be size N+1
