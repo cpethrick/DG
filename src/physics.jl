@@ -12,6 +12,7 @@ struct PhysicsAndFluxParams
     include_source::Bool
     alpha_split::Float64
     finaltime::Float64
+    debugmode::Bool
 end
 
 function calculate_numerical_flux(uM_face,uP_face,n_face, direction, param::PhysicsAndFluxParams)

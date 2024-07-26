@@ -61,7 +61,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     RK scheme
     ==============================================================================#
 
-    if true 
+    if param.debugmode == false
         rk4a = [ 0.0,
             -567301805773.0/1357537059087.0,
             -2404267990393.0/2016746695238.0,
@@ -78,8 +78,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
             2006345519317.0/3224310063776.0,
             2802321613138.0/2924317926251.0];
         nRKStage=5
-    end
-    if false
+    else 
         rk4a=[0]
         rk4b=[1]
         rk4c=[0]
@@ -122,6 +121,9 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     dt = 1E-4
     Nsteps::Int64 = ceil(finaltime/dt)
     dt = finaltime/Nsteps
+    if param.debugmode == true
+        Nsteps = 1
+    end
 
     #==============================================================================
     ODE Solver 
@@ -274,9 +276,10 @@ function main()
     #fluxtype="split_with_LxF"
     fluxtype="split"
     PDEtype = "burgers1D"
+    debugmode=true # if true, only solve one step using explicit Euler.
 
     finaltime=1.0
-    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, true, alpha_split, finaltime)
+    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, true, alpha_split, finaltime,debugmode)
 
     L2_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))
