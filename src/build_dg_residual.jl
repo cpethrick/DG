@@ -55,9 +55,9 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
         #u_face = u_local[dg.LFIDtoLID[face, :]]
         #u_face = u_local[dg.LFIDtoLID[face, :]]
         u_face = dg.chi_f[:,:,face]*u_hat_local
-        #display("interior")
-        #display(ielem)
-        #display(iface)
+        display("interior")
+        display(ielem)
+        display(iface)
         #display(dg.LFIDtoLID[face, :])
     else
         u_hat_local_exterior_elem = zeros(dg.Np)
@@ -67,15 +67,15 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
         #u_local_exterior_elem = dg.chi_v * u_hat_local_exterior_elem # nodal solution
         #u_face = u_local_exterior_elem[dg.LFIDtoLID[face,:]]
         u_face = dg.chi_f[:,:,face] * u_hat_local_exterior_elem
-        #display("exterior")
-        #display(ielem)
-        #display(iface)
-        #display(elem)
-        #display(face)
+        display("exterior")
+        display(ielem)
+        display(iface)
+        display(elem)
+        display(face)
         #display(dg.LFIDtoLID[face,:])
     end
     #display("end Function get_solution_at_face")
-    #display(u_face)
+    display(u_face)
     return u_face
 
 end

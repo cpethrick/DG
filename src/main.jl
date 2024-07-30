@@ -101,7 +101,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     #u_old = cos.(π * x)
     u_hat0 = zeros(dg.N_elem*dg.Np)
     u_local = zeros(dg.N_vol)
-   #display(u0)
+   display(u0)
     for ielem = 1:dg.N_elem
         for inode = 1:dg.N_vol
             u_local[inode] = u0[dg.EIDLIDtoGID_vol[ielem,inode]]
@@ -224,15 +224,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     Plots.savefig(pltname)
 
 
-    if false#dim == 2
-        PyPlot.figure("Initial cond, no overintegrate")
-        PyPlot.clf()
-        PyPlot.tricontourf(dg.x, dg.y, u0, 20)
-        PyPlot.colorbar()
-        PyPlot.figure("Final soln, no overintegrate")
-        PyPlot.clf()
-        PyPlot.tricontourf(dg.x, dg.y, u_calc_final, 20)
-        PyPlot.colorbar()
+    if false #dim == 2
         PyPlot.figure("Initial cond, overintegrated")
         PyPlot.clf()
         PyPlot.tricontourf(x_overint, y_overint, u0_overint, 20)
@@ -262,21 +254,21 @@ function main()
     P = 2
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
-    N_elem_range = [2 4 16 32]
+    #N_elem_range = [2 4 16 32]
     #N_elem_range = [2 4 8]# 16 32]
-    #N_elem_range = [3]
+    N_elem_range = [3]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
     
-    #alpha_split = 1 #Discretization of conservative form
-    alpha_split = 2.0/3.0 #energy-stable split form
+    alpha_split = 1 #Discretization of conservative form
+    #alpha_split = 2.0/3.0 #energy-stable split form
     
-    dim=1
+    dim=2
     #fluxtype="split_with_LxF"
     fluxtype="split"
     PDEtype = "burgers1D"
-    debugmode=false# if true, only solve one step using explicit Euler.
+    debugmode= true# if true, only solve one step using explicit Euler.
 
     finaltime=0.25
     param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, true, alpha_split, finaltime,debugmode)

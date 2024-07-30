@@ -216,7 +216,10 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], N_elem_per_dim+1) |> collect
     dg.delta_x = dg.VX[2]-dg.VX[1]
     # constant jacobian on all elements as they are evenly spaced
-    jacobian = dg.delta_x/(2.0^dim) #reference element is 2 units long
+    #jacobian = (2.0^dim)/dg.delta_x^dim #reference element is 2 units long
+    jacobian = dg.delta_x^dim/2.0^dim #reference element is 2 units long
+    display("jacobian")
+    display(jacobian)
     dg.J = LinearAlgebra.diagm(ones(length(dg.r_volume)^dim)*jacobian)
 
     (dg.x, dg.y) = build_coords_vectors(dg.r_volume, dg) 
@@ -238,13 +241,19 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
         dg.d_chi_v_d_xi = gradvandermonde2D(1, dg.r_volume,dg.r_basis, dg)
         dg.d_chi_v_d_eta = gradvandermonde2D(2, dg.r_volume,dg.r_basis, dg)
         dg.W = LinearAlgebra.diagm(vec(dg.w_basis*dg.w_basis'))
-        dg.chi_f = assembleFaceVandermonde2D(dg.chi_v,dg.r_basis,dg)
+        display("W")
+        display(dg.W)
+        display("1D w")
+        display(dg.w_basis)
+        dg.chi_f = assembleFaceVandermonde2D(dg.r_basis,dg.r_volume,dg)
         dg.W_f = LinearAlgebra.diagm(dg.w_basis)
     end
     
     # Mass and stiffness matrices as defined Eq. 9.5 Cicchino 2022
     # All defined on a single element.
     dg.M = dg.chi_v' * dg.W * dg.J * dg.chi_v
+    display("Mass matrix")
+    display(dg.M)
     dg.M_inv = inv(dg.M)
     dg.S_xi = dg.chi_v' * dg.W * dg.d_chi_v_d_xi
     dg.S_noncons_xi = dg.W * dg.d_chi_v_d_xi
@@ -255,7 +264,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     dg.M_nojac = dg.chi_v' * dg.W * dg.chi_v
     dg.Pi = inv(dg.M_nojac)*dg.chi_v'*dg.W
 
-    display(dg.Pi)
+    #display(dg.Pi)
     display("Next line is dg.chi_v*dg.Pi, which should be identity.")
     display(dg.chi_v*dg.Pi) #should be identity
 
