@@ -101,7 +101,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     #u_old = cos.(π * x)
     u_hat0 = zeros(dg.N_elem*dg.Np)
     u_local = zeros(dg.N_vol)
-   display(u0)
+   #display(u0)
     for ielem = 1:dg.N_elem
         for inode = 1:dg.N_vol
             u_local[inode] = u0[dg.EIDLIDtoGID_vol[ielem,inode]]
@@ -115,10 +115,10 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     a = 2π
 
     #timestep size according to CFL
-    #CFL = 0.01
+    CFL = 0.01
     #xmin = minimum(abs.(x[1,:] .- x[2,:]))
     #dt = abs(CFL / a * xmin /2)
-    dt = 1E-4
+    dt = CFL * (dg.delta_x / dg.Np_per_dim)
     Nsteps::Int64 = ceil(finaltime/dt)
     dt = finaltime/Nsteps
     if param.debugmode == true
@@ -165,7 +165,11 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         J_overint = LinearAlgebra.diagm(ones(length(r_overint)^dim)*dg.J[1]) #assume constant jacobian
     end
         
-    u_exact_overint = cos.(π*(x_overint.-current_time))
+    if cmp(param.pde_type, "burgers1D")==0
+        u_exact_overint = cos.(π*(x_overint.-current_time))
+    else
+        u_exact_overint = sin.(π * (x_overint.-current_time)) .+ 0.01
+    end
     u_calc_final_overint = zeros(size(x_overint))
     u0_overint = zeros(size(x_overint))
     u_calc_final = zeros(dg.N_vol*dg.N_elem)
@@ -202,11 +206,14 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     energy_initial = 0
     for ielem = 1:dg.N_elem
         L2_error += (sum((u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])))
+        
         # use non-overintegrated qties to calculate energy difference
         energy_final_calc += sum(((u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.W * dg.J * (u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])))
         energy_initial += sum(((u0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.W * dg.J * (u0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])))
     end
     L2_error = sqrt(L2_error)
+
+    Linf_error = maximum(abs.(u_diff))
 
     energy_change = energy_final_calc - energy_initial
 
@@ -224,7 +231,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     Plots.savefig(pltname)
 
 
-    if false #dim == 2
+    if dim == 2 && N_elem_per_dim == 4
         PyPlot.figure("Initial cond, overintegrated")
         PyPlot.clf()
         PyPlot.tricontourf(x_overint, y_overint, u0_overint, 20)
@@ -237,7 +244,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         Plots.savefig(pltname)
     end
 
-    return L2_error, energy_change#, solution
+    return L2_error, Linf_error, energy_change#, solution
 end
 
 #==============================================================================
@@ -251,12 +258,12 @@ Discretize into elements
 function main()
 
     # Polynomial order
-    P = 2
+    P =2 
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
-    #N_elem_range = [2 4 16 32]
-    #N_elem_range = [2 4 8]# 16 32]
-    N_elem_range = [3]
+    #N_elem_range = [2 4 8 16 32]
+    N_elem_range = [2 4 8 16]# 32]
+    #N_elem_range = [4]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
@@ -267,13 +274,16 @@ function main()
     dim=2
     #fluxtype="split_with_LxF"
     fluxtype="split"
-    PDEtype = "burgers1D"
-    debugmode= true# if true, only solve one step using explicit Euler.
+    #PDEtype = "burgers1D"
+    PDEtype = "linear_adv_1D"
+    debugmode= false# if true, only solve one step using explicit Euler
+    includesource = false
 
-    finaltime=0.25
-    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, true, alpha_split, finaltime,debugmode)
+    finaltime=1.0
+    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, includesource, alpha_split, finaltime,debugmode)
 
     L2_err_store = zeros(length(N_elem_range))
+    Linf_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))
 
     for i=1:length(N_elem_range)
@@ -283,19 +293,23 @@ function main()
         # Number of elements
         N_elem =  N_elem_range[i]
 
-        L2_err_store[i],energy_change_store[i] = setup_and_solve(N_elem,P,param)
+        L2_err_store[i],Linf_err_store[i], energy_change_store[i] = setup_and_solve(N_elem,P,param)
     end
 
     Printf.@printf("P =  %d \n", P)
 
-    Printf.@printf("n cells           Error     Error rate     Energy change \n")
+    dx = 2.0./N_elem_range
+
+    Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change \n")
     for i = 1:length(N_elem_range)
-            conv_rate = 0.0
+            conv_rate_L2 = 0.0
+            conv_rate_Linf = 0.0
             if i>1
-                conv_rate = log(L2_err_store[i]/L2_err_store[i-1]) / log(N_elem_range[i]/N_elem_range[i-1])
+                conv_rate_L2 = log(L2_err_store[i]/L2_err_store[i-1]) / log(dx[i]/dx[i-1])
+                conv_rate_Linf = log(Linf_err_store[i]/Linf_err_store[i-1]) / log(dx[i]/dx[i-1])
             end
 
-            Printf.@printf("%d \t%.16f \t%.2f \t%.16f\n", N_elem_range[i], L2_err_store[i], conv_rate, energy_change_store[i])
+            Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f\n", N_elem_range[i], dx[i], L2_err_store[i], conv_rate_L2, Linf_err_store[i], conv_rate_Linf, energy_change_store[i])
     end
 end
 

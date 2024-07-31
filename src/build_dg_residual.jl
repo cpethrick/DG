@@ -12,25 +12,25 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
     #display(iface)
     #display("direction")
     #display(direction)
-    f_numerical_dot_n = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction, param)
+    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction, param)
 
     #display("f_hat")
     #display(f_hat)
     #face_flux_dot_n::AbstractVector{Float64} = [(dg.chi_v * f_hat)[dg.LFIDtoLID[iface]]]
-    face_flux_dot_n::AbstractVector{Float64} = dg.chi_f[:,:,iface] * f_hat
+    face_flux::AbstractVector{Float64} = dg.chi_f[:,:,iface] * f_hat
     if param.alpha_split < 1
-        face_flux_dot_n*=param.alpha_split
+        face_flux*=param.alpha_split
         #face_flux_nonconservative = reshape(calculate_face_terms_nonconservative(dg.chi_f[:,:,iface], u_hat), size(face_flux_dot_n))
         face_flux_nonconservative = calculate_face_terms_nonconservative(dg.chi_f[:,:,iface], u_hat)
-        face_flux_dot_n .+= (1-param.alpha_split) * face_flux_nonconservative
+        face_flux .+= (1-param.alpha_split) * face_flux_nonconservative
     end
-    face_flux_dot_n .*= dg.LFIDtoNormal[iface]
+    #face_flux_dot_n .*= dg.LFIDtoNormal[iface, direction]
     #display("face_flux_dot_n")
     #display(face_flux_dot_n)
     #display("f_numerical_dot_n")
     #display(f_numerical_dot_n)
     
-    face_term = dg.chi_f[:,:,iface]' * dg.W_f * (f_numerical_dot_n .- face_flux_dot_n)
+    face_term = dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface, direction] * (f_numerical .- face_flux)
     #display("face_term")
     #display(face_term)
 
@@ -55,9 +55,9 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
         #u_face = u_local[dg.LFIDtoLID[face, :]]
         #u_face = u_local[dg.LFIDtoLID[face, :]]
         u_face = dg.chi_f[:,:,face]*u_hat_local
-        display("interior")
-        display(ielem)
-        display(iface)
+        #display("interior")
+        #display(ielem)
+        #display(iface)
         #display(dg.LFIDtoLID[face, :])
     else
         u_hat_local_exterior_elem = zeros(dg.Np)
@@ -67,15 +67,15 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
         #u_local_exterior_elem = dg.chi_v * u_hat_local_exterior_elem # nodal solution
         #u_face = u_local_exterior_elem[dg.LFIDtoLID[face,:]]
         u_face = dg.chi_f[:,:,face] * u_hat_local_exterior_elem
-        display("exterior")
-        display(ielem)
-        display(iface)
-        display(elem)
-        display(face)
+        #display("exterior")
+        #display(ielem)
+        #display(iface)
+        #display(elem)
+        #display(face)
         #display(dg.LFIDtoLID[face,:])
     end
     #display("end Function get_solution_at_face")
-    display(u_face)
+    #display(u_face)
     return u_face
 
 end
@@ -122,7 +122,6 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
            #display("idim")
            #display(idim)
             f_hat_local = calculate_flux(u_local,idim, dg, param)
-            ## Flux needs to be higher-dim!!
 
             volume_terms_dim = calculate_volume_terms(f_hat_local,idim, dg)
            #display("volume_terms_dim")
@@ -148,9 +147,15 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
             end
         end
 
+       #display("volume terms")
+       #display(volume_terms)
+       #display("face terms")
+       #display(face_terms)
 
         rhs_local = -1* dg.M_inv * (volume_terms .+ face_terms)
 
+       #display("rhs_local")
+       #display(rhs_local)
 
         if param.include_source
             x_local = zeros(Float64, dg.N_vol)

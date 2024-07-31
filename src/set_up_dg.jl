@@ -41,7 +41,7 @@ mutable struct DG
 
 
     r_volume::Vector{Float64}
-    w::Vector{Float64}
+    w_volume::Vector{Float64}
     r_basis::Vector{Float64}
     w_basis::Vector{Float64}
     chi_v::AbstractMatrix{Float64}
@@ -129,7 +129,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     Np_per_dim=P+1 # for convenience
     N_elem = dg.N_elem
     Np = dg.Np
-    dg.N_vol_per_dim = dg.Np_per_dim# + 1 # for testing, assume overintegrate by 1.
+    dg.N_vol_per_dim = dg.Np_per_dim # for testing, assume overintegrate by 1.
     dg.N_vol = dg.N_vol_per_dim^dim # for testing, assume overintegrate by 1.
 
     
@@ -201,8 +201,9 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     # must choose GLL nodes unless I modify the selection of uP and uP for numerical flux.
     # Also will need to change splitting on the face.
     #dg.r_volume,dg.w = FastGaussQuadrature.gausslobatto(dg.N_vol_per_dim)
-    dg.r_volume,dg.w = FastGaussQuadrature.gaussjacobi(dg.N_vol_per_dim, 0.0,0.0)
+    dg.r_volume,dg.w_volume = FastGaussQuadrature.gaussjacobi(dg.N_vol_per_dim, 0.0,0.0)
     display("r_volume")
+    # dg.r_volume= dg.r_volume * 0.5 .+ 0.5 # for changing ref element to match PHiLiP
     display(dg.r_volume)
     #r will be size N+1
 
@@ -211,13 +212,16 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     #dg.r_basis,dg.w_basis=FastGaussQuadrature.gaussjacobi(Np_per_dim,0.0,0.0)
     dg.r_basis,dg.w_basis=FastGaussQuadrature.gausslobatto(dg.Np_per_dim)
     display("r_basis")
+    # dg.r_basis = dg.r_basis * 0.5 .+ 0.5
     display(dg.r_basis)
 
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], N_elem_per_dim+1) |> collect
+    display(N_elem_per_dim)
     dg.delta_x = dg.VX[2]-dg.VX[1]
+    display(dg.VX)
     # constant jacobian on all elements as they are evenly spaced
     #jacobian = (2.0^dim)/dg.delta_x^dim #reference element is 2 units long
-    jacobian = dg.delta_x^dim/2.0^dim #reference element is 2 units long
+    jacobian = dg.delta_x/2.0 #reference element is 2 units long
     display("jacobian")
     display(jacobian)
     dg.J = LinearAlgebra.diagm(ones(length(dg.r_volume)^dim)*jacobian)
@@ -234,19 +238,19 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
         r_f_R::Float64 = 1
         dg.chi_f = assembleFaceVandermonde1D(r_f_L,r_f_R,dg.r_basis)
 
-        dg.W = LinearAlgebra.diagm(dg.w) # diagonal matrix holding quadrature weights
+        dg.W = LinearAlgebra.diagm(dg.w_volume) # diagonal matrix holding quadrature weights
         dg.W_f = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
     elseif dim == 2
         dg.chi_v = vandermonde2D(dg.r_volume,dg.r_basis, dg)
         dg.d_chi_v_d_xi = gradvandermonde2D(1, dg.r_volume,dg.r_basis, dg)
         dg.d_chi_v_d_eta = gradvandermonde2D(2, dg.r_volume,dg.r_basis, dg)
-        dg.W = LinearAlgebra.diagm(vec(dg.w_basis*dg.w_basis'))
+        dg.W = LinearAlgebra.diagm(vec(dg.w_volume*dg.w_volume'))
         display("W")
         display(dg.W)
         display("1D w")
-        display(dg.w_basis)
+        display(dg.w_volume)
         dg.chi_f = assembleFaceVandermonde2D(dg.r_basis,dg.r_volume,dg)
-        dg.W_f = LinearAlgebra.diagm(dg.w_basis)
+        dg.W_f = LinearAlgebra.diagm(dg.w_volume)
     end
     
     # Mass and stiffness matrices as defined Eq. 9.5 Cicchino 2022

@@ -16,11 +16,17 @@ struct PhysicsAndFluxParams
 end
 
 function calculate_numerical_flux(uM_face,uP_face,n_face, direction, param::PhysicsAndFluxParams)
+    f_numerical=zeros(size(uM_face))
 
     #alpha = 0 #upwind
     #alpha = 1 #central
-    #
-    #f_numerical = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face) * (uM_face.-uP_face) # lin. adv, upwind/central
+    if cmp(param.pde_type, "linear_adv_1D")==0
+        a=1
+        alpha = 0 
+        if direction == 1
+            f_numerical = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face[direction]) * (uM_face.-uP_face) # lin. adv, upwind/central
+        end
+    end
     #f_numerical = 0.25 * (uM_face.^2 .+ uP_face.^2) .+ (1-alpha) / 4.0 * (n_face) * (uM_face.^2 .-uP_face.^2) #Burgers, LxF
     #f_numerical = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) #Burgers, energy-conserving
     #if LxF
@@ -41,14 +47,13 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction, param::Phys
     #display(f_numerical)
     #return f_numerical
 
-    f_numerical=zeros(size(uM_face))
    #display("normal in the direction of interest")
    #display(n_face[direction])
     #display("uM_face")
     #display(uM_face)
     if cmp(param.pde_type,"burgers1D")==0
         if direction == 1
-            f_numerical  = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) .* n_face[direction] # split
+            f_numerical  = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) # split
             if cmp(param.numerical_flux_type, "split_with_LxF")==0
                 stacked_MP = [uM_face;uP_face]
                 max_eigenvalue = findmax(abs.(stacked_MP))[1]
@@ -65,9 +70,11 @@ end
 function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
     f = zeros(dg.N_vol)
             
-    if cmp(param.pde_type,"linear_advection")==0
-        a = 1 #placeholder - should modify to actually be linear advection if I need that.
-        f = a .* u # nodal flux for lin. adv.
+    if cmp(param.pde_type,"linear_adv_1D")==0
+        if direction == 1
+            a = 1 #placeholder - should modify to actually be linear advection if I need that.
+            f .+= a .* u # nodal flux for lin. adv.
+        end
     elseif cmp(param.pde_type, "burgers1D")==0
         if direction == 1
             f += 0.5 .* (u.*u) # nodal flux
@@ -75,6 +82,9 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
             f .+=0
         end
     end
+
+    #display("Flux")
+    #display(f)
 
     #f_f = f[Fmask[:],:] #since we use GLL solution nodes, can select first and last element for face flux values.
     # what to do abt face? I don't use  Fmask anymore
