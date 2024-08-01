@@ -55,7 +55,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     #==============================================================================
     Start Up
     ==============================================================================#
-    dg = init_DG(P, dim, N_elem_per_dim, [x_Llim,x_Rlim])
+    dg = init_DG(P, dim, N_elem_per_dim, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes)
 
     #==============================================================================
     RK scheme
@@ -94,7 +94,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     if param.include_source
         u0 = cos.(π * dg.x)
     else
-        u0 = sin.(π * dg.x) .+ 0.01
+        u0 = sin.(π * (dg.x)) .+ 0.01
     end
     if dim == 2
     end
@@ -133,6 +133,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     current_time = 0
     residual = zeros(size(u_hat))
     rhs = zeros(size(u_hat))
+    display("dt")
+    display(dt)
     for tstep = 1:Nsteps
     #for tstep = 1:1
         for iRKstage = 1:nRKStage
@@ -201,11 +203,11 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         end
     end
 
-    L2_error = 0
+    L2_error::Float64 = 0
     energy_final_calc = 0
     energy_initial = 0
     for ielem = 1:dg.N_elem
-        L2_error += (sum((u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])))
+        L2_error += (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])
         
         # use non-overintegrated qties to calculate energy difference
         energy_final_calc += sum(((u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.W * dg.J * (u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])))
@@ -258,11 +260,11 @@ Discretize into elements
 function main()
 
     # Polynomial order
-    P =2 
+    P = 3
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
     #N_elem_range = [2 4 8 16 32]
-    N_elem_range = [2 4 8 16]# 32]
+    N_elem_range = [2 4 8 16 32]
     #N_elem_range = [4]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
@@ -274,13 +276,16 @@ function main()
     dim=2
     #fluxtype="split_with_LxF"
     fluxtype="split"
-    #PDEtype = "burgers1D"
-    PDEtype = "linear_adv_1D"
+    PDEtype = "burgers1D"
+    #PDEtype = "linear_adv_1D"
     debugmode= false# if true, only solve one step using explicit Euler
-    includesource = false
+    includesource = true
+    volumenodes = "GL"
+    basisnodes = "GLL"
 
-    finaltime=1.0
-    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, includesource, alpha_split, finaltime,debugmode)
+    finaltime=0.50
+    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, includesource, alpha_split, finaltime, volumenodes, basisnodes, debugmode)
+    display(param)
 
     L2_err_store = zeros(length(N_elem_range))
     Linf_err_store = zeros(length(N_elem_range))

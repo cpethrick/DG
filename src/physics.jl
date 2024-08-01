@@ -12,10 +12,16 @@ struct PhysicsAndFluxParams
     include_source::Bool
     alpha_split::Float64
     finaltime::Float64
+    volumenodes::String #"GLL" or "GL"
+    basisnodes::String #"GLL" or "GL"
     debugmode::Bool
 end
 
-function calculate_numerical_flux(uM_face,uP_face,n_face, direction, param::PhysicsAndFluxParams)
+function transform_physical_to_reference(f_physical, direction, dg::DG)
+    return dg.C_m[direction,direction] * f_physical 
+end
+
+function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, param::PhysicsAndFluxParams)
     f_numerical=zeros(size(uM_face))
 
     #alpha = 0 #upwind
@@ -23,7 +29,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction, param::Phys
     if cmp(param.pde_type, "linear_adv_1D")==0
         a=1
         alpha = 0 
-        if direction == 1
+        if direction ==1 
             f_numerical = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face[direction]) * (uM_face.-uP_face) # lin. adv, upwind/central
         end
     end
@@ -55,13 +61,18 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction, param::Phys
         if direction == 1
             f_numerical  = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) # split
             if cmp(param.numerical_flux_type, "split_with_LxF")==0
+                display("Warning: there is an issue with LxF that needs to be fixed.")
                 stacked_MP = [uM_face;uP_face]
                 max_eigenvalue = findmax(abs.(stacked_MP))[1]
-                f_numerical -= 0.5 .* max_eigenvalue .* (uP_face .- uM_face)
+                f_numerical -= 0.5 .* max_eigenvalue .* (uP_face .- uM_face) # I think normal needs to be incorporated here.
             end
         elseif direction == 2
             f_numerical .+= 0 #for 1D burgers, no numerical flux in the y direction,
         end
+    end
+    if dg.dim == 2
+        # in 1D, C_m = 1 so we don't need this step
+        f_numerical = transform_physical_to_reference(f_numerical, direction, dg)
     end
     return f_numerical
 
@@ -83,12 +94,10 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
         end
     end
 
-    #display("Flux")
-    #display(f)
-
-    #f_f = f[Fmask[:],:] #since we use GLL solution nodes, can select first and last element for face flux values.
-    # what to do abt face? I don't use  Fmask anymore
-    
+    if dg.dim == 2
+        # in 1D, C_m = 1 so we don't need this step
+        f = transform_physical_to_reference(f, direction, dg)
+    end
     f_hat = dg.Pi * f
 
     return f_hat#,f_f
@@ -96,12 +105,15 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
 end
 
 function calculate_face_terms_nonconservative(chi_face, u_hat)
+    #only for 1D at the momend
     return 0.5 * (chi_face * u_hat) .* (chi_face * u_hat)
 end
 
 function calculate_source_terms(x::AbstractVector{Float64},t::Float64, param::PhysicsAndFluxParams)
-    #return zeros(size(x)) 
     if param.include_source
+        if cmp(param.pde_type, "linear_adv_1D") ==0
+            display("Warning! You probably don't want the source for linear advection!")
+        end
         return π*sin.(π*(x .- t)).*(1 .- cos.(π*(x .- t)))
     else
         return zeros(size(x))

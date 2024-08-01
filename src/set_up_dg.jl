@@ -36,8 +36,8 @@ mutable struct DG
                                                 # dimension is LFID of the edge.
     LFIDtoLFIDofexterior::Vector{Int} # which LFID of the exterior cell matches to the index LFID.
 
-    LXIDLYIDtoLID::AbstractMatrix{Int} # local x, y (length Np_per_dim) to local ID (length Np)
-    LIDtoLXIDLYID::AbstractMatrix{Int} # local x, y (length Np_per_dim) to local ID (length Np)
+    #LXIDLYIDtoLID::AbstractMatrix{Int} # local x, y (length Np_per_dim) to local ID (length Np)
+    #LIDtoLXIDLYID::AbstractMatrix{Int} # local x, y (length Np_per_dim) to local ID (length Np)
 
 
     r_volume::Vector{Float64}
@@ -48,6 +48,7 @@ mutable struct DG
     d_chi_v_d_xi::AbstractMatrix{Float64}
     d_chi_v_d_eta::AbstractMatrix{Float64}
     chi_f::AbstractArray{Float64}
+    C_m::AbstractMatrix{Float64}
     
     W::AbstractMatrix{Float64}
     W_f::AbstractMatrix{Float64}
@@ -108,7 +109,7 @@ function build_coords_vectors(ref_vec_1D, dg::DG)
 end
 
 # Outer constructor for DG object. Might be good to move to inner constructor at some point.
-function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{Float64})
+function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{Float64}, volumenodes::String, basisnodes::String)
     
     #initialize incomplete DG struct
     dg = DG(P, dim, N_elem_per_dim, domain_x_limits)
@@ -183,7 +184,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
         end
     end
     dg.LFIDtoLFIDofexterior = [2, 1, 4, 3] #Hard-code for 2D. Also works fine for 1D. 
-
+    #=== Not currently used anywhere (it messes with the generality of volume and basis nodes)
     if dim == 2
         dg.LXIDLYIDtoLID = zeros(Int, (Np_per_dim,Np_per_dim))
         dg.LIDtoLXIDLYID = zeros(Int, (Np_per_dim*Np_per_dim,2))
@@ -196,23 +197,36 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
             end
         end
     end
+    ===#
 
-    # Solution nodes - GLL
-    # must choose GLL nodes unless I modify the selection of uP and uP for numerical flux.
-    # Also will need to change splitting on the face.
-    #dg.r_volume,dg.w = FastGaussQuadrature.gausslobatto(dg.N_vol_per_dim)
-    dg.r_volume,dg.w_volume = FastGaussQuadrature.gaussjacobi(dg.N_vol_per_dim, 0.0,0.0)
+    # Solution nodes (integration nodes)
+    if cmp(volumenodes, "GLL") == 0 
+        display("GLL Volume nodes.")
+        dg.r_volume,dg.w_volume = FastGaussQuadrature.gausslobatto(dg.N_vol_per_dim)
+    elseif cmp(volumenodes, "GL") == 0
+        display("GL Volume nodes.")
+        dg.r_volume,dg.w_volume = FastGaussQuadrature.gaussjacobi(dg.N_vol_per_dim, 0.0,0.0)
+    else
+        display("Illegal volume node choice!")
+    end
     display("r_volume")
-    # dg.r_volume= dg.r_volume * 0.5 .+ 0.5 # for changing ref element to match PHiLiP
+    # dg.r_volume= dg.r_volume * 0.5 .+ 0.5 # for changing ref element to match PHiLiP for debugging purposes
+    # dg.w_volume /= 2.0
     display(dg.r_volume)
-    #r will be size N+1
 
-    # Basis function nodes - GLL
-    # Note: must choose GLL due to face flux splitting.
-    #dg.r_basis,dg.w_basis=FastGaussQuadrature.gaussjacobi(Np_per_dim,0.0,0.0)
-    dg.r_basis,dg.w_basis=FastGaussQuadrature.gausslobatto(dg.Np_per_dim)
+    # Basis function nodes (shape functions, interpolation nodes)
+    if cmp(basisnodes, "GLL") == 0 
+        display("GLL basis nodes.")
+        dg.r_basis,dg.w_basis=FastGaussQuadrature.gausslobatto(dg.Np_per_dim)
+    elseif cmp(basisnodes, "GL") == 0
+        display("GL basis nodes.")
+        dg.r_basis,dg.w_basis=FastGaussQuadrature.gaussjacobi(Np_per_dim,0.0,0.0)
+    else
+        display("Illegal basis node choice!")
+    end
     display("r_basis")
     # dg.r_basis = dg.r_basis * 0.5 .+ 0.5
+    # dg.w_basis /= 2.0
     display(dg.r_basis)
 
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], N_elem_per_dim+1) |> collect
@@ -220,8 +234,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     dg.delta_x = dg.VX[2]-dg.VX[1]
     display(dg.VX)
     # constant jacobian on all elements as they are evenly spaced
-    #jacobian = (2.0^dim)/dg.delta_x^dim #reference element is 2 units long
-    jacobian = dg.delta_x/2.0 #reference element is 2 units long
+    jacobian = (dg.delta_x/2.0)^dim #reference element is 2 units long
     display("jacobian")
     display(jacobian)
     dg.J = LinearAlgebra.diagm(ones(length(dg.r_volume)^dim)*jacobian)
@@ -251,11 +264,12 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
         display(dg.w_volume)
         dg.chi_f = assembleFaceVandermonde2D(dg.r_basis,dg.r_volume,dg)
         dg.W_f = LinearAlgebra.diagm(dg.w_volume)
+        dg.C_m = dg.delta_x/2.0 * [1 0; 0 1]  # Assuming a cartesian element and a reference element (-1,1)
     end
     
     # Mass and stiffness matrices as defined Eq. 9.5 Cicchino 2022
     # All defined on a single element.
-    dg.M = dg.chi_v' * dg.W * dg.J * dg.chi_v
+    dg.M = dg.chi_v' * dg.W * dg.J * dg.chi_v ## Have verified this against PHiLiP.
     display("Mass matrix")
     display(dg.M)
     dg.M_inv = inv(dg.M)
@@ -268,7 +282,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     dg.M_nojac = dg.chi_v' * dg.W * dg.chi_v
     dg.Pi = inv(dg.M_nojac)*dg.chi_v'*dg.W
 
-    #display(dg.Pi)
     display("Next line is dg.chi_v*dg.Pi, which should be identity.")
     display(dg.chi_v*dg.Pi) #should be identity
 
@@ -276,4 +289,3 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
 
 end
 
-#init_DG(4,1,5,  [0.0, 1.0] )
