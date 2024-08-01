@@ -61,7 +61,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     RK scheme
     ==============================================================================#
 
-    if param.debugmode == false
+    if true #param.debugmode == false
         rk4a = [ 0.0,
             -567301805773.0/1357537059087.0,
             -2404267990393.0/2016746695238.0,
@@ -115,7 +115,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     a = 2π
 
     #timestep size according to CFL
-    CFL = 0.01
+    CFL = 0.005
     #xmin = minimum(abs.(x[1,:] .- x[2,:]))
     #dt = abs(CFL / a * xmin /2)
     dt = CFL * (dg.delta_x / dg.Np_per_dim)
@@ -260,30 +260,30 @@ Discretize into elements
 function main()
 
     # Polynomial order
-    P = 3
+    P = 2
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
     #N_elem_range = [2 4 8 16 32]
-    N_elem_range = [2 4 8]# 16 32]
-    #N_elem_range = [4]
+    #N_elem_range = [2 4 8]# 16 32]
+    N_elem_range = [4]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
     
-    alpha_split = 1 #Discretization of conservative form
-    #alpha_split = 2.0/3.0 #energy-stable split form
+    #alpha_split = 1 #Discretization of conservative form
+    alpha_split = 2.0/3.0 #energy-stable split form
     
-    dim=2
-    fluxtype="split_with_LxF"
-    #fluxtype="split"
+    dim=1
+    #fluxtype="split_with_LxF"
+    fluxtype="split"
     PDEtype = "burgers1D"
     #PDEtype = "linear_adv_1D"
     debugmode= false# if true, only solve one step using explicit Euler
-    includesource = true
+    includesource = false
     volumenodes = "GL"
     basisnodes = "GLL"
 
-    finaltime=0.50
+    finaltime=0.1
     param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, includesource, alpha_split, finaltime, volumenodes, basisnodes, debugmode)
     display(param)
 
