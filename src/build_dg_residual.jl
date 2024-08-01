@@ -55,8 +55,12 @@ function calculate_volume_terms(f_hat, direction, dg)
         
 end
 
-function calculate_volume_terms_nonconservative(u, u_hat, dg) 
-    return dg.chi_v' * ((u) .* (dg.S_noncons_xi * u_hat))
+function calculate_volume_terms_nonconservative(u, u_hat, direction, dg::DG, param::PhysicsAndFluxParams) 
+    if direction == 1 && occursin("burgers",param.pde_type) #both 1D and 2D burg
+        return dg.chi_v' * ((u) .* (dg.S_noncons_xi * u_hat))
+    elseif direction == 2 && cmp(param.pde_type, "burgers2D") == 0 
+        return dg.chi_v' * ((u) .* (dg.S_noncons_eta * u_hat))                                                                                                                                                     
+    end
 end
 
 function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
@@ -78,7 +82,7 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
 
             volume_terms_dim = calculate_volume_terms(f_hat_local,idim, dg)
             if param.alpha_split < 1
-                volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local, dg)
+                volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local,idim, dg, param)
                 volume_terms_dim = param.alpha_split * volume_terms_dim + (1-param.alpha_split) * volume_terms_nonconservative
             end
             volume_terms += volume_terms_dim

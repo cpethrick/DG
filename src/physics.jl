@@ -57,12 +57,19 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, para
    #display(n_face[direction])
     #display("uM_face")
     #display(uM_face)
+    if cmp(param.pde_type,"burgers2D")==0 || (cmp(param.pde_type,"burgers1D")==0 && direction == 1)
+        f_numerical  = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) # split
+        if cmp(param.numerical_flux_type, "split_with_LxF")==0
+            stacked_MP = [uM_face;uP_face]
+            max_eigenvalue = findmax(abs.(stacked_MP))[1]
+            f_numerical += n_face[direction] * 0.5 .* max_eigenvalue .* (uM_face .- uP_face)
+        end
+    end
+#==
     if cmp(param.pde_type,"burgers1D")==0
         if direction == 1
             f_numerical  = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) # split
             if cmp(param.numerical_flux_type, "split_with_LxF")==0
-                #display("Warning: there is an issue with LxF that needs to be fixed.")
-                stacked_MP = [uM_face;uP_face]
                 max_eigenvalue = findmax(abs.(stacked_MP))[1]
                 f_numerical += n_face[direction] * 0.5 .* max_eigenvalue .* (uM_face .- uP_face) # I think normal needs to be incorporated here.
             end
@@ -70,6 +77,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, para
             f_numerical .+= 0 #for 1D burgers, no numerical flux in the y direction,
         end
     end
+    ==#
     if dg.dim == 2
         # in 1D, C_m = 1 so we don't need this step
         f_numerical = transform_physical_to_reference(f_numerical, direction, dg)
@@ -86,12 +94,8 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
             a = 1 #placeholder - should modify to actually be linear advection if I need that.
             f .+= a .* u # nodal flux for lin. adv.
         end
-    elseif cmp(param.pde_type, "burgers1D")==0
-        if direction == 1
-            f += 0.5 .* (u.*u) # nodal flux
-        elseif direction==2
-            f .+=0
-        end
+    elseif cmp(param.pde_type,"burgers2D")==0 || (cmp(param.pde_type,"burgers1D")==0 && direction == 1)
+        f += 0.5 .* (u.*u) # nodal flux
     end
 
     if dg.dim == 2
@@ -105,7 +109,6 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
 end
 
 function calculate_face_terms_nonconservative(chi_face, u_hat)
-    #only for 1D at the momend
     return 0.5 * (chi_face * u_hat) .* (chi_face * u_hat)
 end
 

@@ -91,8 +91,10 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     finaltime = param.finaltime
 
-    if param.include_source
+    if param.include_source && cmp(param.pde_type, "burgers1D")
         u0 = cos.(π * dg.x)
+    elseif cmp(param.pde_type, "burgers2D") == 0
+        u0 = exp.(-10*((dg.x .-1).^2 .+(dg.y .-1).^2))
     else
         u0 = sin.(π * (dg.x)) .+ 0.01
     end
@@ -188,13 +190,13 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     end
     u_diff = u_calc_final_overint .- u_exact_overint
 
-    x_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
-    u_calc_final_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
-    u0_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
-    u_exact_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
+    x_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim*2)
+    u_calc_final_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim*2)
+    u0_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim*2)
+    u_exact_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim*2)
     ctr = 1
     for iglobalID = 1:length(y_overint)
-        if  y_overint[iglobalID] == 0
+        if  y_overint[iglobalID] == 1.0
             x_overint_1D[ctr] = x_overint[iglobalID]
             u_calc_final_overint_1D[ctr] = u_calc_final_overint[iglobalID]
             u0_overint_1D[ctr] = u0_overint[iglobalID]
@@ -220,7 +222,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     energy_change = energy_final_calc - energy_initial
 
     Plots.vline(dg.VX, color="lightgray", linewidth=0.75, label="grid")
-    Plots.plot!(vec(x_overint_1D), [vec(u_exact_overint_1D), vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["exact" "calculated" "initial"])
+    #Plots.plot!(vec(x_overint_1D), [vec(u_exact_overint_1D), vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["exact" "calculated" "initial"])
+    Plots.plot!(vec(x_overint_1D), [vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["calculated" "initial"])
     pltname = string("plt", N_elem_per_dim, ".pdf")
     Plots.savefig(pltname)
     
@@ -264,21 +267,21 @@ function main()
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
     #N_elem_range = [2 4 8 16 32]
-    #N_elem_range = [2 4 8]# 16 32]
-    N_elem_range = [4]
+    N_elem_range = [2 4 8]# 16 32]
+    #N_elem_range = [4]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
     
-    #alpha_split = 1 #Discretization of conservative form
-    alpha_split = 2.0/3.0 #energy-stable split form
+    alpha_split = 1 #Discretization of conservative form
+    #alpha_split = 2.0/3.0 #energy-stable split form
     
-    dim=1
+    dim=2
     #fluxtype="split_with_LxF"
     fluxtype="split"
-    PDEtype = "burgers1D"
+    PDEtype = "burgers2D"
     #PDEtype = "linear_adv_1D"
-    debugmode= false# if true, only solve one step using explicit Euler
+    debugmode=false# if true, only solve one step using explicit Euler
     includesource = false
     volumenodes = "GL"
     basisnodes = "GLL"
