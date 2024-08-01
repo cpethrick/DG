@@ -264,7 +264,7 @@ function main()
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
     #N_elem_range = [2 4 8 16 32]
-    N_elem_range = [2 4 8 16 32]
+    N_elem_range = [2 4 8]# 16 32]
     #N_elem_range = [4]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
@@ -274,8 +274,8 @@ function main()
     #alpha_split = 2.0/3.0 #energy-stable split form
     
     dim=2
-    #fluxtype="split_with_LxF"
-    fluxtype="split"
+    fluxtype="split_with_LxF"
+    #fluxtype="split"
     PDEtype = "burgers1D"
     #PDEtype = "linear_adv_1D"
     debugmode= false# if true, only solve one step using explicit Euler

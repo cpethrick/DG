@@ -61,10 +61,10 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, para
         if direction == 1
             f_numerical  = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) # split
             if cmp(param.numerical_flux_type, "split_with_LxF")==0
-                display("Warning: there is an issue with LxF that needs to be fixed.")
+                #display("Warning: there is an issue with LxF that needs to be fixed.")
                 stacked_MP = [uM_face;uP_face]
                 max_eigenvalue = findmax(abs.(stacked_MP))[1]
-                f_numerical -= 0.5 .* max_eigenvalue .* (uP_face .- uM_face) # I think normal needs to be incorporated here.
+                f_numerical += n_face[direction] * 0.5 .* max_eigenvalue .* (uM_face .- uP_face) # I think normal needs to be incorporated here.
             end
         elseif direction == 2
             f_numerical .+= 0 #for 1D burgers, no numerical flux in the y direction,
