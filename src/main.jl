@@ -296,12 +296,12 @@ function main()
     alpha_split = 2.0/3.0 #energy-stable split form
     
     dim=2
-    fluxtype="split_with_LxF"
+    fluxtype="split"
     #fluxtype="split"
-    PDEtype = "burgers1D"
+    PDEtype = "burgers2D"
     #PDEtype = "linear_adv_1D"
     debugmode=false# if true, only solve one step using explicit Euler
-    includesource = true
+    includesource = false 
     volumenodes = "GL"
     basisnodes = "GLL"
 
