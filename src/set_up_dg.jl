@@ -253,6 +253,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
 
         dg.W = LinearAlgebra.diagm(dg.w_volume) # diagonal matrix holding quadrature weights
         dg.W_f = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
+        dg.C_m = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
     elseif dim == 2
         dg.chi_v = vandermonde2D(dg.r_volume,dg.r_basis, dg)
         dg.d_chi_v_d_xi = gradvandermonde2D(1, dg.r_volume,dg.r_basis, dg)

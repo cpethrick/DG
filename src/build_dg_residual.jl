@@ -11,7 +11,7 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
     face_flux::AbstractVector{Float64} = dg.chi_f[:,:,iface] * f_hat
     if param.alpha_split < 1
         face_flux*=param.alpha_split
-        face_flux_nonconservative = calculate_face_terms_nonconservative(dg.chi_f[:,:,iface], u_hat)
+        face_flux_nonconservative = calculate_face_terms_nonconservative(dg.chi_f[:,:,iface], u_hat, direction, dg, param)
         face_flux .+= (1-param.alpha_split) * face_flux_nonconservative
     end
     
@@ -55,12 +55,15 @@ function calculate_volume_terms(f_hat, direction, dg)
         
 end
 
-function calculate_volume_terms_nonconservative(u, u_hat, direction, dg::DG, param::PhysicsAndFluxParams) 
+function calculate_volume_terms_nonconservative(u, u_hat, direction, dg::DG, param::PhysicsAndFluxParams)
     if direction == 1 && occursin("burgers",param.pde_type) #both 1D and 2D burg
-        return dg.chi_v' * ((u) .* (dg.S_noncons_xi * u_hat))
-    elseif direction == 2 && cmp(param.pde_type, "burgers2D") == 0 
-        return dg.chi_v' * ((u) .* (dg.S_noncons_eta * u_hat))                                                                                                                                                     
-    end
+        volume_term_physical = dg.chi_v' * ((u) .* (dg.S_noncons_xi * u_hat))                                                                                                                              
+    elseif direction == 2 && cmp(param.pde_type, "burgers2D") == 0
+        volume_term_physical = dg.chi_v' * ((u) .* (dg.S_noncons_eta * u_hat))
+    else
+        volume_term_physical = 0 * dg.chi_v' * ((u) .* (dg.S_noncons_xi * u_hat)) #expensive way to get the right size
+    end 
+    return transform_physical_to_reference(volume_term_physical, direction, dg) 
 end
 
 function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)

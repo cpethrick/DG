@@ -33,6 +33,21 @@ import Printf
 import Plots
 import PyPlot
 
+
+#==============================================================================
+Handy function to avoid unintentionally exiting :)
+==============================================================================#
+function myexit()
+    Printf.@printf("Do you really want to exit? [y/n] \n")
+    exitresponse::String = readline()
+
+    if cmp(exitresponse,"y")==0
+        exit()
+    else
+        Printf.@printf("Not exiting for now.")
+    end
+end
+
 #==============================================================================
 Load external files
 ==============================================================================#
@@ -105,7 +120,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     #u_old = cos.(π * x)
     u_hat0 = zeros(dg.N_elem*dg.Np)
     u_local = zeros(dg.N_vol)
-   #display(u0)
+    #display(u0)
     for ielem = 1:dg.N_elem
         for inode = 1:dg.N_vol
             u_local[inode] = u0[dg.EIDLIDtoGID_vol[ielem,inode]]
@@ -267,12 +282,12 @@ Discretize into elements
 function main()
 
     # Polynomial order
-    P = 2
+    P = 3
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
     #N_elem_range = [2 4 8 16 32]
     N_elem_range = [2 4 8 16 32]
-    #N_elem_range = [4]
+    #N_elem_range = [2]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
@@ -287,10 +302,10 @@ function main()
     #PDEtype = "linear_adv_1D"
     debugmode=false# if true, only solve one step using explicit Euler
     includesource = true
-    volumenodes = "GLL"
+    volumenodes = "GL"
     basisnodes = "GLL"
 
-    finaltime=0.25
+    finaltime=0.1
     param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, includesource, alpha_split, finaltime, volumenodes, basisnodes, debugmode)
     display(param)
 

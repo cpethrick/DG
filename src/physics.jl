@@ -98,9 +98,12 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
         f += 0.5 .* (u.*u) # nodal flux
     end
 
+    #display("f_physical")
+    #display(f)
     if dg.dim == 2
         # in 1D, C_m = 1 so we don't need this step
         f = transform_physical_to_reference(f, direction, dg)
+    #display(f)
     end
     f_hat = dg.Pi * f
 
@@ -108,9 +111,16 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
 
 end
 
-function calculate_face_terms_nonconservative(chi_face, u_hat)
-    return 0.5 * (chi_face * u_hat) .* (chi_face * u_hat)
-end
+function calculate_face_terms_nonconservative(chi_face, u_hat, direction, dg::DG, param::PhysicsAndFluxParams)
+    if cmp(param.pde_type,"burgers2D")==0 || (cmp(param.pde_type,"burgers1D")==0 && direction == 1)
+        u_physical = chi_face*u_hat
+        f_physical =  0.5 * (u_physical) .* (u_physical)
+        f_reference = transform_physical_to_reference(f_physical, direction, dg)
+    else
+        return 0*(chi_face*u_hat)
+    end
+    return f_reference
+end 
 
 function calculate_source_terms(x::AbstractVector{Float64},y::AbstractVector{Float64},t::Float64, param::PhysicsAndFluxParams)
     if param.include_source
@@ -120,6 +130,7 @@ function calculate_source_terms(x::AbstractVector{Float64},y::AbstractVector{Flo
         if cmp(param.pde_type, "burgers1D")==0
             return π*sin.(π*(x .- t)).*(1 .- cos.(π*(x .- t)))
         elseif cmp(param.pde_type, "burgers2D")==0 
+            display("Warning! This source is not correct!")
             return π*sin.(π*(x .+ y.- sqrt(2) * t)).*(1 .- cos.(π*(x .+ y .- sqrt(2) * t)))
         end
     else
