@@ -112,12 +112,16 @@ function calculate_face_terms_nonconservative(chi_face, u_hat)
     return 0.5 * (chi_face * u_hat) .* (chi_face * u_hat)
 end
 
-function calculate_source_terms(x::AbstractVector{Float64},t::Float64, param::PhysicsAndFluxParams)
+function calculate_source_terms(x::AbstractVector{Float64},y::AbstractVector{Float64},t::Float64, param::PhysicsAndFluxParams)
     if param.include_source
         if cmp(param.pde_type, "linear_adv_1D") ==0
             display("Warning! You probably don't want the source for linear advection!")
         end
-        return π*sin.(π*(x .- t)).*(1 .- cos.(π*(x .- t)))
+        if cmp(param.pde_type, "burgers1D")==0
+            return π*sin.(π*(x .- t)).*(1 .- cos.(π*(x .- t)))
+        elseif cmp(param.pde_type, "burgers2D")==0 
+            return π*sin.(π*(x .+ y.- sqrt(2) * t)).*(1 .- cos.(π*(x .+ y .- sqrt(2) * t)))
+        end
     else
         return zeros(size(x))
     end

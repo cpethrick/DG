@@ -91,8 +91,10 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     finaltime = param.finaltime
 
-    if param.include_source && cmp(param.pde_type, "burgers1D")
-        u0 = cos.(π * dg.x)
+    if param.include_source && cmp(param.pde_type, "burgers2D")==0
+        u0 = cos.(π * (dg.x + dg.y))
+    elseif param.include_source && cmp(param.pde_type, "burgers1D")==0
+        u0 = cos.(π * (dg.x))
     elseif cmp(param.pde_type, "burgers2D") == 0
         u0 = exp.(-10*((dg.x .-1).^2 .+(dg.y .-1).^2))
     else
@@ -171,6 +173,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         
     if cmp(param.pde_type, "burgers1D")==0
         u_exact_overint = cos.(π*(x_overint.-current_time))
+    elseif cmp(param.pde_type, "burgers2D")==0
+        u_exact_overint = cos.(π*(x_overint.+y_overint.-sqrt(2)*current_time))
     else
         u_exact_overint = sin.(π * (x_overint.-current_time)) .+ 0.01
     end
@@ -222,8 +226,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     energy_change = energy_final_calc - energy_initial
 
     Plots.vline(dg.VX, color="lightgray", linewidth=0.75, label="grid")
-    #Plots.plot!(vec(x_overint_1D), [vec(u_exact_overint_1D), vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["exact" "calculated" "initial"])
-    Plots.plot!(vec(x_overint_1D), [vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["calculated" "initial"])
+    Plots.plot!(vec(x_overint_1D), [vec(u_exact_overint_1D), vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["exact" "calculated" "initial"])
+    #Plots.plot!(vec(x_overint_1D), [vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["calculated" "initial"])
     pltname = string("plt", N_elem_per_dim, ".pdf")
     Plots.savefig(pltname)
     
@@ -267,26 +271,26 @@ function main()
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
     #N_elem_range = [2 4 8 16 32]
-    N_elem_range = [2 4 8]# 16 32]
+    N_elem_range = [2 4 8 16 32]
     #N_elem_range = [4]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
     #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
     
-    alpha_split = 1 #Discretization of conservative form
-    #alpha_split = 2.0/3.0 #energy-stable split form
+    #alpha_split = 1 #Discretization of conservative form
+    alpha_split = 2.0/3.0 #energy-stable split form
     
     dim=2
-    #fluxtype="split_with_LxF"
-    fluxtype="split"
-    PDEtype = "burgers2D"
+    fluxtype="split_with_LxF"
+    #fluxtype="split"
+    PDEtype = "burgers1D"
     #PDEtype = "linear_adv_1D"
     debugmode=false# if true, only solve one step using explicit Euler
-    includesource = false
-    volumenodes = "GL"
+    includesource = true
+    volumenodes = "GLL"
     basisnodes = "GLL"
 
-    finaltime=0.1
+    finaltime=0.25
     param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, includesource, alpha_split, finaltime, volumenodes, basisnodes, debugmode)
     display(param)
 
@@ -302,22 +306,22 @@ function main()
         N_elem =  N_elem_range[i]
 
         L2_err_store[i],Linf_err_store[i], energy_change_store[i] = setup_and_solve(N_elem,P,param)
-    end
 
-    Printf.@printf("P =  %d \n", P)
+        Printf.@printf("P =  %d \n", P)
 
-    dx = 2.0./N_elem_range
+        dx = 2.0./N_elem_range
 
-    Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change \n")
-    for i = 1:length(N_elem_range)
-            conv_rate_L2 = 0.0
-            conv_rate_Linf = 0.0
-            if i>1
-                conv_rate_L2 = log(L2_err_store[i]/L2_err_store[i-1]) / log(dx[i]/dx[i-1])
-                conv_rate_Linf = log(Linf_err_store[i]/Linf_err_store[i-1]) / log(dx[i]/dx[i-1])
-            end
+        Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change \n")
+        for j = 1:i
+                conv_rate_L2 = 0.0
+                conv_rate_Linf = 0.0
+                if j>1
+                    conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
+                    conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
+                end
 
-            Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f\n", N_elem_range[i], dx[i], L2_err_store[i], conv_rate_L2, Linf_err_store[i], conv_rate_Linf, energy_change_store[i])
+                Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j])
+        end
     end
 end
 

@@ -102,10 +102,12 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
 
         if param.include_source
             x_local = zeros(Float64, dg.N_vol)
+            y_local = zeros(Float64, dg.N_vol)
             for inode = 1:dg.N_vol
                 x_local[inode] = dg.x[dg.EIDLIDtoGID_vol[ielem,inode]]
+                y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
             end
-            rhs_local+=dg.Pi*calculate_source_terms(x_local,t, param)
+            rhs_local+=dg.Pi*calculate_source_terms(x_local,y_local,t, param)
         end
 
         # store local rhs in global rhs
