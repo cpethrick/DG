@@ -119,7 +119,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     #timestep size according to CFL
     CFL = 0.005
     if param.usespacetime
-        CFL=0.5 # we are using RK but treating it like pseudotime so can set a larger CFL
+        CFL=0.01# we are using RK but treating it like pseudotime so can set a larger CFL
     end
     #xmin = minimum(abs.(x[1,:] .- x[2,:]))
     #dt = abs(CFL / a * xmin /2)
@@ -174,7 +174,10 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         J_overint = LinearAlgebra.diagm(ones(length(r_overint)^dim)*dg.J[1]) #assume constant jacobian
     end
         
-    if cmp(param.pde_type, "burgers1D")==0
+    if cmp(param.pde_type, "burgers1D")==0 && param.usespacetime
+        # y is time
+        u_exact_overint = cos.(π*(x_overint-y_overint))
+    elseif cmp(param.pde_type, "burgers1D")==0
         u_exact_overint = cos.(π*(x_overint.-current_time))
     elseif cmp(param.pde_type, "burgers2D")==0
         u_exact_overint = cos.(π*(x_overint.+y_overint.-sqrt(2)*current_time))
@@ -304,7 +307,7 @@ function main()
     # "burgers1D" will solve 1D burgers on a 1D grid or 1D burgers on a 2D grid with no flux in the y-direction.
     # "linear_adv_1D" will solve 1D linear advection in the x-direction with specified velocity on a 1D or 2D grid.
     # "burgers2D" will solve 2D burgers on a 2D grid.
-    PDEtype = "linear_adv_1D"
+    PDEtype = "burgers1D"
 
     # Toggle for whether to use space-time.
     # Should set dim=2 and use "linear_adv_1D" PDE.
@@ -321,7 +324,7 @@ function main()
     # Relative weighting of conservative and non-conservative forms
     # alpha_split=1 recovers the conservative discretization.
     # alpha_split = 2.0/3.0 will be energy-conservative for Burgers' equation.
-    alpha_split = 1.0
+    alpha_split = 2.0/3.0 
 
     # Advection speed
     advection_speed = 0.5
@@ -337,7 +340,7 @@ function main()
     # perform a grid refinement study and find OOAs.
     # 2D Burgers manufactured solution is not yet implemented.
     # The initial condition is set based on the inclusion of a source.
-    includesource = false
+    includesource = false 
 
     # FInal time to run the simulation for.
     # Solves with RK4.
