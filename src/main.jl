@@ -119,7 +119,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     #timestep size according to CFL
     CFL = 0.005
     if param.usespacetime
-        CFL=0.1# we are using RK but treating it like pseudotime so can set a larger CFL
+        CFL=0.1 #we are using RK but treating it like pseudotime so can set a larger CFL
     end
     #xmin = minimum(abs.(x[1,:] .- x[2,:]))
     #dt = abs(CFL / a * xmin /2)

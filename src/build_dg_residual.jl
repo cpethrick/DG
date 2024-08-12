@@ -21,7 +21,7 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
     return face_term
 end
 
-function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_global, u_hat_local, dg::DG)
+function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_global, u_hat_local, dg::DG, param::PhysicsAndFluxParams)
 
     if find_interior_values
         # interpolate to face
@@ -60,7 +60,7 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
                 # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
                 # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
             end
-            u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local)
+            u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
             #display("Dirichlet boundary")
             #display("x_face")
             #display(x_local)
@@ -122,8 +122,8 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
                 
                 #How to get exterior values if those are all modal?? Would be doing double work...
                 # I'm also doing extra work here by calculating the external solution one per dim. Think about how to improve this.
-                uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg)
-                uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg)
+                uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
+                uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg, param)
 
                 face_terms .+= calculate_face_term(iface, f_hat_local, u_hat_local, uM, uP, idim, dg, param)
 
