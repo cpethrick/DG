@@ -30,7 +30,6 @@ import FastGaussQuadrature
 import SparseArrays
 import LinearAlgebra
 import Printf
-import Plots
 import PyPlot
 
 
@@ -154,6 +153,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     rhs = zeros(size(u_hat))
     display("dt")
     display(dt)
+    display("About to start time loop...")
     for tstep = 1:Nsteps
     #for tstep = 1:1
         for iRKstage = 1:nRKStage
@@ -168,6 +168,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         end
         current_time += dt   
     end
+    display("Done time loop.")
     #==============================================================================
     Analysis
     ==============================================================================#
@@ -209,13 +210,13 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     end
     u_diff = u_calc_final_overint .- u_exact_overint
 
-    x_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim*2)
-    u_calc_final_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim*2)
-    u0_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim*2)
-    u_exact_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim*2)
+    x_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
+    u_calc_final_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
+    u0_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
+    u_exact_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
     ctr = 1
     for iglobalID = 1:length(y_overint)
-        if  y_overint[iglobalID] == 1.0
+        if  y_overint[iglobalID] == 0.0
             x_overint_1D[ctr] = x_overint[iglobalID]
             u_calc_final_overint_1D[ctr] = u_calc_final_overint[iglobalID]
             u0_overint_1D[ctr] = u0_overint[iglobalID]
@@ -240,34 +241,47 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     energy_change = energy_final_calc - energy_initial
 
-    Plots.vline(dg.VX, color="lightgray", linewidth=0.75, label="grid")
-    Plots.plot!(vec(x_overint_1D), [vec(u_exact_overint_1D), vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["exact" "calculated" "initial"])
+    PyPlot.figure("Solution", figsize=(6,4))
+    PyPlot.clf()
+    ax = PyPlot.gca()
+    ax.set_xticks(dg.VX, minor=true)
+    ax.xaxis.grid(true, which="major")
+    PyPlot.plot(vec(x_overint_1D), vec(u0_overint_1D), label="initial")
+    PyPlot.plot(vec(x_overint_1D), vec(u_exact_overint_1D), label="exact")
+    PyPlot.plot(vec(x_overint_1D), vec(u_calc_final_overint_1D), label="calculated")
     #Plots.plot!(vec(x_overint_1D), [vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["calculated" "initial"])
+    PyPlot.legend()
     pltname = string("plt", N_elem_per_dim, ".pdf")
-    Plots.savefig(pltname)
+    PyPlot.savefig(pltname)
     
-    #plot grid
+    PyPlot.figure("Grid", figsize=(6,6))
+    PyPlot.clf()
+    ax = PyPlot.gca()
+    ax.set_xticks(dg.VX, minor=false)
+    ax.xaxis.grid(true, which="major", color="k")
+    ax.set_axisbelow(false)
+    if dim == 1
+        plt.axhline(0)
+    elseif dim == 2
+        ax.set_yticks(dg.VX, minor=false)
+        ax.yaxis.grid(true, which="major", color="k")
+    end
+    PyPlot.plot(x_overint, y_overint,"o", color="yellowgreen", label="overintegration", markersize=0.25)
+    PyPlot.plot(dg.x, dg.y, "o", color="darkolivegreen", label="volume nodes")
     pltname = string("grid", N_elem_per_dim, ".pdf")
-    Plots.vline(dg.VX, color="black", linewidth=0.75, label="grid")
-    Plots.hline!(dg.VX, color="black", linewidth=0.75, label="grid")
-    Plots.plot!(x_overint, y_overint, label=["nodes-overint"], seriestype=:scatter)
-    Plots.plot!(dg.x, dg.y, label=["nodes"], seriestype=:scatter)
-    Plots.savefig(pltname)
-
-
+    PyPlot.savefig(pltname)
+        
+    
     if dim == 2 && N_elem_per_dim == 4
         PyPlot.figure("Initial cond, overintegrated")
         PyPlot.clf()
         PyPlot.tricontourf(x_overint, y_overint, u0_overint, 20)
         PyPlot.colorbar()
-        Plots.savefig(pltname)
         PyPlot.figure("Final soln, overintegrated")
         PyPlot.clf()
         PyPlot.tricontourf(x_overint, y_overint, u_calc_final_overint, 20)
         PyPlot.colorbar()
-        Plots.savefig(pltname)
     end
-
     return L2_error, Linf_error, energy_change#, solution
 end
 
@@ -286,7 +300,7 @@ function main()
 
     #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
     #N_elem_range = [2 4 8 16 32]
-    N_elem_range = [2 4 8 16 32]
+    N_elem_range = [2 4 8 16]
     #N_elem_range = [2]
     #N_elem_fine_grid = 1024 #fine grid for getting reference solution
 
@@ -298,10 +312,10 @@ function main()
     dim=2
     fluxtype="split"
     #fluxtype="split"
-    PDEtype = "burgers2D"
+    PDEtype = "burgers1D"
     #PDEtype = "linear_adv_1D"
     debugmode=false# if true, only solve one step using explicit Euler
-    includesource = false 
+    includesource = true
     volumenodes = "GL"
     basisnodes = "GLL"
 
