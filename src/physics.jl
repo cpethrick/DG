@@ -12,6 +12,7 @@ struct PhysicsAndFluxParams
     usespacetime::Bool
     include_source::Bool
     alpha_split::Float64
+    advection_speed::Float64
     finaltime::Float64
     volumenodes::String #"GLL" or "GL"
     basisnodes::String #"GLL" or "GL"
@@ -28,7 +29,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, para
     #alpha = 0 #upwind
     #alpha = 1 #central
     if cmp(param.pde_type, "linear_adv_1D")==0
-        a=1
+        a = param.advection_speed
         alpha = 0 
         if direction ==1 
             f_numerical = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face[direction]) * (uM_face.-uP_face) # lin. adv, upwind/central
@@ -69,8 +70,7 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
             
     if cmp(param.pde_type,"linear_adv_1D")==0
         if direction == 1
-            a = 1 #placeholder - should modify to actually be linear advection if I need that.
-            f .+= a .* u # nodal flux for lin. adv.
+            f .+= param.advection_speed .* u # nodal flux for lin. adv.
         elseif direction == 2 && param.usespacetime
             f .+= u # CHECK
         end

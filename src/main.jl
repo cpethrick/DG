@@ -130,7 +130,6 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
        #display(dg.chi_v*u_hat_local)#Check that transformation to/from modal is okay.
         u_hat0[dg.EIDLIDtoGID_basis[ielem,:]] = u_hat_local
     end
-    a = 2π
 
     #timestep size according to CFL
     CFL = 0.005
@@ -195,9 +194,9 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     elseif cmp(param.pde_type, "burgers2D")==0
         u_exact_overint = cos.(π*(x_overint.+y_overint.-sqrt(2)*current_time))
     elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == false
-        u_exact_overint = sin.(π * (x_overint.-current_time)) .+ 0.01
+        u_exact_overint = sin.(π * (x_overint.- param.advection_speed * current_time)) .+ 0.01
     elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == true 
-        u_exact_overint = sin.(π * (x_overint - y_overint)) .+ 0.01
+        u_exact_overint = sin.(π * (x_overint - param.advection_speed * y_overint)) .+ 0.01
     end
     u_calc_final_overint = zeros(size(x_overint))
     u0_overint = zeros(size(x_overint))
@@ -318,7 +317,7 @@ function main()
     
     # PDE type to solve. 
     # "burgers1D" will solve 1D burgers on a 1D grid or 1D burgers on a 2D grid with no flux in the y-direction.
-    # "linear_adv_1D" will solve 1D linear advection in the x-direction with unit velocity on a 1D or 2D grid.
+    # "linear_adv_1D" will solve 1D linear advection in the x-direction with specified velocity on a 1D or 2D grid.
     # "burgers2D" will solve 2D burgers on a 2D grid.
     PDEtype = "linear_adv_1D"
 
@@ -338,6 +337,9 @@ function main()
     # alpha_split=1 recovers the conservative discretization.
     # alpha_split = 2.0/3.0 will be energy-conservative for Burgers' equation.
     alpha_split = 1.0
+
+    # Advection speed
+    advection_speed = 0.5
     
     # Choice of nodes for volume and basis nodes.
     # Options are "GL" for Gauss-Legendre or "GLL" for Gauss-Legendre-Lobatto.
@@ -354,14 +356,14 @@ function main()
 
     # FInal time to run the simulation for.
     # Solves with RK4.
-    finaltime=10.0
+    finaltime=4.0 # space-time: use at least 4 to allow enough time for information to propagate through the domain times 2
     
     # Run in debug mode.
     # if true, only solve one step using explicit Euler, ignoring finaltime.
     debugmode = false
 
     #Pack parameters into a struct
-    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, usespacetime, includesource, alpha_split, finaltime, volumenodes, basisnodes, debugmode)
+    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, usespacetime, includesource, alpha_split, advection_speed, finaltime, volumenodes, basisnodes, debugmode)
     display(param)
 
     L2_err_store = zeros(length(N_elem_range))
