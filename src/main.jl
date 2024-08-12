@@ -298,28 +298,55 @@ function main()
     # Polynomial order
     P = 3
 
-    #N_elem_range = [4 8 16 32 64 128 256]# 512 1024]
-    #N_elem_range = [2 4 8 16 32]
+    # Range of element numbers to solve.
+    # Use an array for a refinement study, e.g. N_elem_range = [2 4 8 16 32]
+    # Or a single value, e.g. N_elem_range = [3]
     N_elem_range = [2 4 8 16]
-    #N_elem_range = [2]
-    #N_elem_fine_grid = 1024 #fine grid for getting reference solution
-
-    #_,_,reference_fine_grid_solution = setup_and_solve(N_elem_fine_grid,N)
     
-    #alpha_split = 1 #Discretization of conservative form
+    # Dimension of the grid.
+    # Can be 1 or 2.
+    dim=2
+    
+    # PDE type to solve. 
+    # "burgers1D" will solve 1D burgers on a 1D grid or 1D burgers on a 2D grid with no flux in the y-direction.
+    # "linear_adv_1D" will solve 1D linear advection in the x-direction with unit velocity on a 1D or 2D grid.
+    # "burgers2D" will solve 2D burgers on a 2D grid.
+    PDEtype = "burgers1D"
+
+    # Type of flux to use for the numerical flux.
+    # If the PDE type is linear_adv_1D, LxF upwinding will ALWAYS be chosen.
+    # Either choice split or split_with_LxF will result in LxF.
+    # If the PDE type is burgers, "split" is a pure energy-conserving flux
+    # and "split_with_LxF" adds LxF upwinding to the energy-conserving flux.
+    fluxtype="split"
+
+    # Relative weighting of conservative and non-conservative forms
+    # alpha_split=1 recovers the conservative discretization.
+    # alpha_split = 2.0/3.0 will be energy-conservative for Burgers' equation.
     alpha_split = 2.0/3.0 #energy-stable split form
     
-    dim=2
-    fluxtype="split"
-    #fluxtype="split"
-    PDEtype = "burgers1D"
-    #PDEtype = "linear_adv_1D"
-    debugmode=false# if true, only solve one step using explicit Euler
-    includesource = true
+    # Choice of nodes for volume and basis nodes.
+    # Options are "GL" for Gauss-Legendre or "GLL" for Gauss-Legendre-Lobatto.
+    # Any combination should work.
     volumenodes = "GL"
     basisnodes = "GLL"
 
+    # Include a manufactured solution source.
+    # For 1D burgers on any grid, this will add the manufactured solution required to 
+    # perform a grid refinement study and find OOAs.
+    # 2D Burgers manufactured solution is not yet implemented.
+    # The initial condition is set based on the inclusion of a source.
+    includesource = true
+
+    # FInal time to run the simulation for.
+    # Solves with RK4.
     finaltime=0.1
+    
+    # Run in debug mode.
+    # if true, only solve one step using explicit Euler, ignoring finaltime.
+    debugmode=false
+
+    #Pack parameters into a struct
     param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, includesource, alpha_split, finaltime, volumenodes, basisnodes, debugmode)
     display(param)
 
@@ -329,17 +356,15 @@ function main()
 
     for i=1:length(N_elem_range)
 
-       #display("P = "*string(P))
-       #display("N_elem_per_dim = "*string(N_elem_range[i]))
         # Number of elements
         N_elem =  N_elem_range[i]
 
+        #Solve
         L2_err_store[i],Linf_err_store[i], energy_change_store[i] = setup_and_solve(N_elem,P,param)
 
+        #Evalate convergence and print
         Printf.@printf("P =  %d \n", P)
-
         dx = 2.0./N_elem_range
-
         Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change \n")
         for j = 1:i
                 conv_rate_L2 = 0.0
@@ -348,9 +373,9 @@ function main()
                     conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
                     conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
                 end
-
                 Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j])
         end
+
     end
 end
 
