@@ -311,11 +311,16 @@ function main()
     # "burgers1D" will solve 1D burgers on a 1D grid or 1D burgers on a 2D grid with no flux in the y-direction.
     # "linear_adv_1D" will solve 1D linear advection in the x-direction with unit velocity on a 1D or 2D grid.
     # "burgers2D" will solve 2D burgers on a 2D grid.
-    PDEtype = "burgers1D"
+    PDEtype = "linear_adv_1D"
+
+    # Toggle for whether to use space-time.
+    # Should set dim=2 and use "linear_adv_1D" PDE.
+    usespacetime = true
 
     # Type of flux to use for the numerical flux.
-    # If the PDE type is linear_adv_1D, LxF upwinding will ALWAYS be chosen.
-    # Either choice split or split_with_LxF will result in LxF.
+    # If the PDE type is linear_adv_1D, pure upwinding will ALWAYS be chosen.
+    # Either choice split or split_with_LxF will result in upwinding.
+    # You can hard-code central in physics.jl.
     # If the PDE type is burgers, "split" is a pure energy-conserving flux
     # and "split_with_LxF" adds LxF upwinding to the energy-conserving flux.
     fluxtype="split"
@@ -323,7 +328,7 @@ function main()
     # Relative weighting of conservative and non-conservative forms
     # alpha_split=1 recovers the conservative discretization.
     # alpha_split = 2.0/3.0 will be energy-conservative for Burgers' equation.
-    alpha_split = 2.0/3.0 #energy-stable split form
+    alpha_split = 1.0
     
     # Choice of nodes for volume and basis nodes.
     # Options are "GL" for Gauss-Legendre or "GLL" for Gauss-Legendre-Lobatto.
@@ -336,7 +341,7 @@ function main()
     # perform a grid refinement study and find OOAs.
     # 2D Burgers manufactured solution is not yet implemented.
     # The initial condition is set based on the inclusion of a source.
-    includesource = true
+    includesource = false
 
     # FInal time to run the simulation for.
     # Solves with RK4.
@@ -344,10 +349,10 @@ function main()
     
     # Run in debug mode.
     # if true, only solve one step using explicit Euler, ignoring finaltime.
-    debugmode=false
+    debugmode=true
 
     #Pack parameters into a struct
-    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, includesource, alpha_split, finaltime, volumenodes, basisnodes, debugmode)
+    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, usespacetime, includesource, alpha_split, finaltime, volumenodes, basisnodes, debugmode)
     display(param)
 
     L2_err_store = zeros(length(N_elem_range))
