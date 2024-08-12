@@ -69,7 +69,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     #==============================================================================
     Start Up
     ==============================================================================#
-    dg = init_DG(P, dim, N_elem_per_dim, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes)
+    dg = init_DG(P, dim, N_elem_per_dim, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.usespacetime)
 
     #==============================================================================
     RK scheme
@@ -105,35 +105,22 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     finaltime = param.finaltime
 
-    if param.include_source && cmp(param.pde_type, "burgers2D")==0
-        u0 = cos.(π * (dg.x + dg.y))
-    elseif param.include_source && cmp(param.pde_type, "burgers1D")==0
-        u0 = cos.(π * (dg.x))
-    elseif cmp(param.pde_type, "burgers2D") == 0
-        u0 = exp.(-10*((dg.x .-1).^2 .+(dg.y .-1).^2))
-    else
-        u0 = sin.(π * (dg.x)) .+ 0.01
-    end
-    if dim == 2
-    end
-    #u_old = cos.(π * x)
+    u0 = calculate_initial_solution(dg.x, dg.y, param)
     u_hat0 = zeros(dg.N_elem*dg.Np)
     u_local = zeros(dg.N_vol)
-    #display(u0)
     for ielem = 1:dg.N_elem
         for inode = 1:dg.N_vol
             u_local[inode] = u0[dg.EIDLIDtoGID_vol[ielem,inode]]
         end
-       #display(u_local)
         u_hat_local = dg.Pi*u_local
-       #display(u_hat_local)
-       #display(dg.chi_v*u_hat_local)#Check that transformation to/from modal is okay.
         u_hat0[dg.EIDLIDtoGID_basis[ielem,:]] = u_hat_local
     end
-    a = 2π
 
     #timestep size according to CFL
     CFL = 0.005
+    if param.usespacetime
+        CFL=0.1 #we are using RK but treating it like pseudotime so can set a larger CFL
+    end
     #xmin = minimum(abs.(x[1,:] .- x[2,:]))
     #dt = abs(CFL / a * xmin /2)
     dt = CFL * (dg.delta_x / dg.Np_per_dim)
@@ -187,12 +174,17 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         J_overint = LinearAlgebra.diagm(ones(length(r_overint)^dim)*dg.J[1]) #assume constant jacobian
     end
         
-    if cmp(param.pde_type, "burgers1D")==0
+    if cmp(param.pde_type, "burgers1D")==0 && param.usespacetime
+        # y is time
+        u_exact_overint = cos.(π*(x_overint-y_overint))
+    elseif cmp(param.pde_type, "burgers1D")==0
         u_exact_overint = cos.(π*(x_overint.-current_time))
     elseif cmp(param.pde_type, "burgers2D")==0
         u_exact_overint = cos.(π*(x_overint.+y_overint.-sqrt(2)*current_time))
-    else
-        u_exact_overint = sin.(π * (x_overint.-current_time)) .+ 0.01
+    elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == false
+        u_exact_overint = sin.(π * (x_overint.- param.advection_speed * current_time)) .+ 0.01
+    elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == true 
+        u_exact_overint = sin.(π * (x_overint - param.advection_speed * y_overint)) .+ 0.01
     end
     u_calc_final_overint = zeros(size(x_overint))
     u0_overint = zeros(size(x_overint))
@@ -216,7 +208,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     u_exact_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
     ctr = 1
     for iglobalID = 1:length(y_overint)
-        if  y_overint[iglobalID] == 0.0
+        if  y_overint[iglobalID] == 2.0
             x_overint_1D[ctr] = x_overint[iglobalID]
             u_calc_final_overint_1D[ctr] = u_calc_final_overint[iglobalID]
             u0_overint_1D[ctr] = u0_overint[iglobalID]
@@ -281,6 +273,10 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         PyPlot.clf()
         PyPlot.tricontourf(x_overint, y_overint, u_calc_final_overint, 20)
         PyPlot.colorbar()
+        PyPlot.figure("Final exact soln, overintegrated")
+        PyPlot.clf()
+        PyPlot.tricontourf(x_overint, y_overint, u_exact_overint, 20)
+        PyPlot.colorbar()
     end
     return L2_error, Linf_error, energy_change#, solution
 end
@@ -301,7 +297,7 @@ function main()
     # Range of element numbers to solve.
     # Use an array for a refinement study, e.g. N_elem_range = [2 4 8 16 32]
     # Or a single value, e.g. N_elem_range = [3]
-    N_elem_range = [2 4 8 16]
+    N_elem_range = [2 4 8]
     
     # Dimension of the grid.
     # Can be 1 or 2.
@@ -309,21 +305,29 @@ function main()
     
     # PDE type to solve. 
     # "burgers1D" will solve 1D burgers on a 1D grid or 1D burgers on a 2D grid with no flux in the y-direction.
-    # "linear_adv_1D" will solve 1D linear advection in the x-direction with unit velocity on a 1D or 2D grid.
+    # "linear_adv_1D" will solve 1D linear advection in the x-direction with specified velocity on a 1D or 2D grid.
     # "burgers2D" will solve 2D burgers on a 2D grid.
     PDEtype = "burgers1D"
 
+    # Toggle for whether to use space-time.
+    # Should set dim=2 and use "linear_adv_1D" PDE.
+    usespacetime = true
+
     # Type of flux to use for the numerical flux.
-    # If the PDE type is linear_adv_1D, LxF upwinding will ALWAYS be chosen.
-    # Either choice split or split_with_LxF will result in LxF.
+    # If the PDE type is linear_adv_1D, pure upwinding will ALWAYS be chosen.
+    # Either choice split or split_with_LxF will result in upwinding.
+    # You can hard-code central in physics.jl.
     # If the PDE type is burgers, "split" is a pure energy-conserving flux
     # and "split_with_LxF" adds LxF upwinding to the energy-conserving flux.
-    fluxtype="split"
+    fluxtype="split_with_LxF"
 
     # Relative weighting of conservative and non-conservative forms
     # alpha_split=1 recovers the conservative discretization.
     # alpha_split = 2.0/3.0 will be energy-conservative for Burgers' equation.
-    alpha_split = 2.0/3.0 #energy-stable split form
+    alpha_split = 2.0/3.0 
+
+    # Advection speed
+    advection_speed = 0.5
     
     # Choice of nodes for volume and basis nodes.
     # Options are "GL" for Gauss-Legendre or "GLL" for Gauss-Legendre-Lobatto.
@@ -340,14 +344,14 @@ function main()
 
     # FInal time to run the simulation for.
     # Solves with RK4.
-    finaltime=0.1
+    finaltime= 4 # space-time: use at least 4 to allow enough time for information to propagate through the domain times 2
     
     # Run in debug mode.
     # if true, only solve one step using explicit Euler, ignoring finaltime.
-    debugmode=false
+    debugmode = false
 
     #Pack parameters into a struct
-    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, includesource, alpha_split, finaltime, volumenodes, basisnodes, debugmode)
+    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, usespacetime, includesource, alpha_split, advection_speed, finaltime, volumenodes, basisnodes, debugmode)
     display(param)
 
     L2_err_store = zeros(length(N_elem_range))

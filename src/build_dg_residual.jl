@@ -9,7 +9,8 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
     f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction,dg, param)
 
     face_flux::AbstractVector{Float64} = dg.chi_f[:,:,iface] * f_hat
-    if param.alpha_split < 1
+    use_split::Bool = param.alpha_split < 1 && (direction == 1 || (direction == 2 && !param.usespacetime))
+    if use_split
         face_flux*=param.alpha_split
         face_flux_nonconservative = calculate_face_terms_nonconservative(dg.chi_f[:,:,iface], u_hat, direction, dg, param)
         face_flux .+= (1-param.alpha_split) * face_flux_nonconservative
@@ -20,26 +21,53 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
     return face_term
 end
 
-function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_global, u_hat_local, dg::DG)
-    
-    # Select the appropriate face to find values from
-    if find_interior_values
-        elem = ielem
-        face = iface
-    else
-        elem = dg.EIDLFIDtoEIDofexterior[ielem,iface]
-        face =dg.LFIDtoLFIDofexterior[iface]
-    end
+function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_global, u_hat_local, dg::DG, param::PhysicsAndFluxParams)
 
-    #Find local solution of the element of interest if we seek an exterior value
     if find_interior_values
-        u_face = dg.chi_f[:,:,face]*u_hat_local
+        # interpolate to face
+        u_face = dg.chi_f[:,:,iface]*u_hat_local
     else
-        u_hat_local_exterior_elem = zeros(dg.Np)
-        for inode = 1:dg.Np
-            u_hat_local_exterior_elem[inode] = u_hat_global[dg.EIDLIDtoGID_basis[elem,inode]]
+        # Select the appropriate elem to find values from
+        elem = dg.EIDLFIDtoEIDofexterior[ielem,iface]
+        if elem > 0
+            # Select the appropriate face of the neighboring elem
+            face = dg.LFIDtoLFIDofexterior[iface]
+            # find solution from the element whose ID was found 
+            #Find local solution of the element of interest if we seek an exterior value
+            u_hat_local_exterior_elem = zeros(dg.Np)
+            for inode = 1:dg.Np
+                u_hat_local_exterior_elem[inode] = u_hat_global[dg.EIDLIDtoGID_basis[elem,inode]]
+            end
+            # interpolate to face
+            u_face = dg.chi_f[:,:,face] * u_hat_local_exterior_elem
+            #display("Periodic boundary")
+            #display("ielem")
+            #display(ielem)
+            #display("iface")
+            #display(iface)
+            #display("u_face")
+            #display(u_face)
+        elseif elem == 0 
+            # elemID of 0 corresponds to Dirichlet boundary (weak imposition).
+            # Find x and y coords of the face and pass to a physics function
+            x_local = zeros(Float64, dg.N_vol_per_dim)
+            y_local = zeros(Float64, dg.N_vol_per_dim)
+            for inode = 1:dg.N_vol_per_dim
+                # The node numbering used in this code allows us
+                # to choose the first N_vol_per_dim x-points
+                # to get a vector of x-coords on the face.
+                x_local[inode] = dg.x[dg.EIDLIDtoGID_vol[ielem,inode]]
+                # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
+                # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
+            end
+            u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
+            #display("Dirichlet boundary")
+            #display("x_face")
+            #display(x_local)
+            #display("u_face")
+            #display(u_face)
         end
-        u_face = dg.chi_f[:,:,face] * u_hat_local_exterior_elem
+
     end
     
     return u_face
@@ -84,7 +112,8 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
             f_hat_local = calculate_flux(u_local,idim, dg, param)
 
             volume_terms_dim = calculate_volume_terms(f_hat_local,idim, dg)
-            if param.alpha_split < 1
+            use_split::Bool = param.alpha_split < 1 && (idim == 1 || (idim == 2 && !param.usespacetime))
+            if use_split
                 volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local,idim, dg, param)
                 volume_terms_dim = param.alpha_split * volume_terms_dim + (1-param.alpha_split) * volume_terms_nonconservative
             end
@@ -93,8 +122,8 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
                 
                 #How to get exterior values if those are all modal?? Would be doing double work...
                 # I'm also doing extra work here by calculating the external solution one per dim. Think about how to improve this.
-                uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg)
-                uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg)
+                uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
+                uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg, param)
 
                 face_terms .+= calculate_face_term(iface, f_hat_local, u_hat_local, uM, uP, idim, dg, param)
 
