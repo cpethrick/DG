@@ -119,7 +119,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     #timestep size according to CFL
     CFL = 0.005
     if param.usespacetime
-        CFL=0.01# we are using RK but treating it like pseudotime so can set a larger CFL
+        CFL=0.1# we are using RK but treating it like pseudotime so can set a larger CFL
     end
     #xmin = minimum(abs.(x[1,:] .- x[2,:]))
     #dt = abs(CFL / a * xmin /2)
@@ -319,7 +319,7 @@ function main()
     # You can hard-code central in physics.jl.
     # If the PDE type is burgers, "split" is a pure energy-conserving flux
     # and "split_with_LxF" adds LxF upwinding to the energy-conserving flux.
-    fluxtype="split"
+    fluxtype="split_with_LxF"
 
     # Relative weighting of conservative and non-conservative forms
     # alpha_split=1 recovers the conservative discretization.
@@ -340,11 +340,11 @@ function main()
     # perform a grid refinement study and find OOAs.
     # 2D Burgers manufactured solution is not yet implemented.
     # The initial condition is set based on the inclusion of a source.
-    includesource = false 
+    includesource = true
 
     # FInal time to run the simulation for.
     # Solves with RK4.
-    finaltime=10 # space-time: use at least 4 to allow enough time for information to propagate through the domain times 2
+    finaltime= 4 # space-time: use at least 4 to allow enough time for information to propagate through the domain times 2
     
     # Run in debug mode.
     # if true, only solve one step using explicit Euler, ignoring finaltime.

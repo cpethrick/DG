@@ -104,7 +104,7 @@ function calculate_initial_solution(x::AbstractVector{Float64},y::AbstractVector
 
     if param.usespacetime
         u0 = 0*x
-        #u0 = cos.(π * (x))
+        u0 = cos.(π * (x))
     elseif param.include_source && cmp(param.pde_type, "burgers2D")==0
         u0 = cos.(π * (x + y))
     elseif param.include_source && cmp(param.pde_type, "burgers1D")==0
@@ -138,6 +138,6 @@ function calculate_source_terms(x::AbstractVector{Float64},y::AbstractVector{Flo
 end
 
 function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::AbstractVector{Float64})
-    #return  cos.(π * (x-y))
-    return 0.1*sin.(π * (x)) .+ 0.01 #0.2*sin.(π * (x)) .+ 0.4 # matches 1D linear advection initial condition
+    return  cos.(π * (x-y))
+    #return 0.1*sin.(π * (x)) .+ 0.01 #0.2*sin.(π * (x)) .+ 0.4 # matches 1D linear advection initial condition
 end

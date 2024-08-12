@@ -9,7 +9,8 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
     f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction,dg, param)
 
     face_flux::AbstractVector{Float64} = dg.chi_f[:,:,iface] * f_hat
-    if param.alpha_split < 1
+    use_split::Bool = param.alpha_split < 1 && (direction == 1 || (direction == 2 && !param.usespacetime))
+    if use_split
         face_flux*=param.alpha_split
         face_flux_nonconservative = calculate_face_terms_nonconservative(dg.chi_f[:,:,iface], u_hat, direction, dg, param)
         face_flux .+= (1-param.alpha_split) * face_flux_nonconservative
@@ -111,7 +112,8 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams)
             f_hat_local = calculate_flux(u_local,idim, dg, param)
 
             volume_terms_dim = calculate_volume_terms(f_hat_local,idim, dg)
-            if param.alpha_split < 1
+            use_split::Bool = param.alpha_split < 1 && (idim == 1 || (idim == 2 && !param.usespacetime))
+            if use_split
                 volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local,idim, dg, param)
                 volume_terms_dim = param.alpha_split * volume_terms_dim + (1-param.alpha_split) * volume_terms_nonconservative
             end
