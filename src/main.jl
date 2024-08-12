@@ -105,29 +105,14 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     finaltime = param.finaltime
 
-    if param.include_source && cmp(param.pde_type, "burgers2D")==0
-        u0 = cos.(π * (dg.x + dg.y))
-    elseif param.include_source && cmp(param.pde_type, "burgers1D")==0
-        u0 = cos.(π * (dg.x))
-    elseif cmp(param.pde_type, "burgers2D") == 0
-        u0 = exp.(-10*((dg.x .-1).^2 .+(dg.y .-1).^2))
-    else
-        u0 = sin.(π * (dg.x)) .+ 0.01
-    end
-    if dim == 2
-    end
-    #u_old = cos.(π * x)
+    u0 = calculate_initial_solution(dg.x, dg.y, param)
     u_hat0 = zeros(dg.N_elem*dg.Np)
     u_local = zeros(dg.N_vol)
-    #display(u0)
     for ielem = 1:dg.N_elem
         for inode = 1:dg.N_vol
             u_local[inode] = u0[dg.EIDLIDtoGID_vol[ielem,inode]]
         end
-       #display(u_local)
         u_hat_local = dg.Pi*u_local
-       #display(u_hat_local)
-       #display(dg.chi_v*u_hat_local)#Check that transformation to/from modal is okay.
         u_hat0[dg.EIDLIDtoGID_basis[ielem,:]] = u_hat_local
     end
 
@@ -356,7 +341,7 @@ function main()
 
     # FInal time to run the simulation for.
     # Solves with RK4.
-    finaltime=4.0 # space-time: use at least 4 to allow enough time for information to propagate through the domain times 2
+    finaltime=10 # space-time: use at least 4 to allow enough time for information to propagate through the domain times 2
     
     # Run in debug mode.
     # if true, only solve one step using explicit Euler, ignoring finaltime.
