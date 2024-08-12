@@ -69,7 +69,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     #==============================================================================
     Start Up
     ==============================================================================#
-    dg = init_DG(P, dim, N_elem_per_dim, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes)
+    dg = init_DG(P, dim, N_elem_per_dim, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.usespacetime)
 
     #==============================================================================
     RK scheme
@@ -134,6 +134,9 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     #timestep size according to CFL
     CFL = 0.005
+    if param.usespacetime
+        CFL=0.5 # we are using RK but treating it like pseudotime so can set a larger CFL
+    end
     #xmin = minimum(abs.(x[1,:] .- x[2,:]))
     #dt = abs(CFL / a * xmin /2)
     dt = CFL * (dg.delta_x / dg.Np_per_dim)
@@ -191,8 +194,10 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         u_exact_overint = cos.(π*(x_overint.-current_time))
     elseif cmp(param.pde_type, "burgers2D")==0
         u_exact_overint = cos.(π*(x_overint.+y_overint.-sqrt(2)*current_time))
-    else
+    elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == false
         u_exact_overint = sin.(π * (x_overint.-current_time)) .+ 0.01
+    elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == true 
+        u_exact_overint = sin.(π * (x_overint - y_overint)) .+ 0.01
     end
     u_calc_final_overint = zeros(size(x_overint))
     u0_overint = zeros(size(x_overint))
@@ -216,7 +221,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     u_exact_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
     ctr = 1
     for iglobalID = 1:length(y_overint)
-        if  y_overint[iglobalID] == 0.0
+        if  y_overint[iglobalID] == 2.0
             x_overint_1D[ctr] = x_overint[iglobalID]
             u_calc_final_overint_1D[ctr] = u_calc_final_overint[iglobalID]
             u0_overint_1D[ctr] = u0_overint[iglobalID]
@@ -281,6 +286,10 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         PyPlot.clf()
         PyPlot.tricontourf(x_overint, y_overint, u_calc_final_overint, 20)
         PyPlot.colorbar()
+        PyPlot.figure("Final exact soln, overintegrated")
+        PyPlot.clf()
+        PyPlot.tricontourf(x_overint, y_overint, u_exact_overint, 20)
+        PyPlot.colorbar()
     end
     return L2_error, Linf_error, energy_change#, solution
 end
@@ -301,7 +310,7 @@ function main()
     # Range of element numbers to solve.
     # Use an array for a refinement study, e.g. N_elem_range = [2 4 8 16 32]
     # Or a single value, e.g. N_elem_range = [3]
-    N_elem_range = [2 4 8 16]
+    N_elem_range = [2 4 8]
     
     # Dimension of the grid.
     # Can be 1 or 2.
@@ -345,11 +354,11 @@ function main()
 
     # FInal time to run the simulation for.
     # Solves with RK4.
-    finaltime=0.1
+    finaltime=10.0
     
     # Run in debug mode.
     # if true, only solve one step using explicit Euler, ignoring finaltime.
-    debugmode=true
+    debugmode = false
 
     #Pack parameters into a struct
     param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, usespacetime, includesource, alpha_split, finaltime, volumenodes, basisnodes, debugmode)

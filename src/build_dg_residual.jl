@@ -21,25 +21,52 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
 end
 
 function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_global, u_hat_local, dg::DG)
-    
-    # Select the appropriate face to find values from
-    if find_interior_values
-        elem = ielem
-        face = iface
-    else
-        elem = dg.EIDLFIDtoEIDofexterior[ielem,iface]
-        face =dg.LFIDtoLFIDofexterior[iface]
-    end
 
-    #Find local solution of the element of interest if we seek an exterior value
     if find_interior_values
-        u_face = dg.chi_f[:,:,face]*u_hat_local
+        # interpolate to face
+        u_face = dg.chi_f[:,:,iface]*u_hat_local
     else
-        u_hat_local_exterior_elem = zeros(dg.Np)
-        for inode = 1:dg.Np
-            u_hat_local_exterior_elem[inode] = u_hat_global[dg.EIDLIDtoGID_basis[elem,inode]]
+        # Select the appropriate elem to find values from
+        elem = dg.EIDLFIDtoEIDofexterior[ielem,iface]
+        if elem > 0
+            # Select the appropriate face of the neighboring elem
+            face = dg.LFIDtoLFIDofexterior[iface]
+            # find solution from the element whose ID was found 
+            #Find local solution of the element of interest if we seek an exterior value
+            u_hat_local_exterior_elem = zeros(dg.Np)
+            for inode = 1:dg.Np
+                u_hat_local_exterior_elem[inode] = u_hat_global[dg.EIDLIDtoGID_basis[elem,inode]]
+            end
+            # interpolate to face
+            u_face = dg.chi_f[:,:,face] * u_hat_local_exterior_elem
+            #display("Periodic boundary")
+            #display("ielem")
+            #display(ielem)
+            #display("iface")
+            #display(iface)
+            #display("u_face")
+            #display(u_face)
+        elseif elem == 0 
+            # elemID of 0 corresponds to Dirichlet boundary (weak imposition).
+            # Find x and y coords of the face and pass to a physics function
+            x_local = zeros(Float64, dg.N_vol_per_dim)
+            y_local = zeros(Float64, dg.N_vol_per_dim)
+            for inode = 1:dg.N_vol_per_dim
+                # The node numbering used in this code allows us
+                # to choose the first N_vol_per_dim x-points
+                # to get a vector of x-coords on the face.
+                x_local[inode] = dg.x[dg.EIDLIDtoGID_vol[ielem,inode]]
+                # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
+                # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
+            end
+            u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local)
+            #display("Dirichlet boundary")
+            #display("x_face")
+            #display(x_local)
+            #display("u_face")
+            #display(u_face)
         end
-        u_face = dg.chi_f[:,:,face] * u_hat_local_exterior_elem
+
     end
     
     return u_face

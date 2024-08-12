@@ -109,7 +109,9 @@ function build_coords_vectors(ref_vec_1D, dg::DG)
 end
 
 # Outer constructor for DG object. Might be good to move to inner constructor at some point.
-function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{Float64}, volumenodes::String, basisnodes::String)
+function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{Float64},
+        volumenodes::String, basisnodes::String, 
+        usespacetime::Bool)
     
     #initialize incomplete DG struct
     dg = DG(P, dim, N_elem_per_dim, domain_x_limits)
@@ -163,23 +165,39 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     elseif dim == 2
         dg.EIDLFIDtoEIDofexterior = zeros(Int, (N_elem, dg.Nfaces))
         for ielem = 1:N_elem
+            # face 1: left
             # regular joining (assume not on boundary)
             dg.EIDLFIDtoEIDofexterior[ielem,1] = ielem - 1
             if mod(ielem,N_elem_per_dim) == 1
                 #if on a periodic boundary
                 dg.EIDLFIDtoEIDofexterior[ielem,1]+=N_elem_per_dim
             end
+            # face 2: right
             dg.EIDLFIDtoEIDofexterior[ielem,2] = ielem + 1
             if mod(ielem,N_elem_per_dim) == 0
                 dg.EIDLFIDtoEIDofexterior[ielem,2]-=N_elem_per_dim
             end
+            # face 3: bottom
             dg.EIDLFIDtoEIDofexterior[ielem,3] = ielem - N_elem_per_dim
             if ielem/N_elem_per_dim <= 1
                 dg.EIDLFIDtoEIDofexterior[ielem,3] += N_elem
+                if usespacetime
+                    # when using space-time, bottom and top are assigned dirichlet
+                    # boundaries
+                    # This is set using an EIDofexterior = 0
+                    dg.EIDLFIDtoEIDofexterior[ielem,3] = 0
+                end
             end
+            # face 4: top
             dg.EIDLFIDtoEIDofexterior[ielem,4] = ielem + N_elem_per_dim
             if ielem/N_elem_per_dim > N_elem_per_dim - 1
                 dg.EIDLFIDtoEIDofexterior[ielem,4] -= N_elem
+                if usespacetime
+                    # when using space-time, bottom and top are assigned dirichlet
+                    # boundaries
+                    # This is set using an EIDofexterior = 0
+                    dg.EIDLFIDtoEIDofexterior[ielem,4] = 0
+                end
             end
         end
     end

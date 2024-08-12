@@ -32,8 +32,18 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, para
         alpha = 0 
         if direction ==1 
             f_numerical = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face[direction]) * (uM_face.-uP_face) # lin. adv, upwind/central
-        elseif direction == 2 && param.usespacetime
-            f_numerical = uM_face # only use one-sided information . Possibly should take into account normal ?
+        elseif direction == 2 && param.usespacetime 
+            # second direction corresponding to time.
+            # only use one-sided information such that the flow of information is from past to future.
+            if n_face[direction] == -1
+                # face is bottom. Use the information from the external element
+                # which corresponds to the past
+                f_numerical = uP_face
+            elseif n_face[direction] == 1
+                # face is bottom. Use internal solution
+                # which corresonds to the past
+                f_numerical = uM_face
+            end
         end
     end
     
@@ -106,4 +116,8 @@ function calculate_source_terms(x::AbstractVector{Float64},y::AbstractVector{Flo
     else
         return zeros(size(x))
     end
+end
+
+function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::AbstractVector{Float64})
+    return sin.(π * (x)) .+ 0.01 # matches 1D linear advection initial condition
 end
