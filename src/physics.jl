@@ -103,7 +103,8 @@ function calculate_initial_solution(x::AbstractVector{Float64},y::AbstractVector
 
 
     if param.usespacetime
-        u0 = 0*x
+        u0 = cos.(π * (x))
+        #u0 = 0*x
     elseif param.include_source && cmp(param.pde_type, "burgers2D")==0
         u0 = cos.(π * (x + y))
     elseif param.include_source && cmp(param.pde_type, "burgers1D")==0

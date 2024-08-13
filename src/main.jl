@@ -56,6 +56,7 @@ include("FE_basis.jl")
 include("FE_mapping.jl")
 include("build_dg_residual.jl")
 include("set_up_dg.jl")
+include("ode_solver.jl")
 
 function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     # N_elem_per_dim is number of elements PER DIM
@@ -70,34 +71,6 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     Start Up
     ==============================================================================#
     dg = init_DG(P, dim, N_elem_per_dim, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.usespacetime)
-
-    #==============================================================================
-    RK scheme
-    ==============================================================================#
-
-    if true #param.debugmode == false
-        rk4a = [ 0.0,
-            -567301805773.0/1357537059087.0,
-            -2404267990393.0/2016746695238.0,
-            -3550918686646.0/2091501179385.0,
-            -1275806237668.0/842570457699.0];
-        rk4b = [ 1432997174477.0/9575080441755.0,
-            5161836677717.0/13612068292357.0,
-            1720146321549.0/2090206949498.0,
-            3134564353537.0/4481467310338.0,
-            2277821191437.0/14882151754819.0];
-        rk4c = [ 0.0,
-            1432997174477.0/9575080441755.0,
-            2526269341429.0/6820363962896.0,
-            2006345519317.0/3224310063776.0,
-            2802321613138.0/2924317926251.0];
-        nRKStage=5
-    else 
-        rk4a=[0]
-        rk4b=[1]
-        rk4c=[0]
-        nRKStage=1
-    end
 
     #==============================================================================
     Initialization
@@ -116,46 +89,50 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         u_hat0[dg.EIDLIDtoGID_basis[ielem,:]] = u_hat_local
     end
 
-    #timestep size according to CFL
-    CFL = 0.005
-    if param.usespacetime
-        CFL=0.1 #we are using RK but treating it like pseudotime so can set a larger CFL
-    end
-    #xmin = minimum(abs.(x[1,:] .- x[2,:]))
-    #dt = abs(CFL / a * xmin /2)
-    dt = CFL * (dg.delta_x / dg.Np_per_dim)
-    Nsteps::Int64 = ceil(finaltime/dt)
-    dt = finaltime/Nsteps
-    if param.debugmode == true
-        Nsteps = 1
-    end
-
     #==============================================================================
     ODE Solver 
     ==============================================================================#
-
-    u_hat = u_hat0
-    current_time = 0
-    residual = zeros(size(u_hat))
-    rhs = zeros(size(u_hat))
-    display("dt")
-    display(dt)
-    display("About to start time loop...")
-    for tstep = 1:Nsteps
-    #for tstep = 1:1
-        for iRKstage = 1:nRKStage
-            
-            rktime = current_time + rk4c[iRKstage] * dt
-
-            #####assemble residual
-            rhs = assemble_residual(u_hat, rktime, dg, param)
-
-            residual = rk4a[iRKstage] * residual .+ dt * rhs
-            u_hat += rk4b[iRKstage] * residual
+    if !param.usespacetime
+        #Physical time
+        #timestep size according to CFL
+        CFL = 0.005
+        if param.usespacetime
+            CFL=0.1 #we are using RK but treating it like pseudotime so can set a larger CFL
         end
-        current_time += dt   
+        #xmin = minimum(abs.(x[1,:] .- x[2,:]))
+        #dt = abs(CFL / a * xmin /2)
+        dt = CFL * (dg.delta_x / dg.Np_per_dim)
+        Nsteps::Int64 = ceil(finaltime/dt)
+        dt = finaltime/Nsteps
+        if param.debugmode == true
+            Nsteps = 1
+        end
+
+        u_hat = u_hat0
+        current_time = 0
+        residual = zeros(size(u_hat))
+        rhs = zeros(size(u_hat))
+        display("dt")
+        display(dt)
+        display("About to start time loop...")
+        for tstep = 1:Nsteps
+        #for tstep = 1:1
+            for iRKstage = 1:nRKStage
+                
+                rktime = current_time + rk4c[iRKstage] * dt
+
+                #####assemble residual
+                rhs = assemble_residual(u_hat, rktime, dg, param)
+
+                residual = rk4a[iRKstage] * residual .+ dt * rhs
+                u_hat += rk4b[iRKstage] * residual
+            end
+            current_time += dt   
+        end
+        display("Done time loop.")
+    else
+        u_hat = pseudotimesolve(u_hat0, dg, param)
     end
-    display("Done time loop.")
     #==============================================================================
     Analysis
     ==============================================================================#
@@ -292,12 +269,12 @@ Discretize into elements
 function main()
 
     # Polynomial order
-    P = 3
+    P = 4
 
     # Range of element numbers to solve.
     # Use an array for a refinement study, e.g. N_elem_range = [2 4 8 16 32]
     # Or a single value, e.g. N_elem_range = [3]
-    N_elem_range = [2 4 8]
+    N_elem_range = [2 4 8 16]
     
     # Dimension of the grid.
     # Can be 1 or 2.
