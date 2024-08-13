@@ -69,7 +69,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     #==============================================================================
     Start Up
     ==============================================================================#
-    dg = init_DG(P, dim, N_elem_per_dim, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.usespacetime)
+    dg = init_DG(P, dim, N_elem_per_dim, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxreconstructionC, param.usespacetime)
 
     #==============================================================================
     RK scheme
@@ -208,7 +208,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     u_exact_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
     ctr = 1
     for iglobalID = 1:length(y_overint)
-        if  y_overint[iglobalID] == 2.0
+        if  y_overint[iglobalID] == 0.0
             x_overint_1D[ctr] = x_overint[iglobalID]
             u_calc_final_overint_1D[ctr] = u_calc_final_overint[iglobalID]
             u0_overint_1D[ctr] = u0_overint[iglobalID]
@@ -253,7 +253,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     ax.xaxis.grid(true, which="major", color="k")
     ax.set_axisbelow(false)
     if dim == 1
-        plt.axhline(0)
+        PyPlot.axhline(0)
     elseif dim == 2
         ax.set_yticks(dg.VX, minor=false)
         ax.yaxis.grid(true, which="major", color="k")
@@ -292,26 +292,26 @@ Discretize into elements
 function main()
 
     # Polynomial order
-    P = 3
+    P = 2
 
     # Range of element numbers to solve.
     # Use an array for a refinement study, e.g. N_elem_range = [2 4 8 16 32]
     # Or a single value, e.g. N_elem_range = [3]
-    N_elem_range = [2 4 8]
-    
+    N_elem_range = [2 4 8 16 32]
+     
     # Dimension of the grid.
     # Can be 1 or 2.
-    dim=2
+    dim=1
     
     # PDE type to solve. 
     # "burgers1D" will solve 1D burgers on a 1D grid or 1D burgers on a 2D grid with no flux in the y-direction.
     # "linear_adv_1D" will solve 1D linear advection in the x-direction with specified velocity on a 1D or 2D grid.
     # "burgers2D" will solve 2D burgers on a 2D grid.
-    PDEtype = "burgers1D"
+    PDEtype = "linear_adv_1D"
 
     # Toggle for whether to use space-time.
     # Should set dim=2 and use "linear_adv_1D" PDE.
-    usespacetime = true
+    usespacetime = false 
 
     # Type of flux to use for the numerical flux.
     # If the PDE type is linear_adv_1D, pure upwinding will ALWAYS be chosen.
@@ -324,7 +324,7 @@ function main()
     # Relative weighting of conservative and non-conservative forms
     # alpha_split=1 recovers the conservative discretization.
     # alpha_split = 2.0/3.0 will be energy-conservative for Burgers' equation.
-    alpha_split = 2.0/3.0 
+    alpha_split = 1.0 
 
     # Advection speed
     advection_speed = 0.5
@@ -335,23 +335,42 @@ function main()
     volumenodes = "GL"
     basisnodes = "GLL"
 
+
+    # Flux reconstruction parameter "c"
+    # In normalized Legendre reference basis per Table 1 of Cicchino 2021
+    #
+    # cDG
+    fluxreconstructionC = 0 
+    P=3
+    cp = factorial(2*P) / (2^P * factorial(P)^2)
+    # c-
+    #fluxreconstructionC = -1/((2 * P + 1) * ( factorial(P) * cp )^2) # assume 1D 
+    # cSD
+    #fluxreconstructionC = P /((P+1) * (2 * P + 1) * ( factorial(P) * cp )^2) # assume 1D 
+    # cHU
+    fluxreconstructionC = (P+1) /((P) * (2 * P + 1) * ( factorial(P) * cp )^2) # assume 1D 
+    # cPlus for P=2, RK44 from Castonguay 2012 thesis
+    #fluxreconstructionC = 0.183 / 2 # divide by 2 for normalized Legendre basis
+    # cPlus for P=3, RK44
+    #fluxreconstructionC = 3.60E−3 / 2
+
     # Include a manufactured solution source.
     # For 1D burgers on any grid, this will add the manufactured solution required to 
     # perform a grid refinement study and find OOAs.
     # 2D Burgers manufactured solution is not yet implemented.
     # The initial condition is set based on the inclusion of a source.
-    includesource = true
+    includesource = false
 
     # FInal time to run the simulation for.
     # Solves with RK4.
-    finaltime= 4 # space-time: use at least 4 to allow enough time for information to propagate through the domain times 2
+    finaltime= 1 # space-time: use at least 4 to allow enough time for information to propagate through the domain times 2
     
     # Run in debug mode.
     # if true, only solve one step using explicit Euler, ignoring finaltime.
     debugmode = false
 
     #Pack parameters into a struct
-    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, usespacetime, includesource, alpha_split, advection_speed, finaltime, volumenodes, basisnodes, debugmode)
+    param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, usespacetime, includesource, alpha_split, advection_speed, finaltime, volumenodes, basisnodes, fluxreconstructionC, debugmode)
     display(param)
 
     L2_err_store = zeros(length(N_elem_range))
