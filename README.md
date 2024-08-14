@@ -22,4 +22,6 @@ To exit the REPL, use the command `exit()` or press `ctrl+D`.
 
 Ensure that you are in the julia REPL in julia mode -- `julia>` should appear at the beginning of the line. If you are in the command or package REPL, press backspace to enter julian mode. To launch the REPL, use the command `julia --project=.` . To run the code, use the command `include("src/main.jl")`. This may take some time to compile the first time you run in a particular session.
 
-Currently, the parameters are modified in the `main()` function of `main.jl`. Functional options are clearly indicated. After modifying the code, re-run `include("src/main.jl")`. Julia will only re-compile functions which have been changed.
+Parameters are specified from .csv files. There are several common tests included in the highest level directory of the code. They can be run using `main("1D_burgers_OOA_evenP.csv")`. Running `main()` with no arguments runs a short default-parameter test.
+Functional options are currently indicated in `main.jl`. 
+After modifying the code, re-run `include("src/main.jl")`. Julia will only re-compile functions which have been changed.
