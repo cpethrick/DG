@@ -95,7 +95,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     if !param.usespacetime
         #Physical time
         #timestep size according to CFL
-        CFL = 0.005
+        CFL = 0.001
         #xmin = minimum(abs.(x[1,:] .- x[2,:]))
         #dt = abs(CFL / a * xmin /2)
         dt = CFL * (dg.delta_x / dg.Np_per_dim)
@@ -177,8 +177,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         L2_error += (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])
         
         # use non-overintegrated qties to calculate energy difference
-        energy_final_calc += sum(((u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.W * dg.J * (u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])))
-        energy_initial += sum(((u0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.W * dg.J * (u0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])))
+        energy_final_calc += (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
+        energy_initial += (u_hat0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
     end
     L2_error = sqrt(L2_error)
 
@@ -250,21 +250,21 @@ function main()
     # Range of element numbers to solve.
     # Use an array for a refinement study, e.g. N_elem_range = [2 4 8 16 32]
     # Or a single value, e.g. N_elem_range = [3]
-    N_elem_range = [2 4 8 16]
+    N_elem_range = [2 4 8 16 32 64]
    
     # Dimension of the grid.
     # Can be 1 or 2.
-    dim=2
+    dim=1
     
     # PDE type to solve. 
     # "burgers1D" will solve 1D burgers on a 1D grid or 1D burgers on a 2D grid with no flux in the y-direction.
     # "linear_adv_1D" will solve 1D linear advection in the x-direction with specified velocity on a 1D or 2D grid.
     # "burgers2D" will solve 2D burgers on a 2D grid.
-    PDEtype = "linear_adv_1D"
+    PDEtype = "burgers1D"
 
     # Toggle for whether to use space-time.
     # Should set dim=2 and use "linear_adv_1D" PDE.
-    usespacetime = true
+    usespacetime = false
 
     # Type of flux to use for the numerical flux.
     # If the PDE type is linear_adv_1D, pure upwinding will ALWAYS be chosen.
@@ -272,12 +272,12 @@ function main()
     # You can hard-code central in physics.jl.
     # If the PDE type is burgers, "split" is a pure energy-conserving flux
     # and "split_with_LxF" adds LxF upwinding to the energy-conserving flux.
-    fluxtype="split_with_LxF"
+    fluxtype="split"
 
     # Relative weighting of conservative and non-conservative forms
     # alpha_split=1 recovers the conservative discretization.
     # alpha_split = 2.0/3.0 will be energy-conservative for Burgers' equation.
-    alpha_split = 1.0 
+    alpha_split = 2.0/3.0
 
     # Advection speed
     advection_speed = 0.5
@@ -294,19 +294,19 @@ function main()
     #
     # cDG
     fluxreconstructionC = 0 
-    P=3
+    P=4
     cp = factorial(2*P) / (2^P * factorial(P)^2)
     # c-
     #fluxreconstructionC = -1/((2 * P + 1) * ( factorial(P) * cp )^2)^dim 
     # cSD
-    #fluxreconstructionC = P /((P+1) * ((2 * P + 1) * ( factorial(P) * cp )^2)^dim)
+    fluxreconstructionC = P /((P+1) * ((2 * P + 1) * ( factorial(P) * cp )^2)^dim)
     # cHU
-    fluxreconstructionC = (P+1) /((P) * ( (2 * P + 1) * ( factorial(P) * cp )^2)^dim)
+    #fluxreconstructionC = (P+1) /((P) * ( (2 * P + 1) * ( factorial(P) * cp )^2)^dim)
     # cPlus for P=2, RK44 from Castonguay 2012 thesis
     #fluxreconstructionC = 0.183 / 2 # divide by 2 for normalized Legendre basis
     # cPlus for P=3, RK44
     #fluxreconstructionC = 3.60E−3 / 2
-    # fluxreconstructionC = 0.1/2
+    fluxreconstructionC = 1E-8
 
     # Include a manufactured solution source.
     # For 1D burgers on any grid, this will add the manufactured solution required to 
@@ -317,7 +317,7 @@ function main()
 
     # FInal time to run the simulation for.
     # Solves with RK4.
-    finaltime= 1 # space-time: use at least 4 to allow enough time for information to propagate through the domain times 2
+    finaltime= 0.2 # space-time: use at least 4 to allow enough time for information to propagate through the domain times 2
     
     # Run in debug mode.
     # if true, only solve one step using explicit Euler, ignoring finaltime.
