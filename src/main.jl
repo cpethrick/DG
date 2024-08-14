@@ -95,7 +95,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     if !param.usespacetime
         #Physical time
         #timestep size according to CFL
-        CFL = 0.001
+        CFL = 0.005
         #xmin = minimum(abs.(x[1,:] .- x[2,:]))
         #dt = abs(CFL / a * xmin /2)
         dt = CFL * (dg.delta_x / dg.Np_per_dim)
@@ -234,6 +234,39 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     return L2_error, Linf_error, energy_change#, solution
 end
 
+function run(param::PhysicsAndFluxParams)
+
+
+    P = param.P
+    N_elem_range = 2 .^(1:param.n_times_to_solve)
+    L2_err_store = zeros(length(N_elem_range))
+    Linf_err_store = zeros(length(N_elem_range))
+    energy_change_store = zeros(length(N_elem_range))
+
+    for i=1:length(N_elem_range)
+
+        # Number of elements
+        N_elem =  N_elem_range[i]
+
+        #Solve
+        L2_err_store[i],Linf_err_store[i], energy_change_store[i] = setup_and_solve(N_elem,P,param)
+
+        #Evalate convergence and print
+        Printf.@printf("P =  %d \n", P)
+        dx = 2.0./N_elem_range
+        Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change \n")
+        for j = 1:i
+                conv_rate_L2 = 0.0
+                conv_rate_Linf = 0.0
+                if j>1
+                    conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
+                    conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
+                end
+                Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j])
+        end
+
+    end
+end
 #==============================================================================
 Global setup
 
@@ -242,8 +275,8 @@ Discretize into elements
 ==============================================================================#
 
 #main program
-function main()
-
+function main(paramfile::AbstractString="default_parameters.csv")
+#==
     # Polynomial order
     P = 2
 
@@ -326,34 +359,10 @@ function main()
     #Pack parameters into a struct
     param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, usespacetime, includesource, alpha_split, advection_speed, finaltime, volumenodes, basisnodes, fluxreconstructionC, debugmode)
     display(param)
+==#
+    param = parse_parameters(paramfile)
 
-    L2_err_store = zeros(length(N_elem_range))
-    Linf_err_store = zeros(length(N_elem_range))
-    energy_change_store = zeros(length(N_elem_range))
-
-    for i=1:length(N_elem_range)
-
-        # Number of elements
-        N_elem =  N_elem_range[i]
-
-        #Solve
-        L2_err_store[i],Linf_err_store[i], energy_change_store[i] = setup_and_solve(N_elem,P,param)
-
-        #Evalate convergence and print
-        Printf.@printf("P =  %d \n", P)
-        dx = 2.0./N_elem_range
-        Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change \n")
-        for j = 1:i
-                conv_rate_L2 = 0.0
-                conv_rate_Linf = 0.0
-                if j>1
-                    conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
-                    conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
-                end
-                Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j])
-        end
-
-    end
+    run(param)
 end
 
 main()

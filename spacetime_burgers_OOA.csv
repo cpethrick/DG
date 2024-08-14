@@ -1,0 +1,4 @@
+name,value
+dim,2
+n_times_to_solve,5
+usespacetime,true

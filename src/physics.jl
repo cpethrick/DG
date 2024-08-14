@@ -3,10 +3,15 @@
 # Currently solves Linear Advection.
 ==============================================================================#
 
+import CSV
+import DataFrames
+
 include("set_up_dg.jl")
 
-struct PhysicsAndFluxParams
+mutable struct PhysicsAndFluxParams
     dim::Int64
+    n_times_to_solve::Int64
+    P::Int64
     numerical_flux_type::AbstractString
     pde_type::AbstractString
     usespacetime::Bool
@@ -18,6 +23,99 @@ struct PhysicsAndFluxParams
     basisnodes::String #"GLL" or "GL"
     fluxreconstructionC::Float64
     debugmode::Bool
+end
+
+function parse_param_Float64(name::String, paramDF)
+    return parse(Float64, paramDF[in.(paramDF.name, Ref([name])), "value"][1])
+end
+
+function parse_param_Bool(name::String, paramDF)
+    return parse(Bool, paramDF[in.(paramDF.name, Ref([name])), "value"][1])
+end
+
+function parse_param_Int64(name::String, paramDF)
+    return parse(Int64, paramDF[in.(paramDF.name, Ref([name])), "value"][1])
+end
+
+function parse_param_String(name::String, paramDF)
+    return paramDF[in.(paramDF.name, Ref([name])), "value"][1]
+end
+
+function parse_default_parameters()
+    #parse default params 
+    paramDF = CSV.read("default_parameters.csv", DataFrames.DataFrame)
+
+    dim = parse_param_Float64("dim", paramDF)
+    n_times_to_solve = parse_param_Int64("n_times_to_solve", paramDF)
+    P = parse_param_Int64("P", paramDF)
+    numerical_flux_type = parse_param_String("numerical_flux_type", paramDF)
+    pde_type = parse_param_String("pde_type", paramDF)
+    usespacetime = parse_param_Bool("usespacetime", paramDF)
+    include_source = parse_param_Bool("include_source", paramDF)
+    alpha_split = parse_param_Float64("alpha_split", paramDF)
+    advection_speed = parse_param_Float64("advection_speed", paramDF)
+    finaltime = parse_param_Float64("finaltime", paramDF)
+    volumenodes = parse_param_String("volumenodes", paramDF)
+    basisnodes = parse_param_String("basisnodes", paramDF)
+    fluxreconstructionC = parse_param_Float64("fluxreconstructionC",paramDF)
+    debugmode = parse_param_Bool("debugmode", paramDF)
+
+    return PhysicsAndFluxParams(dim,n_times_to_solve, P,  numerical_flux_type, pde_type, usespacetime, include_source, alpha_split, advection_speed, finaltime, volumenodes, basisnodes, fluxreconstructionC, debugmode)
+end
+
+function parse_parameters(fname::String)
+    default_params = parse_default_parameters()
+
+    if cmp(fname, "default_parameters.csv")!=0 # no need to re-read the file if we are already using default 
+        
+        newparamDF = CSV.read(fname, DataFrames.DataFrame,types=String)
+        display(newparamDF)
+
+        if "dim" in newparamDF.name
+            default_params.dim = parse_param_Float64("dim", newparamDF)
+        end
+        if "n_times_to_solve" in newparamDF.name
+            default_params.n_times_to_solve = parse_param_Int64("n_times_to_solve", newparamDF)
+        end
+        if "P" in newparamDF.name
+            default_params.P = parse_param_Int64("P", newparamDF)
+        end
+        if "numerical_flux_type" in newparamDF.name
+            default_params.numerical_flux_type = parse_param_String("numerical_flux_type", newparamDF)
+        end
+        if "pde_type" in newparamDF.name
+            default_params.pde_type = parse_param_String("pde_type", newparamDF)
+        end
+        if "usespacetime" in newparamDF.name
+            default_params.usespacetime = parse_param_Bool("usespacetime", newparamDF)
+        end
+        if "include_source" in newparamDF.name
+            default_params.include_source = parse_param_Bool("include_source", newparamDF)
+        end
+        if "alpha_split" in newparamDF.name
+            default_params.alpha_split = parse_param_Float64("alpha_split", newparamDF)
+        end
+        if "advection_speed" in newparamDF.name
+            default_params.advection_speed = parse_param_Float64("advection_speed", newparamDF)
+        end
+        if "finaltime" in newparamDF.name
+            default_params.finaltime = parse_param_Float64("finaltime", newparamDF)
+        end
+        if "volumenodes" in newparamDF.name
+            default_params.volumenodes = parse_param_String("volumenodes", newparamDF)
+        end
+        if "basisnodes" in newparamDF.name
+            default_params.basisnodes = parse_param_String("basis_nodes", newparamDF)
+        end
+        if "fluxreconstructionC" in newparamDF.name
+            default_params.fluxreconstructionC = parse_param_Float64("fluxreconstructionC", newparamDF)
+        end
+        if "debugmode" in newparamDF.name
+            default_params.debugmode = parse_param_Float64("debugmode", newparamDF)
+        end
+    end
+
+    return default_params
 end
 
 function transform_physical_to_reference(f_physical, direction, dg::DG)
@@ -104,8 +202,8 @@ function calculate_initial_solution(x::AbstractVector{Float64},y::AbstractVector
 
 
     if param.usespacetime
-        u0 = cos.(π * (x))
-        #u0 = 0*x
+        #u0 = cos.(π * (x))
+        u0 = 0*x
     elseif param.include_source && cmp(param.pde_type, "burgers2D")==0
         u0 = cos.(π * (x + y))
     elseif param.include_source && cmp(param.pde_type, "burgers1D")==0

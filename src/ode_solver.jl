@@ -30,6 +30,14 @@ function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
        end
        residualnew = sqrt(sum(u_change.^2))/first_residual
 
+       if isnan(residualnew)
+           display("NaN detected, decreasing dt and restarting")
+           u_hatnew = u_hat0
+           residual=1
+           residualnew=1
+           dt *= 0.8
+       end
+
        residual = residualnew
        display(residual)
        u_hat = u_hatnew

@@ -1,0 +1,4 @@
+name,value
+numerical_flux_type,split
+include_source,false
+finaltime,0.3
