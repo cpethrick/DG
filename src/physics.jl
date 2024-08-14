@@ -16,6 +16,7 @@ struct PhysicsAndFluxParams
     finaltime::Float64
     volumenodes::String #"GLL" or "GL"
     basisnodes::String #"GLL" or "GL"
+    fluxreconstructionC::Float64
     debugmode::Bool
 end
 

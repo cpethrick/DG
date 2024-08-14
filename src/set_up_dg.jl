@@ -61,6 +61,7 @@ mutable struct DG
     S_noncons_eta::AbstractMatrix{Float64}
     M_nojac::AbstractMatrix{Float64}
     Pi::AbstractMatrix{Float64}
+    K::AbstractMatrix{Float64}
 
     #Incomplete initializer - only assign Category 1 variables.
     DG(P::Int, 
@@ -110,7 +111,7 @@ end
 
 # Outer constructor for DG object. Might be good to move to inner constructor at some point.
 function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{Float64},
-        volumenodes::String, basisnodes::String, 
+        volumenodes::String, basisnodes::String, fluxreconstructionC::Float64,
         usespacetime::Bool)
     
     #initialize incomplete DG struct
@@ -288,10 +289,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     
     # Mass and stiffness matrices as defined Eq. 9.5 Cicchino 2022
     # All defined on a single element.
-    dg.M = dg.chi_v' * dg.W * dg.J * dg.chi_v ## Have verified this against PHiLiP.
-    display("Mass matrix")
-    display(dg.M)
-    dg.M_inv = inv(dg.M)
+    dg.M = dg.chi_v' * dg.W * dg.J * dg.chi_v ## Have verified this against PHiLiP. Here, unmodified mass matrix.
     dg.S_xi = dg.chi_v' * dg.W * dg.d_chi_v_d_xi
     dg.S_noncons_xi = dg.W * dg.d_chi_v_d_xi
     if dim==2
@@ -300,6 +298,13 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     end
     dg.M_nojac = dg.chi_v' * dg.W * dg.chi_v
     dg.Pi = inv(dg.M_nojac)*dg.chi_v'*dg.W
+    dg.K = fluxreconstructionC * ( (inv(dg.M_nojac)*dg.S_xi)^P )' * dg.M * ( (inv(dg.M_nojac)*dg.S_xi)^P )
+    display("FR K")
+    display(dg.K)
+    dg.M = dg.M + dg.K # Here, modified mass matrix.
+    display("Mass matrix")
+    display(dg.M)
+    dg.M_inv = inv(dg.M)
 
     display("Next line is dg.chi_v*dg.Pi, which should be identity.")
     display(dg.chi_v*dg.Pi) #should be identity

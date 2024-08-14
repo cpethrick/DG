@@ -11,10 +11,10 @@ The included code implements modal discontinuous Galerkin in `julia` using minim
 # Installing
 
 First, ensure that `julia` is installed:
-* Install [juliaup](https://github.com/JuliaLang/juliaup) using `curl -fsSL https://install.julialang.org | sh -s -- -y`. This will install the most current version of Julia. The code is known to work in version 1.10.4 of Julia.
+* Install [juliaup](https://github.com/JuliaLang/juliaup) using `curl -fsSL https://install.julialang.org | sh -s`. This will install the most current version of Julia. The code is known to work in version 1.10.4 of Julia. Continue with the default installation options and restart the terminal to ensure `PATH` is up-to-date.
 * Clone this repo to a directory of your choosing.
 * In the installation directory, run the command `julia --project=.` to enter the [REPL](https://docs.julialang.org/en/v1/stdlib/REPL/) with the project environment for this code.
-* Press `]` to enter package mode. Enter the command `initiate` to install the dependencies.
+* Press `]` to enter package mode. Enter the command `instantiate` to install the dependencies.
 * Press backspace to return to julian mode. Test the code by running `include("src/main.jl")`, which will compile and run the most recent commit.
 To exit the REPL, use the command `exit()` or press `ctrl+D`.
 
