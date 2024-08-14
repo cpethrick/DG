@@ -143,6 +143,6 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
     if param.include_source
         return  cos.(π * (x-y))
     else
-        return 0.2*sin.(π * (x)) #0.2*sin.(π * (x)) .+ 0.4 # matches 1D linear advection initial condition
+        return sin.(π * (x))  .+ 0.01#0.2*sin.(π * (x)) .+ 0.4 # matches 1D linear advection initial condition
     end
 end

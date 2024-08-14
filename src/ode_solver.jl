@@ -7,52 +7,44 @@ include("set_up_dg.jl")
 function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
 
     #initial dt
-    dt = 0.1* (dg.delta_x / dg.Np_per_dim) 
+    dt = 0.3* (dg.delta_x / dg.Np_per_dim) 
     residual = 1
     u_hat = u_hat0
     residual_scaling = sqrt(sum(u_hat.^2))
     first_residual = -1
-    while dt < 0.3*(dg.delta_x / dg.Np_per_dim)
-        residual = 1
-        while residual > 1E-5
-           # solve a time step with RK
-           # check difference between old and new solutions
-           # compare to residual
-           # if residual is decreasing, increase the CFL # to expidite solution
-           u_hatnew = physicaltimesolve(u_hat, dt, 10, dg, param)
-           u_change = u_hatnew - u_hat
 
-           if first_residual < 0
-               residual = sqrt(sum(u_change.^2))
-               first_residual = residual
-               display("First residual")
-               display(first_residual)
-           end
-           residualnew = sqrt(sum(u_change.^2))/first_residual
+    # converge loosly with large time step
+    while residual > 1E-5
+       # solve a time step with RK
+       # check difference between old and new solutions
+       # compare to residual
+       # if residual is decreasing, increase the CFL # to expidite solution
+       (u_hatnew,current_time) = physicaltimesolve(u_hat, dt, 10, dg, param)
+       u_change = u_hatnew - u_hat
 
-           residual = residualnew
-           display(residual)
-           u_hat = u_hatnew
+       if first_residual < 0
+           residual = sqrt(sum(u_change.^2))
+           first_residual = residual
+           display("First residual")
+           display(first_residual)
        end
-       dt *= 2
-       display("Increasing dt")
-       display(dt)
+       residualnew = sqrt(sum(u_change.^2))/first_residual
+
+       residual = residualnew
+       display(residual)
+       u_hat = u_hatnew
    end
    iterctr = 0
-   # converge once more
+   # converge once more and decrease time step size every 100 iters
     while residual > 1E-12
 
        # solve a time step with RK
        # check difference between old and new solutions
        # compare to residual
        # if residual is decreasing, increase the CFL # to expidite solution
-       u_hatnew = physicaltimesolve(u_hat, dt, 1, dg, param)
+       (u_hatnew,current_time) = physicaltimesolve(u_hat, dt, 1, dg, param)
        u_change = u_hatnew - u_hat
        residualnew = sqrt(sum(u_change.^2))
-
-       #if residualnew > residual
-       #    dt*= 0.8
-       #end
 
        residual = residualnew
        display(residual)
@@ -72,9 +64,10 @@ function physicaltimesolve(u_hat0, dt, Nsteps, dg, param)
 
     #==============================================================================
     RK scheme
+    arguably should move the rk method out of this function in the future
     ==============================================================================#
 
-    if true #param.debugmode == false
+    if param.debugmode == false
         rk4a = [ 0.0,
             -567301805773.0/1357537059087.0,
             -2404267990393.0/2016746695238.0,
@@ -117,6 +110,6 @@ function physicaltimesolve(u_hat0, dt, Nsteps, dg, param)
         current_time += dt   
     end
     
-    return u_hat
+    return (u_hat, current_time)
 
 end
