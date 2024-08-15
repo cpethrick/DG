@@ -188,17 +188,14 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
             if ielem < N_elem_per_dim+1
                 # face on bottom
                 u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
-                display("bottom")
-                display(ielem)
-                display(u_face)
                 energy_initial += u_face' * dg.W_f * dg.J_f * u_face
             elseif ielem > N_elem_per_dim^dim - N_elem_per_dim
                 # face on top
                 u_face = dg.chi_f[:,:,4] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
-                display("top")
-                display(ielem)
-                display(u_face)
                 energy_final_calc += u_face' * dg.W_f * dg.J_f * u_face
+            end
+            if param.fluxreconstructionC > 0
+                display("WARNING: Energy calculation is probably unreliable for c != 0.")
             end
         else
             energy_final_calc += (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
