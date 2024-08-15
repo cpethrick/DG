@@ -39,7 +39,7 @@ function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
        end
 
        residual = residualnew
-       display(residual)
+        Printf.@printf("Residual =  %.3E \n", residual)
        u_hat = u_hatnew
    end
    iterctr = 0
@@ -55,7 +55,7 @@ function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
        residualnew = sqrt(sum(u_change.^2))
 
        residual = residualnew
-       display(residual)
+        Printf.@printf("Residual =  %.3E \n", residual)
        u_hat = u_hatnew
        iterctr += 1
        if iterctr > 50

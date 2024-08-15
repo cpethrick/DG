@@ -228,10 +228,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     else
         display("Illegal volume node choice!")
     end
-    display("r_volume")
     # dg.r_volume= dg.r_volume * 0.5 .+ 0.5 # for changing ref element to match PHiLiP for debugging purposes
     # dg.w_volume /= 2.0
-    display(dg.r_volume)
 
     # Basis function nodes (shape functions, interpolation nodes)
     if cmp(basisnodes, "GLL") == 0 
@@ -243,28 +241,22 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     else
         display("Illegal basis node choice!")
     end
-    display("r_basis")
     # dg.r_basis = dg.r_basis * 0.5 .+ 0.5
     # dg.w_basis /= 2.0
-    display(dg.r_basis)
 
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], N_elem_per_dim+1) |> collect
+    display("Elements per dim:")
     display(N_elem_per_dim)
     dg.delta_x = dg.VX[2]-dg.VX[1]
-    display(dg.VX)
     # constant jacobian on all elements as they are evenly spaced
     jacobian = (dg.delta_x/2.0)^dim #reference element is 2 units long
-    display("jacobian")
-    display(jacobian)
     dg.J = LinearAlgebra.diagm(ones(length(dg.r_volume)^dim)*jacobian)
 
     (dg.x, dg.y) = build_coords_vectors(dg.r_volume, dg) 
     # Define Vandermonde matrices
     if dim == 1
         dg.chi_v = vandermonde1D(dg.r_volume,dg.r_basis)
-        display(dg.chi_v)
         dg.d_chi_v_d_xi = gradvandermonde1D(dg.r_volume,dg.r_basis)
-        display(dg.d_chi_v_d_xi)
         #reference coordinates of L and R faces
         r_f_L::Float64 = -1
         r_f_R::Float64 = 1
@@ -278,10 +270,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
         dg.d_chi_v_d_xi = gradvandermonde2D(1, dg.r_volume,dg.r_basis, dg)
         dg.d_chi_v_d_eta = gradvandermonde2D(2, dg.r_volume,dg.r_basis, dg)
         dg.W = LinearAlgebra.diagm(vec(dg.w_volume*dg.w_volume'))
-        display("W")
-        display(dg.W)
-        display("1D w")
-        display(dg.w_volume)
         dg.chi_f = assembleFaceVandermonde2D(dg.r_basis,dg.r_volume,dg)
         dg.W_f = LinearAlgebra.diagm(dg.w_volume)
         dg.C_m = dg.delta_x/2.0 * [1 0; 0 1]  # Assuming a cartesian element and a reference element (-1,1)

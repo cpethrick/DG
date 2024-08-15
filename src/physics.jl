@@ -44,6 +44,8 @@ end
 function parse_default_parameters()
     #parse default params 
     paramDF = CSV.read("default_parameters.csv", DataFrames.DataFrame)
+    display("Default parameter values:")
+    display(paramDF)
 
     dim = parse_param_Float64("dim", paramDF)
     n_times_to_solve = parse_param_Int64("n_times_to_solve", paramDF)
@@ -69,6 +71,7 @@ function parse_parameters(fname::String)
     if cmp(fname, "default_parameters.csv")!=0 # no need to re-read the file if we are already using default 
         
         newparamDF = CSV.read(fname, DataFrames.DataFrame,types=String)
+        display("Custom parameter values, which will override defaults:")
         display(newparamDF)
 
         if "dim" in newparamDF.name
