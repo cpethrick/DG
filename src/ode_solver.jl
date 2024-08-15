@@ -13,6 +13,8 @@ function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
     residual_scaling = sqrt(sum(u_hat.^2))
     first_residual = -1
 
+    iterctr_all = 0
+
     # converge loosly with large time step
     while residual > 1E-5
        # solve a time step with RK
@@ -41,6 +43,12 @@ function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
        residual = residualnew
         Printf.@printf("Residual =  %.3E \n", residual)
        u_hat = u_hatnew
+       iterctr_all += 1
+
+       if iterctr_all == 1000
+           display("WARNING: not converged by 1000 iterations! Finishing the run.")
+           residual = 1E-14
+       end
    end
    iterctr = 0
    # converge once more and decrease time step size every 100 iters

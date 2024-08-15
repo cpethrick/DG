@@ -177,9 +177,33 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     for ielem = 1:dg.N_elem
         L2_error += (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])
         
-        # use non-overintegrated qties to calculate energy difference
-        energy_final_calc += (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
-        energy_initial += (u_hat0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
+        if param.usespacetime
+            # for spacetime, we want to consider initial as t=0 (bottom surface of the computational domain) and final as t=t_f (top surface)
+            
+            # check if the element is on a surface of interest
+            # use chi_f to interpolate to face
+            # Probably use W_f and J_f (need to construct!) to integrate on face.
+            # (Which won't work exactly if FR c is nonzero!)
+
+            if ielem < N_elem_per_dim+1
+                # face on bottom
+                u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
+                display("bottom")
+                display(ielem)
+                display(u_face)
+                energy_initial += u_face' * dg.W_f * dg.J_f * u_face
+            elseif ielem > N_elem_per_dim^dim - N_elem_per_dim
+                # face on top
+                u_face = dg.chi_f[:,:,4] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
+                display("top")
+                display(ielem)
+                display(u_face)
+                energy_final_calc += u_face' * dg.W_f * dg.J_f * u_face
+            end
+        else
+            energy_final_calc += (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
+            energy_initial += (u_hat0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
+        end
     end
     L2_error = sqrt(L2_error)
 

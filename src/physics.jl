@@ -129,6 +129,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, para
     f_numerical=zeros(size(uM_face))
 
     if direction == 2 && param.usespacetime 
+        #f_numerical = 0.5 * ( uM_face + uP_face )
         # second direction corresponding to time.
         # only use one-sided information such that the flow of information is from past to future.
         if n_face[direction] == -1
@@ -244,6 +245,6 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
     if param.include_source
         return  cos.(π * (x-y))
     else
-        return sin.(π * (x))  .+ 0.01#0.2*sin.(π * (x)) .+ 0.4 # matches 1D linear advection initial condition
+        return 0.1*sin.(π * (x))  .+ 0.01#0.2*sin.(π * (x)) .+ 0.4 # matches 1D linear advection initial condition
     end
 end

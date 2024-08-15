@@ -53,6 +53,7 @@ mutable struct DG
     W::AbstractMatrix{Float64}
     W_f::AbstractMatrix{Float64}
     J::AbstractMatrix{Float64}
+    J_f::AbstractMatrix{Float64}
     M::AbstractMatrix{Float64}
     M_inv::AbstractMatrix{Float64}
     S_xi::AbstractMatrix{Float64}
@@ -272,6 +273,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
         dg.W = LinearAlgebra.diagm(vec(dg.w_volume*dg.w_volume'))
         dg.chi_f = assembleFaceVandermonde2D(dg.r_basis,dg.r_volume,dg)
         dg.W_f = LinearAlgebra.diagm(dg.w_volume)
+        dg.J_f = LinearAlgebra.diagm(ones(length(dg.r_volume)) * jacobian ^ (1/dim)) # 1D jacobian on the face of the element.
         dg.C_m = dg.delta_x/2.0 * [1 0; 0 1]  # Assuming a cartesian element and a reference element (-1,1)
     end
     
