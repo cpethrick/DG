@@ -114,7 +114,7 @@ function parse_parameters(fname::String)
             default_params.fluxreconstructionC = parse_param_Float64("fluxreconstructionC", newparamDF)
         end
         if "debugmode" in newparamDF.name
-            default_params.debugmode = parse_param_Float64("debugmode", newparamDF)
+            default_params.debugmode = parse_param_Bool("debugmode", newparamDF)
         end
     end
 
@@ -245,7 +245,7 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
     if param.include_source
         return  cos.(π * (x-y))
     elseif cmp(param.pde_type, "burgers1D")==0
-        return 0.2*sin.(π * (x))#0.2*sin.(π * (x)) .+ 0.4 # matches 1D linear advection initial condition
+        return 0.2*sin.(π * (x))
     else
         return sin.(π * (x)) .+ 0.01
     end

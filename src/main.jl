@@ -275,7 +275,7 @@ function run(param::PhysicsAndFluxParams)
 
 
     P = param.P
-    N_elem_range = 2 .^(1:param.n_times_to_solve)
+    N_elem_range = 2 .^(1:param.n_times_to_solve)*2
     L2_err_store = zeros(length(N_elem_range))
     Linf_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))
@@ -402,4 +402,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-main()
+main("1D_linear_advection_FR.csv")
