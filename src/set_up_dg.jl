@@ -258,8 +258,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     else
         display("Illegal volume node choice!")
     end
-    dg.r_volume= dg.r_volume * 0.5 .+ 0.5 # for changing ref element to match PHiLiP for debugging purposes
-    dg.w_volume /= 2.0
+    # dg.r_volume= dg.r_volume * 0.5 .+ 0.5 # for changing ref element to match PHiLiP for debugging purposes
+    # dg.w_volume /= 2.0
 
     # Basis function nodes (shape functions, interpolation nodes)
     if cmp(basisnodes, "GLL") == 0 
@@ -271,8 +271,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     else
         display("Illegal basis node choice!")
     end
-    dg.r_basis = dg.r_basis * 0.5 .+ 0.5
-    dg.w_basis /= 2.0
+    # dg.r_basis = dg.r_basis * 0.5 .+ 0.5
+    # dg.w_basis /= 2.0
 
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], N_elem_per_dim+1) |> collect
     display("Elements per dim:")
@@ -280,7 +280,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     dg.delta_x = dg.VX[2]-dg.VX[1]
     # constant jacobian on all elements as they are evenly spaced
     jacobian = (dg.delta_x/2.0)^dim #reference element is 2 units long
-    jacobian = (dg.delta_x/1.0)^dim
+    # jacobian = (dg.delta_x/1.0)^dim
     dg.J = LinearAlgebra.diagm(ones(length(dg.r_volume)^dim)*jacobian)
 
     (dg.x, dg.y) = build_coords_vectors(dg.r_volume, dg) 
@@ -310,8 +310,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     # Mass and stiffness matrices as defined Eq. 9.5 Cicchino 2022
     # All defined on a single element.
     dg.M = dg.chi_v' * dg.W * dg.J * dg.chi_v ## Have verified this against PHiLiP. Here, unmodified mass matrix.
-    display("Mass matrix")
-    display(dg.M)
     dg.S_xi = dg.chi_v' * dg.W * dg.d_chi_v_d_xi
     dg.S_noncons_xi = dg.W * dg.d_chi_v_d_xi
     if dim==2
@@ -320,17 +318,11 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     end
     dg.M_nojac = dg.chi_v' * dg.W * dg.chi_v
     dg.Pi = inv(dg.M_nojac)*dg.chi_v'*dg.W
-    display("")
-    display("")
-    display("")
     if dim==1
         dg.K = fluxreconstructionC * ( (inv(dg.M_nojac)*dg.S_xi)^P )' * dg.M * ( (inv(dg.M_nojac)*dg.S_xi)^P ) ## Verified for 1D.
-        display((inv(dg.M_nojac)*dg.S_xi)^P)
     elseif dim==2
-        D_xi = inv(dg.M_nojac)*dg.S_xi
-        D_eta = inv(dg.M_nojac)*dg.S_eta
+        #==== This version uses tensor products
         dg.K = 0*dg.M #initialize with size of M
-        display(dg.K)
 
         chi_v_1D = vandermonde1D(dg.r_volume,dg.r_basis)
         d_chi_v_d_xi_1D = gradvandermonde1D(dg.r_volume,dg.r_basis)
@@ -342,39 +334,30 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
         display(D_xi_1D_P) # NOT okay.
 
         K_1D = fluxreconstructionC * (D_xi_1D_P)' * M_1D * D_xi_1D_P
-        display("K_1D")
-        display(K_1D)
         
         FR1 = tensor_product_2D(K_1D, M_1D)
-        display("FR1")
-        display(FR1)
         FR2 = tensor_product_2D(M_1D, K_1D)
-        display("FR2")
-        display(FR2)
         FRcross = tensor_product_2D(K_1D, K_1D)
-        display("FRcross")
-        display(FRcross)
 
         dg.K = FR1 + FR2 + FRcross
+
+
+        Following code calculates per Cicchino 2022 curvilinear eq. 28-29. Does the same thing as above code.
+        ==# 
+        D_xi = inv(dg.M_nojac)*dg.S_xi
+        D_eta = inv(dg.M_nojac)*dg.S_eta
         dg.K = 0*dg.M #initialize with size of M
         for s = [0,P]
-            display(s)
             for v = [0,P]
                 if s+v >= P
-                    # Note: condition in the paper is s+v>=p, which doesn't work.
-                    display(s+v)
                     c_sv = fluxreconstructionC ^ ((s/P) + (v/P))
                     dg.K += c_sv * (D_xi^s * D_eta^v)' * dg.M * (D_xi^s * D_eta^v)
-                    display( c_sv * (D_xi^s * D_eta^v)' * dg.M * (D_xi^s * D_eta^v))
                 end
             end
         end
     end
-    display("")
-    display("")
-    display("")
     display("FR K")
-    display(dg.K)
+    display(dg.K) # Verified against PHiLiP for 1D and 2D using C from PHiLiP
     dg.M = dg.M + dg.K # Here, modified mass matrix.
     display("Adjusted Mass matrix")
     display(dg.M)
