@@ -170,6 +170,21 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
             ctr+=1
         end
     end
+    if param.usespacetime
+        # initial is 0.0, final is 2.0
+        ctr0 = 1
+        ctr2 = 1
+        for iglobalID = 1:length(y_overint)
+            if  y_overint[iglobalID] == 2.0
+                u_calc_final_overint_1D[ctr2] = u_calc_final_overint[iglobalID]
+                u_exact_overint_1D[ctr2] = u_exact_overint[iglobalID]
+                ctr2+=1
+            elseif y_overint[iglobalID] == 0.0
+                u0_overint_1D[ctr0] = u_calc_final_overint[iglobalID]
+                ctr0+=1
+            end
+        end
+    end
 
     L2_error::Float64 = 0
     energy_final_calc = 0
@@ -211,7 +226,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     PyPlot.figure("Solution", figsize=(6,4))
     PyPlot.clf()
     ax = PyPlot.gca()
-    ax.set_xticks(dg.VX, minor=true)
+    ax.set_xticks(dg.VX, minor=false)
     ax.xaxis.grid(true, which="major")
     PyPlot.plot(vec(x_overint_1D), vec(u0_overint_1D), label="initial")
     PyPlot.plot(vec(x_overint_1D), vec(u_exact_overint_1D), label="exact")

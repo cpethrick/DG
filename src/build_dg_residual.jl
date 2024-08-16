@@ -60,12 +60,12 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
                 # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
                 # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
             end
-            u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
-            #display("Dirichlet boundary")
-            #display("x_face")
-            #display(x_local)
-            #display("u_face")
-            #display(u_face)
+            if ielem > dg.N_elem_per_dim
+                #assign u_face as interior value
+                u_face =  dg.chi_f[:,:,iface]*u_hat_local
+            else
+                u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
+            end
         end
 
     end
