@@ -5,5 +5,5 @@ n_times_to_solve,4
 pde_type,linear_adv_1D
 include_source,false
 alpha_split,1.0
-fluxreconstructionC,0.000925925925925926
+fr_c_name,cHU
 finaltime,0.25

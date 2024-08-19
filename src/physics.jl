@@ -21,8 +21,77 @@ mutable struct PhysicsAndFluxParams
     finaltime::Float64
     volumenodes::String #"GLL" or "GL"
     basisnodes::String #"GLL" or "GL"
-    fluxreconstructionC::Float64
+    fr_c_name::String # cDG, cPlus, cHU, cSD, c-, 1000
     debugmode::Bool
+
+    # dependant params: set based on above required params.
+    #set based on value of fr_c_name
+    fluxreconstructionC::Float64
+
+
+    # incomplete initialization: leave dependant variables uninitialized.
+    PhysicsAndFluxParams(
+                        dim::Int64,
+                        n_times_to_solve::Int64,
+                        P::Int64,
+                        numerical_flux_type::AbstractString,
+                        pde_type::AbstractString,
+                        usespacetime::Bool,
+                        include_source::Bool,
+                        alpha_split::Float64,
+                        advection_speed::Float64,
+                        finaltime::Float64,
+                        volumenodes::AbstractString, #"GLL" or "GL"
+                        basisnodes::AbstractString, #"GLL" or "GL"
+                        fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000
+                        debugmode::Bool
+                        ) = new(
+                            dim::Int64,
+                            n_times_to_solve::Int64,
+                            P::Int64,
+                            numerical_flux_type::AbstractString,
+                            pde_type::AbstractString,
+                            usespacetime::Bool,
+                            include_source::Bool,
+                            alpha_split::Float64,
+                            advection_speed::Float64,
+                            finaltime::Float64,
+                            volumenodes::AbstractString, #"GLL" or "GL"
+                            basisnodes::AbstractString, #"GLL" or "GL"
+                            fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000
+                            debugmode::Bool
+                            )
+
+
+end
+
+function set_FR_value(param::PhysicsAndFluxParams)
+    P = param.P
+    fr_c_name = param.fr_c_name
+
+    if cmp(fr_c_name, "cDG") == 0
+        param.fluxreconstructionC = 0.0
+    elseif cmp(fr_c_name, "cPlus") == 0
+        display("WARNING: cPlus not yet set. Returning 0.")
+        param.fluxreconstructionC = 0.0
+        # set values here
+    elseif cmp(fr_c_name, "cHU") == 0
+        cp = factorial(2*P)/2^P / factorial(P)^2 # eq. 24 of cicchino 2021 tensor product
+        # table 1, cicchino 2021
+        param.fluxreconstructionC = (P+1) / (  P* ((2*P+1) * (factorial(P) * cp) ^2)   ) 
+    elseif cmp(fr_c_name, "cSD") == 0
+        cp = factorial(2*P)/2^P / factorial(P)^2 # eq. 24 of cicchino 2021 tensor product
+        # table 1, cicchino 2021
+        param.fluxreconstructionC = P / (  (P+1)* ((2*P+1) * (factorial(P) * cp) ^2)   ) 
+    elseif cmp(fr_c_name, "1000") == 0
+        param.fluxreconstructionC = 1000.0
+    elseif cmp(fr_c_name, "c-") == 0
+        cp = factorial(2*P)/2^P / factorial(P)^2 # eq. 24 of cicchino 2021 tensor product
+        # table 1, cicchino 2021
+        param.fluxreconstructionC = -1 / (  ((2*P+1) * (factorial(P) * cp) ^2)   ) 
+    end
+
+   
 end
 
 function parse_param_Float64(name::String, paramDF)
@@ -47,7 +116,7 @@ function parse_default_parameters()
     display("Default parameter values:")
     display(paramDF)
 
-    dim = parse_param_Float64("dim", paramDF)
+    dim = parse_param_Int64("dim", paramDF)
     n_times_to_solve = parse_param_Int64("n_times_to_solve", paramDF)
     P = parse_param_Int64("P", paramDF)
     numerical_flux_type = parse_param_String("numerical_flux_type", paramDF)
@@ -59,10 +128,28 @@ function parse_default_parameters()
     finaltime = parse_param_Float64("finaltime", paramDF)
     volumenodes = parse_param_String("volumenodes", paramDF)
     basisnodes = parse_param_String("basisnodes", paramDF)
-    fluxreconstructionC = parse_param_Float64("fluxreconstructionC",paramDF)
+    fr_c_name = parse_param_String("fr_c_name",paramDF)
     debugmode = parse_param_Bool("debugmode", paramDF)
 
-    return PhysicsAndFluxParams(dim,n_times_to_solve, P,  numerical_flux_type, pde_type, usespacetime, include_source, alpha_split, advection_speed, finaltime, volumenodes, basisnodes, fluxreconstructionC, debugmode)
+    param = PhysicsAndFluxParams(
+                                 dim,
+                                 n_times_to_solve, 
+                                 P,  
+                                 numerical_flux_type, 
+                                 pde_type, 
+                                 usespacetime, 
+                                 include_source, 
+                                 alpha_split, 
+                                 advection_speed, 
+                                 finaltime, 
+                                 volumenodes, 
+                                 basisnodes, 
+                                 fr_c_name, 
+                                 debugmode
+                                )
+    set_FR_value(param)
+
+    return param
 end
 
 function parse_parameters(fname::String)
@@ -110,8 +197,9 @@ function parse_parameters(fname::String)
         if "basisnodes" in newparamDF.name
             default_params.basisnodes = parse_param_String("basis_nodes", newparamDF)
         end
-        if "fluxreconstructionC" in newparamDF.name
-            default_params.fluxreconstructionC = parse_param_Float64("fluxreconstructionC", newparamDF)
+        if "fr_c_name" in newparamDF.name
+            default_params.fr_c_name= parse_param_String("fr_c_name", newparamDF)
+            set_FR_value(default_params)
         end
         if "debugmode" in newparamDF.name
             default_params.debugmode = parse_param_Bool("debugmode", newparamDF)

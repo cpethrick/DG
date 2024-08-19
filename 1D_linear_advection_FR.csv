@@ -6,4 +6,4 @@ pde_type,linear_adv_1D
 include_source,false
 alpha_split,1.0
 debugmode,true
-fluxreconstructionC,0.000925925925925926
+fluxreconstructionC,cSD

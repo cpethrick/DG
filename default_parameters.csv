@@ -11,5 +11,5 @@ advection_speed,1.0
 finaltime,1.0
 volumenodes,GL
 basisnodes,GLL
-fluxreconstructionC,0.0
+fr_c_name,cDG
 debugmode,false
