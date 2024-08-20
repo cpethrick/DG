@@ -1,6 +1,6 @@
 include("build_dg_residual.jl")
-include("physics.jl")
 include("set_up_dg.jl")
+include("parameters.jl")
 
 
 

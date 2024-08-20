@@ -57,6 +57,7 @@ include("FE_mapping.jl")
 include("build_dg_residual.jl")
 include("set_up_dg.jl")
 include("ode_solver.jl")
+include("parameters.jl")
 
 function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     # N_elem_per_dim is number of elements PER DIM

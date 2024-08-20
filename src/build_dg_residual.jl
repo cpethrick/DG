@@ -4,6 +4,7 @@
 
 include("set_up_dg.jl")
 include("physics.jl")
+include("parameters.jl")
 
 function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
     f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction,dg, param)
