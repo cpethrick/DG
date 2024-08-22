@@ -51,11 +51,11 @@ include("parameters.jl")
 function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     # N_elem_per_dim is number of elements PER DIM
     # N is poly order
-    
+
     # Limits of computational domain
     x_Llim = 0.0
     x_Rlim = 2.0
-    
+
     dim = param.dim 
     #==============================================================================
     Start Up
@@ -98,7 +98,11 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         (u_hat,current_time) = physicaltimesolve(u_hat0, dt, Nsteps, dg, param)
         display("Done time loop")
     else
-        u_hat = pseudotimesolve(u_hat0, dg, param)
+        if param.spacetime_decouple_slabs
+            u_hat = pseudotimesolve_decoupled(u_hat0, dg, param)
+        else
+            u_hat = pseudotimesolve(u_hat0, dg, param)
+        end
     end
     #==============================================================================
     Analysis
@@ -117,7 +121,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         W_overint = LinearAlgebra.diagm(vec(w_overint*w_overint'))
         J_overint = LinearAlgebra.diagm(ones(length(r_overint)^dim)*dg.J[1]) #assume constant jacobian
     end
-        
+
     if cmp(param.pde_type, "burgers1D")==0 && param.usespacetime
         # y is time
         u_exact_overint = cos.(π*(x_overint-y_overint))
@@ -181,10 +185,10 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     energy_initial = 0
     for ielem = 1:dg.N_elem
         L2_error += (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])
-        
+
         if param.usespacetime
             # for spacetime, we want to consider initial as t=0 (bottom surface of the computational domain) and final as t=t_f (top surface)
-            
+
             # check if the element is on a surface of interest
             # use chi_f to interpolate to face
             # Probably use W_f and J_f (need to construct!) to integrate on face.
@@ -225,7 +229,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     PyPlot.legend()
     pltname = string("plt", N_elem_per_dim, ".pdf")
     PyPlot.savefig(pltname)
-    
+
     PyPlot.figure("Grid", figsize=(6,6))
     PyPlot.clf()
     ax = PyPlot.gca()
@@ -242,8 +246,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     PyPlot.plot(dg.x, dg.y, "o", color="darkolivegreen", label="volume nodes")
     pltname = string("grid", N_elem_per_dim, ".pdf")
     PyPlot.savefig(pltname)
-        
-    
+
+
     if dim == 2 && N_elem_per_dim == 4
         PyPlot.figure("Initial cond, overintegrated")
         PyPlot.clf()
@@ -265,7 +269,7 @@ function run(param::PhysicsAndFluxParams)
 
 
     P = param.P
-    N_elem_range = 2 .^(1:param.n_times_to_solve)
+    N_elem_range = 2 .^(1:param.n_times_to_solve)*2
     L2_err_store = zeros(length(N_elem_range))
     Linf_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))
@@ -283,13 +287,13 @@ function run(param::PhysicsAndFluxParams)
         dx = 2.0./N_elem_range
         Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change \n")
         for j = 1:i
-                conv_rate_L2 = 0.0
-                conv_rate_Linf = 0.0
-                if j>1
-                    conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
-                    conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
-                end
-                Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j])
+            conv_rate_L2 = 0.0
+            conv_rate_Linf = 0.0
+            if j>1
+                conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
+                conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
+            end
+            Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j])
         end
 
     end
@@ -303,7 +307,7 @@ Discretize into elements
 
 #main program
 function main(paramfile::AbstractString="default_parameters.csv")
-#==
+    #==
     # Polynomial order
     P = 2
 
@@ -311,11 +315,11 @@ function main(paramfile::AbstractString="default_parameters.csv")
     # Use an array for a refinement study, e.g. N_elem_range = [2 4 8 16 32]
     # Or a single value, e.g. N_elem_range = [3]
     N_elem_range = [2 4 8 16 32 64]
-   
+
     # Dimension of the grid.
     # Can be 1 or 2.
     dim=1
-    
+
     # PDE type to solve. 
     # "burgers1D" will solve 1D burgers on a 1D grid or 1D burgers on a 2D grid with no flux in the y-direction.
     # "linear_adv_1D" will solve 1D linear advection in the x-direction with specified velocity on a 1D or 2D grid.
@@ -341,7 +345,7 @@ function main(paramfile::AbstractString="default_parameters.csv")
 
     # Advection speed
     advection_speed = 0.5
-    
+
     # Choice of nodes for volume and basis nodes.
     # Options are "GL" for Gauss-Legendre or "GLL" for Gauss-Legendre-Lobatto.
     # Any combination should work.
@@ -378,7 +382,7 @@ function main(paramfile::AbstractString="default_parameters.csv")
     # FInal time to run the simulation for.
     # Solves with RK4.
     finaltime= 0.2 # space-time: use at least 4 to allow enough time for information to propagate through the domain times 2
-    
+
     # Run in debug mode.
     # if true, only solve one step using explicit Euler, ignoring finaltime.
     debugmode = false
@@ -386,10 +390,10 @@ function main(paramfile::AbstractString="default_parameters.csv")
     #Pack parameters into a struct
     param = PhysicsAndFluxParams(dim, fluxtype, PDEtype, usespacetime, includesource, alpha_split, advection_speed, finaltime, volumenodes, basisnodes, fluxreconstructionC, debugmode)
     display(param)
-==#
+    ==#
     param = parse_parameters(paramfile)
 
     run(param)
 end
 
-main()
+main("spacetime_burgers_OOA.csv")

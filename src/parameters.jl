@@ -14,6 +14,7 @@ mutable struct PhysicsAndFluxParams
     numerical_flux_type::AbstractString
     pde_type::AbstractString
     usespacetime::Bool
+    spacetime_decouple_slabs::Bool
     include_source::Bool
     alpha_split::Float64
     advection_speed::Float64
@@ -30,36 +31,38 @@ mutable struct PhysicsAndFluxParams
 
     # incomplete initialization: leave dependant variables uninitialized.
     PhysicsAndFluxParams(
-                        dim::Int64,
-                        n_times_to_solve::Int64,
-                        P::Int64,
-                        numerical_flux_type::AbstractString,
-                        pde_type::AbstractString,
-                        usespacetime::Bool,
-                        include_source::Bool,
-                        alpha_split::Float64,
-                        advection_speed::Float64,
-                        finaltime::Float64,
-                        volumenodes::AbstractString, #"GLL" or "GL"
-                        basisnodes::AbstractString, #"GLL" or "GL"
-                        fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000
-                        debugmode::Bool
+                         dim::Int64,
+                         n_times_to_solve::Int64,
+                         P::Int64,
+                         numerical_flux_type::AbstractString,
+                         pde_type::AbstractString,
+                         usespacetime::Bool,
+                         spacetime_decouple_slabs::Bool,
+                         include_source::Bool,
+                         alpha_split::Float64,
+                         advection_speed::Float64,
+                         finaltime::Float64,
+                         volumenodes::AbstractString, #"GLL" or "GL"
+                         basisnodes::AbstractString, #"GLL" or "GL"
+                         fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000
+                         debugmode::Bool
                         ) = new(
-                            dim::Int64,
-                            n_times_to_solve::Int64,
-                            P::Int64,
-                            numerical_flux_type::AbstractString,
-                            pde_type::AbstractString,
-                            usespacetime::Bool,
-                            include_source::Bool,
-                            alpha_split::Float64,
-                            advection_speed::Float64,
-                            finaltime::Float64,
-                            volumenodes::AbstractString, #"GLL" or "GL"
-                            basisnodes::AbstractString, #"GLL" or "GL"
-                            fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000
-                            debugmode::Bool
-                            )
+                                dim::Int64,
+                                n_times_to_solve::Int64,
+                                P::Int64,
+                                numerical_flux_type::AbstractString,
+                                pde_type::AbstractString,
+                                usespacetime::Bool,
+                                spacetime_decouple_slabs::Bool,
+                                include_source::Bool,
+                                alpha_split::Float64,
+                                advection_speed::Float64,
+                                finaltime::Float64,
+                                volumenodes::AbstractString, #"GLL" or "GL"
+                                basisnodes::AbstractString, #"GLL" or "GL"
+                                fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000
+                                debugmode::Bool
+                               )
 
 
 end
@@ -90,7 +93,7 @@ function set_FR_value(param::PhysicsAndFluxParams)
         param.fluxreconstructionC = -1 / (  ((2*P+1) * (factorial(P) * cp) ^2)   ) 
     end
 
-   
+
 end
 
 function parse_param_Float64(name::String, paramDF)
@@ -121,6 +124,7 @@ function parse_default_parameters()
     numerical_flux_type = parse_param_String("numerical_flux_type", paramDF)
     pde_type = parse_param_String("pde_type", paramDF)
     usespacetime = parse_param_Bool("usespacetime", paramDF)
+    spacetime_decouple_slabs = parse_param_Bool("spacetime_decouple_slabs", paramDF)
     include_source = parse_param_Bool("include_source", paramDF)
     alpha_split = parse_param_Float64("alpha_split", paramDF)
     advection_speed = parse_param_Float64("advection_speed", paramDF)
@@ -137,6 +141,7 @@ function parse_default_parameters()
                                  numerical_flux_type, 
                                  pde_type, 
                                  usespacetime, 
+                                 spacetime_decouple_slabs,
                                  include_source, 
                                  alpha_split, 
                                  advection_speed, 
@@ -155,7 +160,7 @@ function parse_parameters(fname::String)
     default_params = parse_default_parameters()
 
     if cmp(fname, "default_parameters.csv")!=0 # no need to re-read the file if we are already using default 
-        
+
         newparamDF = CSV.read(fname, DataFrames.DataFrame,types=String)
         display("Custom parameter values, which will override defaults:")
         display(newparamDF)
@@ -176,6 +181,9 @@ function parse_parameters(fname::String)
             default_params.pde_type = parse_param_String("pde_type", newparamDF)
         end
         if "usespacetime" in newparamDF.name
+            default_params.usespacetime = parse_param_Bool("usespacetime", newparamDF)
+        end
+        if "spacetime_decouple_slabs" in newparamDF.name
             default_params.usespacetime = parse_param_Bool("usespacetime", newparamDF)
         end
         if "include_source" in newparamDF.name

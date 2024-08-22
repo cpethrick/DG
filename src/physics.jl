@@ -39,7 +39,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, para
             f_numerical += n_face[direction] * 0.5 .* max_eigenvalue .* (uM_face .- uP_face)
         end
     end
-    
+
     if dg.dim == 2
         # in 1D, C_m = 1 so we don't need this step
         f_numerical = transform_physical_to_reference(f_numerical, direction, dg)
@@ -50,7 +50,7 @@ end
 
 function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
     f = zeros(dg.N_vol)
-            
+
     if direction == 2 && param.usespacetime
         f .+= u
     elseif cmp(param.pde_type,"linear_adv_1D")==0
@@ -66,7 +66,7 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
     if dg.dim == 2
         # in 1D, C_m = 1 so we don't need this step
         f = transform_physical_to_reference(f, direction, dg)
-    #display(f)
+        #display(f)
     end
     f_hat = dg.Pi * f
 

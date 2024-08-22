@@ -35,6 +35,10 @@ mutable struct DG
                                                 # Index of first dim is element ID, index of second 
                                                 # dimension is LFID of the edge.
     LFIDtoLFIDofexterior::Vector{Int} # which LFID of the exterior cell matches to the index LFID.
+    EIDtoTSID::Vector{Int} # maps element ID (index) to time-slab ID. 
+                           # Elements with the same TSID are in the same "row"
+                           # and cover the same t (y) vaues.
+    TSIDtoEID::AbstractMatrix{Int} # TSID is the index, columns are EID.
 
     #LXIDLYIDtoLID::AbstractMatrix{Int} # local x, y (length Np_per_dim) to local ID (length Np)
     #LIDtoLXIDLYID::AbstractMatrix{Int} # local x, y (length Np_per_dim) to local ID (length Np)
@@ -247,6 +251,16 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
         end
     end
     ===#
+    if dim==2 #Only used for space-time, but the DG object has no knowledge of what is space-time.
+        dg.EIDtoTSID = zeros(N_elem)
+        dg.TSIDtoEID = zeros(N_elem_per_dim, N_elem_per_dim)
+        for ielem = 1:N_elem
+            iTS = convert(Int, floor((ielem-1)/N_elem_per_dim+1))
+            dg.EIDtoTSID[ielem] = iTS
+            dg.TSIDtoEID[iTS, mod(ielem-1,N_elem_per_dim)+1] = ielem
+        end
+    end
+
 
     # Solution nodes (integration nodes)
     if cmp(volumenodes, "GLL") == 0 
