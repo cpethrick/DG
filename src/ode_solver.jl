@@ -6,14 +6,15 @@ function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
     # Pseudotime solve while decoupling the time-slabs.
     # for now, copy-paste from other function mostly. That is uneligant and shoud be fixed.
 
+    display("Decoupled PS")
+
     u_hat = u_hat0
     for iTS=1:dg.N_elem_per_dim
         subset_EIDs = dg.TSIDtoEID[iTS,:]
-        display(subset_EIDs)
     
         ########################### COPY STARTS HERE
         #initial dt
-        dt = 0.2* (dg.delta_x / dg.Np_per_dim) 
+        dt = 0.3* (dg.delta_x / dg.Np_per_dim) 
         residual = 1
         u_hat = u_hat0
         residual_scaling = sqrt(sum(u_hat.^2))
@@ -90,6 +91,8 @@ function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
 end
 
 function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
+
+    display("Normal PS")
 
     #initial dt
     dt = 0.3* (dg.delta_x / dg.Np_per_dim) 

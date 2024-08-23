@@ -184,7 +184,7 @@ function parse_parameters(fname::String)
             default_params.usespacetime = parse_param_Bool("usespacetime", newparamDF)
         end
         if "spacetime_decouple_slabs" in newparamDF.name
-            default_params.usespacetime = parse_param_Bool("usespacetime", newparamDF)
+            default_params.spacetime_decouple_slabs= parse_param_Bool("spacetime_decouple_slabs", newparamDF)
         end
         if "include_source" in newparamDF.name
             default_params.include_source = parse_param_Bool("include_source", newparamDF)

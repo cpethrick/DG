@@ -21,7 +21,6 @@ import LinearAlgebra
 import Printf
 import PyPlot
 
-
 #==============================================================================
 Handy function to avoid unintentionally exiting :)
 ==============================================================================#
@@ -99,8 +98,10 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         display("Done time loop")
     else
         if param.spacetime_decouple_slabs
+            display("Decoupled PS")
             u_hat = pseudotimesolve_decoupled(u_hat0, dg, param)
         else
+            display("Normal PS")
             u_hat = pseudotimesolve(u_hat0, dg, param)
         end
     end
@@ -273,27 +274,34 @@ function run(param::PhysicsAndFluxParams)
     L2_err_store = zeros(length(N_elem_range))
     Linf_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))
+    time_store = zeros(length(N_elem_range))
 
     for i=1:length(N_elem_range)
 
         # Number of elements
         N_elem =  N_elem_range[i]
 
-        #Solve
-        L2_err_store[i],Linf_err_store[i], energy_change_store[i] = setup_and_solve(N_elem,P,param)
+        # Start timer (NOTE: should change to BenchmarkTools.jl in the future)
+        t = time()
+        # Solve
+        (L2_err_store[i],Linf_err_store[i], energy_change_store[i]) = setup_and_solve(N_elem,P,param)
+        # End timer
+        time_store[i] = time() - t
 
         #Evalate convergence and print
         Printf.@printf("P =  %d \n", P)
         dx = 2.0./N_elem_range
-        Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change \n")
+        Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change   Time   Time scaling\n")
         for j = 1:i
             conv_rate_L2 = 0.0
             conv_rate_Linf = 0.0
+            conv_rate_time = 0.0
             if j>1
                 conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
                 conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
+                conv_rate_time = log(time_store[j]/time_store[j-1]) / log(dx[j]/dx[j-1])
             end
-            Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j])
+            Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f \t%.5e \t%.2f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j], time_store[j], conv_rate_time)
         end
 
     end
@@ -396,4 +404,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-main("spacetime_burgers_OOA.csv")
+main()
