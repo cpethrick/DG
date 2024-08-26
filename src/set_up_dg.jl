@@ -217,8 +217,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
             if ielem/N_elem_per_dim <= 1
                 dg.EIDLFIDtoEIDofexterior[ielem,3] += N_elem
                 if usespacetime
-                    # when using space-time, bottom and top are assigned dirichlet
-                    # boundaries
+                    # when using space-time, bottom is assigned dirichlet
+                    # boundary
                     # This is set using an EIDofexterior = 0
                     dg.EIDLFIDtoEIDofexterior[ielem,3] = 0
                 end
@@ -228,10 +228,10 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
             if ielem/N_elem_per_dim > N_elem_per_dim - 1
                 dg.EIDLFIDtoEIDofexterior[ielem,4] -= N_elem
                 if usespacetime
-                    # when using space-time, bottom and top are assigned dirichlet
-                    # boundaries
-                    # This is set using an EIDofexterior = 0
-                    dg.EIDLFIDtoEIDofexterior[ielem,4] = 0
+                    # when using space-time, top is outflow (transmissive)
+                    # boundary
+                    # This is set using an EIDofexterior = -1
+                    dg.EIDLFIDtoEIDofexterior[ielem,4] = -1 
                 end
             end
         end

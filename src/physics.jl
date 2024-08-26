@@ -15,6 +15,8 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, para
         # f_numerical = 0.5 * ( uM_face + uP_face )
         # second direction corresponding to time.
         # only use one-sided information such that the flow of information is from past to future.
+        #
+        # NOTE: must disable the decouple time slabs option if using a flux other than pure upwinding!
         if n_face[direction] == -1
             # face is bottom. Use the information from the external element
             # which corresponds to the past

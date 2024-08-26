@@ -270,7 +270,7 @@ function run(param::PhysicsAndFluxParams)
 
 
     P = param.P
-    N_elem_range = 2 .^(1:param.n_times_to_solve)*2
+    N_elem_range = 2 .^(1:param.n_times_to_solve)
     L2_err_store = zeros(length(N_elem_range))
     Linf_err_store = zeros(length(N_elem_range))
     energy_change_store = zeros(length(N_elem_range))

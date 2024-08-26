@@ -67,6 +67,10 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
             else
                 u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
             end
+        elseif elem == -1
+            # elemID == -1 corresponds to outflow (transmissive) boundary
+            # return interior value.
+            u_face =  dg.chi_f[:,:,iface]*u_hat_local
         end
 
     end
@@ -139,6 +143,8 @@ function assemble_local_residual(ielem, u_hat, t, dg::DG, param::PhysicsAndFluxP
         end
         rhs_local+=dg.Pi*calculate_source_terms(x_local,y_local,t, param)
     end
+
+    return rhs_local
 end
 
 function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams, subset_EIDs=nothing)
@@ -148,7 +154,7 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams, subset
 
     rhs = zeros(Float64, size(u_hat))
 
-    if subset_EIDs == nothing
+    if typeof(subset_EIDs) == Nothing
         elem_range = 1:dg.N_elem
     else
         elem_range = subset_EIDs
