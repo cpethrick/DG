@@ -67,6 +67,7 @@ mutable struct DG
     M_nojac::AbstractMatrix{Float64}
     Pi::AbstractMatrix{Float64}
     K::AbstractMatrix{Float64}
+    QtildemQtildeT::AbstractArray{Float64}
 
     #Incomplete initializer - only assign Category 1 variables.
     DG(P::Int, 
@@ -156,7 +157,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     if dim == 1
         dg.Np=dg.Np_per_dim
         dg.Nfaces = 2
-        dg.Nfp = 2
+        dg.Nfp = 1
         dg.N_elem = N_elem_per_dim
     elseif dim == 2
         dg.Nfaces = 4
@@ -376,6 +377,31 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     display("Adjusted Mass matrix")
     display(dg.M)
     dg.M_inv = inv(dg.M)
+
+    dg.QtildemQtildeT = zeros(Np+dg.Nfp, Np+dg.Nfp,dim) # Np points in volume, Np_er_dim on each face. Store ndim matrices.
+    # volume
+    dg.QtildemQtildeT[1:Np, 1:Np,1] .= dg.W * dg.d_chi_v_d_xi- dg.d_chi_v_d_xi' * dg.W
+    if dim==2
+        dg.QtildemQtildeT[1:Np, 1:Np,2] .= dg.W * dg.d_chi_v_d_eta- dg.d_chi_v_d_eta' * dg.W
+    end
+
+    # face - only assemble top-right matrix
+    for iface = 1:dg.Nfaces
+        dg.QtildemQtildeT[1:Np,Np+1:Np+dg.Nfp,1] .+= dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface,1] # 1st direction of normal
+    end
+    if dim==2
+        for iface = 1:dg.Nfaces
+            dg.QtildemQtildeT[1:Np,Np+1:Np+dg.Nfp,2] .+= dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface,2] # 2nd direction of normal
+        end
+    end
+    # then assign skew-symmetric matrix
+    for idim = 1:dim
+        dg.QtildemQtildeT[Np+1:Np+dg.Nfp, 1:Np, idim] .=  -1.0 * dg.QtildemQtildeT[1:Np,Np+1:Np+dg.Nfp,idim]'
+    end
+
+    display("Skew-symmetric stiffness operator")
+    display(dg.QtildemQtildeT)
+
 
     display("Next line is dg.chi_v*dg.Pi, which should be identity.")
     display(dg.chi_v*dg.Pi) #should be identity

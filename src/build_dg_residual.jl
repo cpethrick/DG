@@ -6,6 +6,20 @@ include("set_up_dg.jl")
 include("physics.jl")
 include("parameters.jl")
 
+function hadamard_product(A::AbstractMatrix, B::AbstractMatrix, N_rows::Int, N_cols::Int)
+    #returns C = A ⊙ B, element-wise multiplication of matrices A and B
+    
+    C = zeros(N_rows,N_cols)
+    for irow = 1:N_rows
+        for icol = 1:N_cols
+            C[irow,icol] = A[irow,icol] * B[irow,icol]
+        end
+    end
+
+    return C
+    
+end
+
 function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
     f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction,dg, param)
 
@@ -21,6 +35,17 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
 
     return face_term
 end
+
+function calculate_face_numerical_flux_term(iface, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
+    # For the skew-symmetric stiffness operator, only the numerical flux part is needed.
+
+    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction,dg, param)
+
+    face_term = dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface, direction] * (f_numerical)
+
+    return face_term
+end
+
 
 function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_global, u_hat_local, dg::DG, param::PhysicsAndFluxParams)
 
@@ -99,7 +124,65 @@ function calculate_volume_terms_nonconservative(u, u_hat, direction, dg::DG, par
     return transform_physical_to_reference(volume_term_physical, direction, dg) 
 end
 
+function calculate_dim_cellwise_residual(ielem,u_hat,u_hat_local,u_local,direction, dg::DG, param::PhysicsAndFluxParams)
+
+    rhs_local = zeros(Float64, dg.Np)
+    
+    f_hat_local = calculate_flux(u_local,direction, dg, param)
+
+    volume_terms_dim = calculate_volume_terms(f_hat_local,direction, dg)
+    use_split::Bool = param.alpha_split < 1 && (direction== 1 || (direction== 2 && !param.usespacetime))
+    if use_split
+        volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local,direction, dg, param)
+        volume_terms_dim = param.alpha_split * volume_terms_dim + (1-param.alpha_split) * volume_terms_nonconservative
+    end
+    rhs_local += volume_terms_dim
+    for iface in 1:dg.Nfaces
+
+        #How to get exterior values if those are all modal?? Would be doing double work...
+        # I'm also doing extra work here by calculating the external solution one per dim. Think about how to improve this.
+        uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
+        uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg, param)
+
+        rhs_local.+= calculate_face_term(iface, f_hat_local, u_hat_local, uM, uP, direction, dg, param)
+
+    end
+
+    return rhs_local
+end
+
+function calculate_volume_terms_skew_symm(u_local, u_hat_local, dg::DG, param::PhysicsAndFluxParams)
+
+    volume_term = zeros(Float64, dg.Np)
+
+    #u_local is only on volume nodes. Need to append u on face nodes.
+    
+    u_face = 
+
+    # Problem: how to select u_face? Alex's paper seems contradictory of whether we eant to select Nf * Nfp or Nfp. Can't possibly select Nfp to calculate the two point flux?
+    reference_two_point_flux = two_point_flux.(u_VF,u_VF) 
+
+    return volume_term
+end
+
+function calculate_dim_cellwise_residual_skew_symm(ielem,u_hat,u_hat_local,u_local,direction, dg::DG, param::PhysicsAndFluxParams)
+    rhs_local = zeros(Float64, dg.Np)
+
+
+    rhs_local += calculate_volume_terms_skew_symm(u_local, dg, param)
+    
+    for iface in 1:dg.Nfaces
+        uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
+        uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg, param)
+
+        rhs_local.+= calculate_face_numerical_flux_term(iface, u_hat_local, uM, uP, direction, dg, param)
+
+    end
+    return rhs_local
+end
+
 function assemble_local_residual(ielem, u_hat, t, dg::DG, param::PhysicsAndFluxParams)
+    rhs_local = zeros(Float64, dg.Np)
     u_hat_local = zeros(Float64, dg.Np)
     u_local = zeros(Float64, dg.Np)
     f_hat_local = zeros(Float64, dg.Np)
@@ -108,31 +191,13 @@ function assemble_local_residual(ielem, u_hat, t, dg::DG, param::PhysicsAndFluxP
     end
 
     u_local = dg.chi_v * u_hat_local # nodal solution
-    volume_terms = zeros(Float64, size(u_hat_local))
-    face_terms = zeros(Float64, size(u_hat_local))
+    # volume_terms = zeros(Float64, size(u_hat_local))
+    # face_terms = zeros(Float64, size(u_hat_local))
     for idim = 1:dg.dim
-        f_hat_local = calculate_flux(u_local,idim, dg, param)
-
-        volume_terms_dim = calculate_volume_terms(f_hat_local,idim, dg)
-        use_split::Bool = param.alpha_split < 1 && (idim == 1 || (idim == 2 && !param.usespacetime))
-        if use_split
-            volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local,idim, dg, param)
-            volume_terms_dim = param.alpha_split * volume_terms_dim + (1-param.alpha_split) * volume_terms_nonconservative
-        end
-        volume_terms += volume_terms_dim
-        for iface in 1:dg.Nfaces
-
-            #How to get exterior values if those are all modal?? Would be doing double work...
-            # I'm also doing extra work here by calculating the external solution one per dim. Think about how to improve this.
-            uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
-            uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg, param)
-
-            face_terms .+= calculate_face_term(iface, f_hat_local, u_hat_local, uM, uP, idim, dg, param)
-
-        end
+        rhs_local += calculate_dim_cellwise_residual(ielem,u_hat,u_hat_local,u_local,idim,dg,param)
     end
 
-    rhs_local = -1* dg.M_inv * (volume_terms .+ face_terms)
+    rhs_local = -1* dg.M_inv * (rhs_local)
 
     if param.include_source
         x_local = zeros(Float64, dg.N_vol)
@@ -146,6 +211,7 @@ function assemble_local_residual(ielem, u_hat, t, dg::DG, param::PhysicsAndFluxP
 
     return rhs_local
 end
+
 
 function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams, subset_EIDs=nothing)
     # Parameter subset_EIDs assembles the residual ONLY in the subset of elements given by the vector subset_EIDs
