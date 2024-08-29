@@ -5,10 +5,7 @@ Import packages
 # For Jacobi/Legendre polynomials
 # E.g., ClassicalOrthagonalPolynomials.jacobip(N, alpha, beta, x)
 # NOTE: Need to normalize manually
-import ClassicalOrthogonalPolynomials
-
-#for gamma function
-#import SpecialFunctions
+# import ClassicalOrthogonalPolynomials
 
 # For Gauss quadrature points
 # E.g., xi,wi = FastGaussQuadrature.gaussjacobi(N,0.0,0.0) is Gauss-Legendre nodes

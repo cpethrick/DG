@@ -251,7 +251,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
         end
     end
     ===#
-    if dim==2 #Only used for space-time, but the DG object has no knowledge of what is space-time.
+    if dim==2 #Only used for space-time, but the DG object has no knowledge of what is space-time
+              # so we assemble for any 2D domain
         dg.EIDtoTSID = zeros(N_elem)
         dg.TSIDtoEID = zeros(N_elem_per_dim, N_elem_per_dim)
         for ielem = 1:N_elem

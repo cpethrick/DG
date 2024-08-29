@@ -1,7 +1,8 @@
 name,value
 dim,2
+P,4
 usespacetime,true
-spacetime_decouple_slabs,false
+spacetime_decouple_slabs,true
 numerical_flux_type,split
 n_times_to_solve,3
 include_source,false

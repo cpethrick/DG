@@ -1,7 +1,7 @@
 name,value
 dim,2
-P,3
-n_times_to_solve,3
+P,5
+n_times_to_solve,5
 usespacetime,true
 debugmode,false
 spacetime_decouple_slabs,true
