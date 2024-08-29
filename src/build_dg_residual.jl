@@ -151,16 +151,31 @@ function calculate_dim_cellwise_residual(ielem,u_hat,u_hat_local,u_local,directi
     return rhs_local
 end
 
-function calculate_volume_terms_skew_symm(u_local, u_hat_local, dg::DG, param::PhysicsAndFluxParams)
+function calculate_volume_terms_skew_symm(u_local, u_hat_local, direction, dg::DG, param::PhysicsAndFluxParams)
 
     volume_term = zeros(Float64, dg.Np)
 
     #u_local is only on volume nodes. Need to append u on face nodes.
     
-    u_face = 
+    u_vf = zeros(dg.Np+dg.Nfaces*dg.Nfp)
+    u_vf[1:dg.Np] .= u_local
+    for iface = 1:dg.Nfaces
+        u_face=dg.chi_f[:,:,iface]*u_hat_local
+        u_vf[(dg.Np+(iface-1)*dg.Nfp)+1:(dg.Np+(iface)*dg.Nfp)].=u_face
+    end
 
     # Problem: how to select u_face? Alex's paper seems contradictory of whether we eant to select Nf * Nfp or Nfp. Can't possibly select Nfp to calculate the two point flux?
-    reference_two_point_flux = two_point_flux.(u_VF,u_VF) 
+    reference_two_point_flux = zeros(dg.Np+dg.Nfaces*dg.Nfp,dg.Np+dg.Nfaces*dg.Nfp)
+    for i =1:length(u_vf)
+        ui = u_vf[i]
+        for j = 1:length(u_vf)
+            uj=u_vf[j]
+            #reference_two_point_flux = two_point_flux(ui,uj) 
+            reference_two_point_flux[i,j] = calculate_two_point_flux(ui, uj, direction, dg)
+        end
+    end
+
+    volume_term = dg.chi_vf * hadamard_product(dg.QtildemQtildeT[:,:,direction], reference_two_point_flux, length(u_vf), length(u_vf)) * ones(length(u_vf))
 
     return volume_term
 end
@@ -169,7 +184,7 @@ function calculate_dim_cellwise_residual_skew_symm(ielem,u_hat,u_hat_local,u_loc
     rhs_local = zeros(Float64, dg.Np)
 
 
-    rhs_local += calculate_volume_terms_skew_symm(u_local, dg, param)
+    rhs_local .+= calculate_volume_terms_skew_symm(u_local, u_hat_local,direction, dg, param)
     
     for iface in 1:dg.Nfaces
         uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
@@ -194,7 +209,11 @@ function assemble_local_residual(ielem, u_hat, t, dg::DG, param::PhysicsAndFluxP
     # volume_terms = zeros(Float64, size(u_hat_local))
     # face_terms = zeros(Float64, size(u_hat_local))
     for idim = 1:dg.dim
-        rhs_local += calculate_dim_cellwise_residual(ielem,u_hat,u_hat_local,u_local,idim,dg,param)
+        if param.use_skew_symmetric_stiffness_operator
+            rhs_local += calculate_dim_cellwise_residual_skew_symm(ielem,u_hat,u_hat_local,u_local,idim,dg,param)
+        else
+            rhs_local += calculate_dim_cellwise_residual(ielem,u_hat,u_hat_local,u_local,idim,dg,param)
+        end
     end
 
     rhs_local = -1* dg.M_inv * (rhs_local)

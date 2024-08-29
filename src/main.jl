@@ -404,4 +404,5 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-main("2D_burgers_OOA.csv")
+main()
+#main("2D_burgers_OOA.csv")

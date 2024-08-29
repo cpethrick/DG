@@ -50,6 +50,16 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, para
 
 end
 
+function calculate_two_point_flux(ui,uj, direction, dg::DG)
+    flux_physical = 1.0/6.0 * (ui.* ui + ui .* uj + uj .* uj)
+    
+    if dg.dim == 2
+        return transform_physical_to_reference(flux_physical, direction, dg)
+    else
+        return flux_physical
+    end
+end
+
 function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
     f = zeros(dg.N_vol)
 
@@ -101,7 +111,7 @@ function calculate_initial_solution(x::AbstractVector{Float64},y::AbstractVector
         u0 = exp.(-10*((x .-1).^2 .+(y .-1).^2))
     else
         #u0 = 0.2* sin.(π * x) .+ 0.01
-        u0 = sin.(π * (x)) .+ 0.01
+        u0 = sin.(π * (x))
     end
     return u0
 end

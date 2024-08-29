@@ -52,6 +52,7 @@ mutable struct DG
     d_chi_v_d_xi::AbstractMatrix{Float64}
     d_chi_v_d_eta::AbstractMatrix{Float64}
     chi_f::AbstractArray{Float64}
+    chi_vf::AbstractMatrix{Float64}
     C_m::AbstractMatrix{Float64}
     
     W::AbstractMatrix{Float64}
@@ -321,6 +322,12 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
         dg.J_f = LinearAlgebra.diagm(ones(length(dg.r_volume)) * jacobian ^ (1/dim)) # 1D jacobian on the face of the element.
         dg.C_m = dg.delta_x/2.0 * [1 0; 0 1]  # Assuming a cartesian element and a reference element (-1,1)
     end
+
+    # for skew-symmetric stiffness operator form
+    dg.chi_vf = dg.chi_v'
+    for iface=1:dg.Nfaces
+        dg.chi_vf = [dg.chi_vf dg.chi_f[:,:,iface]' ]
+    end
     
     # Mass and stiffness matrices as defined Eq. 9.5 Cicchino 2022
     # All defined on a single element.
@@ -378,7 +385,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     display(dg.M)
     dg.M_inv = inv(dg.M)
 
-    dg.QtildemQtildeT = zeros(Np+dg.Nfp, Np+dg.Nfp,dim) # Np points in volume, Np_er_dim on each face. Store ndim matrices.
+    dg.QtildemQtildeT = zeros(Np+dg.Nfaces*dg.Nfp, Np+dg.Nfaces*dg.Nfp,dim) # Np points in volume, Nfp on each face. Store ndim matrices.
     # volume
     dg.QtildemQtildeT[1:Np, 1:Np,1] .= dg.W * dg.d_chi_v_d_xi- dg.d_chi_v_d_xi' * dg.W
     if dim==2
@@ -387,16 +394,16 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
 
     # face - only assemble top-right matrix
     for iface = 1:dg.Nfaces
-        dg.QtildemQtildeT[1:Np,Np+1:Np+dg.Nfp,1] .+= dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface,1] # 1st direction of normal
+        dg.QtildemQtildeT[1:Np,(Np+1+dg.Nfp*(iface-1)):(Np+dg.Nfp*iface),1] .+= dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface,1] # 1st direction of normal
     end
     if dim==2
         for iface = 1:dg.Nfaces
-            dg.QtildemQtildeT[1:Np,Np+1:Np+dg.Nfp,2] .+= dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface,2] # 2nd direction of normal
+            dg.QtildemQtildeT[1:Np,(Np+1+dg.Nfp*(iface-1)):(Np+dg.Nfp*iface),2] .+= dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface,2] # 2nd direction of normal
         end
     end
     # then assign skew-symmetric matrix
     for idim = 1:dim
-        dg.QtildemQtildeT[Np+1:Np+dg.Nfp, 1:Np, idim] .=  -1.0 * dg.QtildemQtildeT[1:Np,Np+1:Np+dg.Nfp,idim]'
+        dg.QtildemQtildeT[Np+1:end, 1:Np, idim] .=  -1.0 * dg.QtildemQtildeT[1:Np,Np+1:end,idim]'
     end
 
     display("Skew-symmetric stiffness operator")

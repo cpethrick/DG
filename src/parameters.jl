@@ -17,6 +17,7 @@ mutable struct PhysicsAndFluxParams
     spacetime_decouple_slabs::Bool
     include_source::Bool
     alpha_split::Float64
+    use_skew_symmetric_stiffness_operator::Bool
     advection_speed::Float64
     finaltime::Float64
     volumenodes::String #"GLL" or "GL"
@@ -40,6 +41,7 @@ mutable struct PhysicsAndFluxParams
                          spacetime_decouple_slabs::Bool,
                          include_source::Bool,
                          alpha_split::Float64,
+                         use_skew_symmetric_stiffness_operator::Bool,
                          advection_speed::Float64,
                          finaltime::Float64,
                          volumenodes::AbstractString, #"GLL" or "GL"
@@ -56,6 +58,7 @@ mutable struct PhysicsAndFluxParams
                                 spacetime_decouple_slabs::Bool,
                                 include_source::Bool,
                                 alpha_split::Float64,
+                                use_skew_symmetric_stiffness_operator::Bool,
                                 advection_speed::Float64,
                                 finaltime::Float64,
                                 volumenodes::AbstractString, #"GLL" or "GL"
@@ -127,6 +130,7 @@ function parse_default_parameters()
     spacetime_decouple_slabs = parse_param_Bool("spacetime_decouple_slabs", paramDF)
     include_source = parse_param_Bool("include_source", paramDF)
     alpha_split = parse_param_Float64("alpha_split", paramDF)
+    use_skew_symmetric_stiffness_operator = parse_param_Bool("use_skew_symmetric_stiffness_operator", paramDF)
     advection_speed = parse_param_Float64("advection_speed", paramDF)
     finaltime = parse_param_Float64("finaltime", paramDF)
     volumenodes = parse_param_String("volumenodes", paramDF)
@@ -144,6 +148,7 @@ function parse_default_parameters()
                                  spacetime_decouple_slabs,
                                  include_source, 
                                  alpha_split, 
+                                 use_skew_symmetric_stiffness_operator,
                                  advection_speed, 
                                  finaltime, 
                                  volumenodes, 
@@ -191,6 +196,9 @@ function parse_parameters(fname::String)
         end
         if "alpha_split" in newparamDF.name
             default_params.alpha_split = parse_param_Float64("alpha_split", newparamDF)
+        end
+        if "use_skew_symmetric_stiffness_operator" in newparamDF.name
+            default_params.use_skew_symmetric_stiffness_operator = parse_param_Bool("use_skew_symmetric_stiffness_operator", newparamDF)
         end
         if "advection_speed" in newparamDF.name
             default_params.advection_speed = parse_param_Float64("advection_speed", newparamDF)
