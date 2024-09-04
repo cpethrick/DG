@@ -5,3 +5,5 @@ n_times_to_solve,3
 usespacetime,true
 debugmode,false
 spacetime_decouple_slabs,true
+volumenodes,GLL
+use_skew_symmetric_stiffness_operator,true

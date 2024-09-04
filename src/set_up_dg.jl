@@ -406,8 +406,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
         dg.QtildemQtildeT[Np+1:end, 1:Np, idim] .=  -1.0 * dg.QtildemQtildeT[1:Np,Np+1:end,idim]'
     end
 
-    display("Skew-symmetric stiffness operator")
-    display(dg.QtildemQtildeT)
 
 
     display("Next line is dg.chi_v*dg.Pi, which should be identity.")

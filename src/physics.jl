@@ -12,7 +12,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, para
     f_numerical=zeros(size(uM_face))
 
     if direction == 2 && param.usespacetime 
-        # f_numerical = 0.5 * ( uM_face + uP_face )
+         f_numerical = 0.5 * ( uM_face + uP_face )
         # second direction corresponding to time.
         # only use one-sided information such that the flow of information is from past to future.
         #
@@ -20,11 +20,11 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, para
         if n_face[direction] == -1
             # face is bottom. Use the information from the external element
             # which corresponds to the past
-            f_numerical = uP_face
+        #    f_numerical = uP_face
         elseif n_face[direction] == 1
             # face is bottom. Use internal solution
             # which corresonds to the past
-            f_numerical = uM_face
+        #    f_numerical = uM_face
         end
     elseif cmp(param.pde_type, "linear_adv_1D")==0
         a = param.advection_speed
@@ -50,8 +50,16 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, para
 
 end
 
-function calculate_two_point_flux(ui,uj, direction, dg::DG)
-    flux_physical = 1.0/6.0 * (ui.* ui + ui .* uj + uj .* uj)
+function calculate_two_point_flux(ui,uj, direction, dg::DG, param::PhysicsAndFluxParams)
+
+    if param.usespacetime && direction == 2
+        flux_physical = 0.5 * (ui .+ uj)
+    elseif occursin("burgers", param.pde_type)
+        flux_physical = 1.0/6.0 * (ui.* ui + ui .* uj + uj .* uj)
+    else
+        flux_physical = 0*ui
+        display("Illegal PDE type! No two point flux is defined.")
+    end
     
     if dg.dim == 2
         return transform_physical_to_reference(flux_physical, direction, dg)
@@ -102,7 +110,8 @@ function calculate_initial_solution(x::AbstractVector{Float64},y::AbstractVector
 
     if param.usespacetime
         #u0 = cos.(π * (x))
-        u0 = 0*x
+        u0 = 0.1*sin.(π * (x))
+        #u0 = 0*x
     elseif param.include_source && cmp(param.pde_type, "burgers2D")==0
         u0 = cos.(π * (x + y))
     elseif param.include_source && cmp(param.pde_type, "burgers1D")==0
@@ -140,7 +149,7 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
     if param.include_source
         return  cos.(π * (x-y))
     elseif cmp(param.pde_type, "burgers1D")==0
-        return 0.2*sin.(π * (x))
+        return 0.1*sin.(π * (x))
     else
         return sin.(π * (x)) .+ 0.01
     end

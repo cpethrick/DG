@@ -96,6 +96,8 @@ function set_FR_value(param::PhysicsAndFluxParams)
         param.fluxreconstructionC = -1 / (  ((2*P+1) * (factorial(P) * cp) ^2)   ) 
     end
 
+    display("Value of C is:")
+    display(param.fluxreconstructionC)
 
 end
 
@@ -210,7 +212,7 @@ function parse_parameters(fname::String)
             default_params.volumenodes = parse_param_String("volumenodes", newparamDF)
         end
         if "basisnodes" in newparamDF.name
-            default_params.basisnodes = parse_param_String("basis_nodes", newparamDF)
+            default_params.basisnodes = parse_param_String("basisnodes", newparamDF)
         end
         if "fr_c_name" in newparamDF.name
             default_params.fr_c_name= parse_param_String("fr_c_name", newparamDF)

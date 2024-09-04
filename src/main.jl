@@ -249,7 +249,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     PyPlot.savefig(pltname)
 
 
-    if dim == 2 && N_elem_per_dim == 4
+    if dim == 2 
         PyPlot.figure("Initial cond, overintegrated")
         PyPlot.clf()
         PyPlot.tricontourf(x_overint, y_overint, u0_overint, 20)

@@ -5,3 +5,4 @@ spacetime_decouple_slabs,false
 numerical_flux_type,split
 n_times_to_solve,3
 include_source,false
+volumenodes,GLL

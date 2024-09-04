@@ -166,12 +166,13 @@ function calculate_volume_terms_skew_symm(u_local, u_hat_local, direction, dg::D
 
     # Problem: how to select u_face? Alex's paper seems contradictory of whether we eant to select Nf * Nfp or Nfp. Can't possibly select Nfp to calculate the two point flux?
     reference_two_point_flux = zeros(dg.Np+dg.Nfaces*dg.Nfp,dg.Np+dg.Nfaces*dg.Nfp)
+    # Efficiency note: Some terms of QtildemQtildeT are zero, so those shouldn' be computed.
+    # Can also take advantage of symmetry.
     for i =1:length(u_vf)
         ui = u_vf[i]
         for j = 1:length(u_vf)
             uj=u_vf[j]
-            #reference_two_point_flux = two_point_flux(ui,uj) 
-            reference_two_point_flux[i,j] = calculate_two_point_flux(ui, uj, direction, dg)
+            reference_two_point_flux[i,j] = calculate_two_point_flux(ui, uj, direction, dg, param)
         end
     end
 

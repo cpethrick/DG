@@ -31,6 +31,9 @@ function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
             (u_hatnew,current_time) = physicaltimesolve(u_hat, dt, 10, dg, param, subset_EIDs)
             u_change = u_hatnew - u_hat
 
+            if param.debugmode
+                residual = 1E-14
+            else
             if first_residual < 0
                 residual = sqrt(sum(u_change.^2))
                 first_residual = residual
@@ -56,13 +59,14 @@ function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
                 display("WARNING: not converged by 1000 iterations! Finishing the run.")
                 residual = 1E-14
             end
-            if param.debugmode
-                # setting residual = 1E-14 ensures that we only do 1 time step
-                residual = 1E-14
-            end
+        end
         end
         iterctr = 0
         # converge once more and decrease time step size every 100 iters
+        if param.debugmode
+            residual = 1E-14
+
+        end
         while residual > 1E-12
 
             # solve a time step with RK

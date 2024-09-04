@@ -1,4 +1,7 @@
 name,value
 numerical_flux_type,split
 include_source,false
+use_skew_symmetric_stiffness_operator,true
+volumenodes,GLL
 finaltime,0.3
+fr_c_name,cHU
