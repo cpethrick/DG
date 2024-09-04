@@ -54,38 +54,7 @@ function tensor_product_vandermonde2D(r_basis::AbstractVector, r_volume_x::Abstr
 end
 
 function vandermonde2D(r_volume::AbstractVector, r_basis::AbstractVector, dg::DG)
-
-    # for debugging, transform the reference cell from(-1,1) to (0,1)
-    #r_volume = (r_volume.+1) * 0.5
-    #r_basis = (r_basis.+1) * 0.5
-    #display(r_volume)
-    #display(r_basis)
     V1D = vandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
-    #display(V1D)
-#====
-    dim = 2
-    V2D = zeros(Float64, (length(r_volume)^dim, length(r_basis)^dim))
-    counter_volume=1
-    for iy_V = 1:length(r_volume)
-        for ix_V = 1:length(r_volume)
-            #i_LID_C = dg.LXIDLYIDtoLID[ix_V,iy_V]
-            
-            i_LID_C = counter_volume
-
-
-            counter_basis = 1
-            for iy_B = 1:length(r_basis)
-                for ix_B = 1:length(r_basis)
-                    i_LID_B = counter_basis
-                    V2D[i_LID_C, i_LID_B] = V1D[ix_V,ix_B]*V1D[iy_V,iy_B]
-                    counter_basis = counter_basis + 1
-                end
-            end
-            counter_volume+=1
-        end
-        
-    end
-====#
     return tensor_product_vandermonde2D(r_basis, r_volume, r_volume, V1D, V1D)
 end
 
@@ -130,37 +99,6 @@ function gradvandermonde2D(direction::Int, r_volume::AbstractVector, r_basis::Ab
     DVr1D = gradvandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
     V1D = vandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
 
-    # for debugging, transform the reference cell from(-1,1) to (0,1)
-    #r_volume = (r_volume.+1) * 0.5
-    #r_basis = (r_basis.+1) * 0.5
-    #display(r_volume)
-    #display(r_basis)
-#==
-    dim = 2
-    DVr2D = zeros(Float64, (length(r_volume)^dim, length(r_basis)^dim))
-    counter_vol=1
-    for iy_V = 1:length(r_volume)
-        for ix_V = 1:length(r_volume)
-            i_LID_C = counter_vol#  dg.LXIDLYIDtoLID[ix_V,iy_V] #I think this is not general if there are different numbers of points
-
-
-            counter_basis = 1
-            for iy_B = 1:length(r_basis)
-                for ix_B = 1:length(r_basis)
-                    i_LID_B = counter_basis
-                    if direction == 1 #derivative wrt xi, first direction
-                        DVr2D[i_LID_C, i_LID_B] = DVr1D[ix_V,ix_B]*V1D[iy_V,iy_B]
-                    elseif direction == 2 #derivative wrt eta, first direction
-                        DVr2D[i_LID_C, i_LID_B] = V1D[ix_V,ix_B]*DVr1D[iy_V,iy_B]
-                    end
-                    counter_basis = counter_basis + 1
-                end
-            end
-            counter_vol+=1
-        end
-        
-    end
-===#
     if direction == 1
         return tensor_product_vandermonde2D(r_basis, r_volume, r_volume, DVr1D, V1D)
     else
@@ -182,8 +120,6 @@ function assembleFaceVandermonde2D(r_basis::AbstractVector, r_volume::AbstractVe
     V_f_1D = assembleFaceVandermonde1D(-1.0, 1.0, dg.r_basis)
     # stores a 1D vandermonde matrix at volume integration points
     V_v_1D = vandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
-    display("1D volume VdM matrix")
-    display(V_v_1D)
     
     #This implementation assumes that face points are a subset of volume points.
     
@@ -210,90 +146,6 @@ function assembleFaceVandermonde2D(r_basis::AbstractVector, r_volume::AbstractVe
             V_x = V_v_1D
         end
         V_f[:,:,iface] .= tensor_product_vandermonde2D(r_basis, r_face_x, r_face_y, V_x, V_y)
-        #display("New implementation")
-        #display(V_f[:,:,iface])
-        
-
     end
-    return V_f
-    # Update here!!!!
-    #o
-    #
-    for iface = 1:dg.Nfaces
-        #get reference coords of face intgration points. Use volume node choice.
-        if iface == 1 || iface == 2
-            r_face_y = r_volume
-        elseif iface == 3
-            r_face_y = -1 #0 .*r_volume .- 1
-        elseif iface == 4
-            r_face_y = 1 # 0 .*r_volume .+ 1
-        end
-        if iface == 3 || iface == 4
-            r_face_x = r_volume
-        elseif iface == 1
-            r_face_x = -1 # 0 .*r_volume .- 1
-        elseif iface == 2
-            r_face_x = 1
-        end
-
-        #determine whether face is at -1 or 1
-        if iface == 1 || iface == 3
-            iV_f_1D = 1 # index to find face at -1
-        else
-            iV_f_1D = 2 # index to find face at 1
-        end
-
-        display("Assembling face VdM")
-        display(iface)
-        display(r_face_x)
-        display(r_face_y)
-
-        display("Face VdM at this face:")
-        display(V_f_1D[:,:,iV_f_1D])
-        V_f_thisFace = V_f_1D[:,:,iV_f_1D]
-
-        counter_vol=1
-        for iV_face = 1:length(r_volume)
-            display("iV_face")
-            display(iV_face)
-            #for ix_V = 1:length(r_face_x)
-            #    display("ix_V")
-            #    display(ix_V)
-                i_LID_C = counter_vol#  dg.LXIDLYIDtoLID[ix_V,iy_V] #I think this is not general if there are different numbers of points
-
-
-                counter_basis = 1
-                for iy_B = 1:length(r_basis)
-                    for ix_B = 1:length(r_basis)
-                        i_LID_B = counter_basis
-                        
-                        if iface == 1  || iface == 2 #face is parallel to y-axis: y-direction VdM is volume, while x-direction VdM is face.
-                            V_f[i_LID_C, i_LID_B, iface] = V_f_thisFace[1, iV_face]*V_v_1D[iV_face, iy_B]
-                            #V_f[i_LID_C, i_LID_B, iface] = V_f_1D[ix_V, ix_B, iV_f_1D]*V_v_1D[iy_V, iy_B]
-                        else # face is parallel to x-axis: x-drection  VdM is volume, while y-direction is face.
-                            V_f[i_LID_C, i_LID_B, iface] = V_v_1D[iV_face, ix_B] * V_f_thisFace[1,iV_face]
-                            #V_f[i_LID_C, i_LID_B, iface] = V_f_1D[iy_V, iy_B, iV_f_1D]*V_v_1D[ix_V, ix_B]
-                        end
-
-                        counter_basis = counter_basis + 1
-                    end
-                end
-                counter_vol+=1
-            #end
-            
-        end
-    end
-
-#==
-    for iface = 1:dg.Nfaces
-        #get LID of points on LFID of iface
-
-        LID_iface = dg.LFIDtoLID[iface,:]
-        for ifacept = 1:dg.Nfp
-            V_f[ifacept,:,iface] = chi_v[LID_iface[ifacept], :]
-        end
-    end
-    ==#
-    display(V_f)
     return V_f
 end
