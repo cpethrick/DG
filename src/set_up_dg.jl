@@ -370,6 +370,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
                 end
             end
         end
+        dg.K = fluxreconstructionC * (D_xi^P)' * dg.M * D_xi^P
     end
     display("FR K")
     display(dg.K) # Verified against PHiLiP for 1D and 2D using C from PHiLiP

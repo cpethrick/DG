@@ -17,6 +17,7 @@ import SparseArrays
 import LinearAlgebra
 import Printf
 import PyPlot
+import DelimitedFiles
 
 #==============================================================================
 Handy function to avoid unintentionally exiting :)
@@ -285,10 +286,13 @@ function run(param::PhysicsAndFluxParams)
         # End timer
         time_store[i] = time() - t
 
-        #Evalate convergence and print
+        #Evalate convergence, print, and save to file
         Printf.@printf("P =  %d \n", P)
         dx = 2.0./N_elem_range
         Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change   Time   Time scaling\n")
+        fname = "result.csv" #Note: this should be changed to something useful in the future...
+        f = open(fname, "w")
+        DelimitedFiles.writedlm(f, ["n cells_per_dim" "dx" "L2 Error" "L2  Error rate" "Linf Error" "Linf rate" "Energy change" "Time" "Time scaling"], ",")
         for j = 1:i
             conv_rate_L2 = 0.0
             conv_rate_Linf = 0.0
@@ -299,7 +303,10 @@ function run(param::PhysicsAndFluxParams)
                 conv_rate_time = log(time_store[j]/time_store[j-1]) / log(dx[j]/dx[j-1])
             end
             Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f \t%.5e \t%.2f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j], time_store[j], conv_rate_time)
+            DelimitedFiles.writedlm(f, [N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j    ], time_store[j], conv_rate_time]', ",")
         end
+
+        close(f)
 
     end
 end

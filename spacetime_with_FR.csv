@@ -6,4 +6,4 @@ alpha_split,1.0
 include_source,false
 n_times_to_solve,4
 P,3
-fluxreconstructionC,cHU
+fr_c_name,cHU
