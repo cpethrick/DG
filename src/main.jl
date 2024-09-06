@@ -224,7 +224,9 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     ax.set_xticks(dg.VX, minor=false)
     ax.xaxis.grid(true, which="major")
     PyPlot.plot(vec(x_overint_1D), vec(u0_overint_1D), label="initial")
-    PyPlot.plot(vec(x_overint_1D), vec(u_exact_overint_1D), label="exact")
+    if param.include_source || cmp(param.pde_type, "linear_adv_1D")==0
+        PyPlot.plot(vec(x_overint_1D), vec(u_exact_overint_1D), label="exact")
+    end
     PyPlot.plot(vec(x_overint_1D), vec(u_calc_final_overint_1D), label="calculated")
     #Plots.plot!(vec(x_overint_1D), [vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["calculated" "initial"])
     PyPlot.legend()
@@ -405,4 +407,3 @@ function main(paramfile::AbstractString="default_parameters.csv")
 end
 
 main()
-#main("2D_burgers_OOA.csv")

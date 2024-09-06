@@ -21,7 +21,7 @@ function hadamard_product(A::AbstractMatrix, B::AbstractMatrix, N_rows::Int, N_c
 end
 
 function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
-    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction,dg, param)
+    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction,1,dg, param) #pass s.t. numerical flux chosen by problem physics.
 
     face_flux::AbstractVector{Float64} = dg.chi_f[:,:,iface] * f_hat
     use_split::Bool = param.alpha_split < 1 && (direction == 1 || (direction == 2 && !param.usespacetime))
@@ -36,10 +36,12 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
     return face_term
 end
 
-function calculate_face_numerical_flux_term(iface, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
+function calculate_face_numerical_flux_term(ielem, iface, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
     # For the skew-symmetric stiffness operator, only the numerical flux part is needed.
 
-    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction,dg, param)
+    # EIDofexterior is used to detect the type of numerical flux to apply.
+    EID_of_exterior = dg.EIDLFIDtoEIDofexterior[ielem,iface]
+    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction,EID_of_exterior, dg, param)
 
     face_term = dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface, direction] * (f_numerical)
 
@@ -66,13 +68,6 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
             end
             # interpolate to face
             u_face = dg.chi_f[:,:,face] * u_hat_local_exterior_elem
-            #display("Periodic boundary")
-            #display("ielem")
-            #display(ielem)
-            #display("iface")
-            #display(iface)
-            #display("u_face")
-            #display(u_face)
         elseif elem == 0 
             # elemID of 0 corresponds to Dirichlet boundary (weak imposition).
             # Find x and y coords of the face and pass to a physics function
@@ -95,6 +90,7 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
         elseif elem == -1
             # elemID == -1 corresponds to outflow (transmissive) boundary
             # return interior value.
+            # Note that this value shouldn't be used; returned as a dummy value.
             u_face =  dg.chi_f[:,:,iface]*u_hat_local
         end
 
@@ -191,7 +187,7 @@ function calculate_dim_cellwise_residual_skew_symm(ielem,u_hat,u_hat_local,u_loc
         uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
         uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg, param)
 
-        rhs_local.+= calculate_face_numerical_flux_term(iface, u_hat_local, uM, uP, direction, dg, param)
+        rhs_local.+= calculate_face_numerical_flux_term(ielem, iface, u_hat_local, uM, uP, direction, dg, param)
 
     end
     return rhs_local

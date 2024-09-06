@@ -8,38 +8,62 @@ function transform_physical_to_reference(f_physical, direction, dg::DG)
     return dg.C_m[direction,direction] * f_physical 
 end
 
-function calculate_numerical_flux(uM_face,uP_face,n_face, direction,dg::DG, param::PhysicsAndFluxParams)
+function calculate_numerical_flux(uM_face,uP_face,n_face, direction, bc_type::Int, dg::DG, param::PhysicsAndFluxParams)
+    # bc_type is int indicating the type of boundary
+    # bc_type > 0 indicates boundary to another element (face within the domain
+    #             or a periodic boundary condition), assigned according to 
+    #             the problem physics
+    # bc_type = 0 indicates a Dirichlet boundary for time dimension, returning the exterior value
+    # bc_type = -1 indicates an outflow (transmissive) boundary for time dimension, returning the interior value 
     f_numerical=zeros(size(uM_face))
 
-    if direction == 2 && param.usespacetime 
-         f_numerical = 0.5 * ( uM_face + uP_face )
-        # second direction corresponding to time.
-        # only use one-sided information such that the flow of information is from past to future.
-        #
-        # NOTE: must disable the decouple time slabs option if using a flux other than pure upwinding!
-        if n_face[direction] == -1
-            # face is bottom. Use the information from the external element
-            # which corresponds to the past
-        #    f_numerical = uP_face
-        elseif n_face[direction] == 1
-            # face is bottom. Use internal solution
-            # which corresonds to the past
-        #    f_numerical = uM_face
+    if bc_type > 0
+        # assign boundary according to problem physics.
+
+        if direction == 2 && param.usespacetime 
+            if param.spacetime_decouple_slabs == false
+                # use decouple time slabs option as a proxy for applying U# as U*
+                f_numerical = 0.5 * ( uM_face + uP_face )
+            else
+                #apply upwind if decoupling time slabs.
+                # second direction corresponding to time.
+                # only use one-sided information such that the flow of information is from past to future.
+                #
+                # NOTE: must disable the decouple time slabs option if using a flux other than pure upwinding!
+                if n_face[direction] == -1
+                    # face is bottom. Use the information from the external element
+                    # which corresponds to the past
+                    f_numerical = uP_face
+                elseif n_face[direction] == 1
+                    # face is bottom. Use internal solution
+                    # which corresonds to the past
+                    f_numerical = uM_face
+                end
+            end
+        elseif cmp(param.pde_type, "linear_adv_1D")==0
+            a = param.advection_speed
+            alpha = 0 #upwind
+            #alpha = 1 #central
+            if direction ==1 
+                f_numerical = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face[direction]) * (uM_face.-uP_face) # lin. adv, upwind/central
+            end # numerical flux only in x-direction.
+        elseif cmp(param.pde_type,"burgers2D")==0 || (cmp(param.pde_type,"burgers1D")==0 && direction == 1)
+            f_numerical  = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) # split
+            if cmp(param.numerical_flux_type, "split_with_LxF")==0
+                stacked_MP = [uM_face;uP_face]
+                max_eigenvalue = findmax(abs.(stacked_MP))[1]
+                f_numerical += n_face[direction] * 0.5 .* max_eigenvalue .* (uM_face .- uP_face)
+            end
         end
-    elseif cmp(param.pde_type, "linear_adv_1D")==0
-        a = param.advection_speed
-        alpha = 0 #upwind
-        #alpha = 1 #central
-        if direction ==1 
-            f_numerical = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face[direction]) * (uM_face.-uP_face) # lin. adv, upwind/central
-        end # numerical flux only in x-direction.
-    elseif cmp(param.pde_type,"burgers2D")==0 || (cmp(param.pde_type,"burgers1D")==0 && direction == 1)
-        f_numerical  = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) # split
-        if cmp(param.numerical_flux_type, "split_with_LxF")==0
-            stacked_MP = [uM_face;uP_face]
-            max_eigenvalue = findmax(abs.(stacked_MP))[1]
-            f_numerical += n_face[direction] * 0.5 .* max_eigenvalue .* (uM_face .- uP_face)
-        end
+    elseif bc_type == 0
+        # Dirichlet
+            f_numerical = uP_face # uP_face has been set to be the analtical value in the 
+                                  # get_solution_at_face() function 
+    elseif bc_type == -1
+        # Outflow
+            f_numerical = uM_face # return interior solution
+    else
+        display("Warning: Numerical flux boundary type not recognized!")
     end
 
     if dg.dim == 2

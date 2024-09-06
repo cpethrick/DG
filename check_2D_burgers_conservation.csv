@@ -7,5 +7,5 @@ include_source,false
 use_skew_symmetric_stiffness_operator,true
 finaltime,0.15
 debugmode,false
-volumenodes,GL
+volumenodes,GLL
 fr_c_name,cHU

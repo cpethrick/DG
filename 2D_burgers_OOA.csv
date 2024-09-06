@@ -1,3 +1,6 @@
 name,value
 dim,2
 n_times_to_solve,3
+fr_c_name,cSD
+volumenodes,GLL
+use_skew_symmetric_stiffness_operator,true
