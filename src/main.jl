@@ -78,13 +78,13 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
             # get entropy potential and entropy variables at the face (interior soln)
             phi_face_interior = get_entropy_potential(u_face_interior, param)
             phi_face_Dirichlet = get_entropy_potential(u_face_Dirichlet, param)
-            W_face_interior = get_entropy_variables(u_face_interior, param)
-            W_face_Dirichlet = get_entropy_variables(u_face_Dirichlet, param)
+            v_face_interior = get_entropy_variables(u_face_interior, param)
+            v_face_Dirichlet = get_entropy_variables(u_face_Dirichlet, param)
 
             phi_jump = phi_face_interior - phi_face_Dirichlet
-            W_jump = W_face_interior - W_face_Dirichlet
+            v_jump = v_face_interior - v_face_Dirichlet
 
-            projection_error += (phi_jump - W_jump .* u_face_Dirichlet)' * dg.W_f * dg.J_f * ones(size(u_face_Dirichlet))
+            projection_error += (phi_jump - v_jump .* u_face_Dirichlet)' * dg.W_f * dg.J_f * ones(size(u_face_Dirichlet))
         elseif ielem > dg.N_elem_per_dim^dg.dim - dg.N_elem_per_dim
             # face on top (t=tf)
             u_face = dg.chi_f[:,:,4] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
