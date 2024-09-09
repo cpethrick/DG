@@ -47,6 +47,66 @@ include("set_up_dg.jl")
 include("ode_solver.jl")
 include("parameters.jl")
 
+
+function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::PhysicsAndFluxParams)
+    entropy_initial = 0
+    entropy_final = 0
+    projection_error = 0
+
+    for ielem = 1:dg.N_elem
+        if ielem < dg.N_elem_per_dim+1
+            # face on bottom (t=0)
+            
+            # get initial condition
+            x_local = zeros(Float64, dg.N_vol_per_dim)
+            y_local = zeros(Float64, dg.N_vol_per_dim)
+            for inode = 1:dg.N_vol_per_dim
+                # The node numbering used in this code allows us
+                # to choose the first N_vol_per_dim x-points
+                # to get a vector of x-coords on the face.
+                x_local[inode] = dg.x[dg.EIDLIDtoGID_vol[ielem,inode]]
+                # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
+                # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
+            end
+            u_face_Dirichlet = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
+            u_face_interior = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
+
+            s_vec = get_numerical_entropy_function(u_face_Dirichlet,param)
+            entropy_initial += s_vec' * dg.W_f * dg.J_f * ones(size(s_vec))
+
+
+            # get entropy potential and entropy variables at the face (interior soln)
+            phi_face_interior = get_entropy_potential(u_face_interior, param)
+            phi_face_Dirichlet = get_entropy_potential(u_face_Dirichlet, param)
+            W_face_interior = get_entropy_variables(u_face_interior, param)
+            W_face_Dirichlet = get_entropy_variables(u_face_Dirichlet, param)
+
+            phi_jump = phi_face_interior - phi_face_Dirichlet
+            W_jump = W_face_interior - W_face_Dirichlet
+
+            projection_error += (phi_jump - W_jump .* u_face_Dirichlet)' * dg.W_f * dg.J_f * ones(size(u_face_Dirichlet))
+        elseif ielem > dg.N_elem_per_dim^dg.dim - dg.N_elem_per_dim
+            # face on top (t=tf)
+            u_face = dg.chi_f[:,:,4] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
+            s_vec = get_numerical_entropy_function(u_face,param)
+            entropy_final += s_vec' * dg.W_f * dg.J_f * ones(size(s_vec))
+        end
+    end
+
+    display("Final entropy is ")
+    display(entropy_final)
+    display("Initial entropy from boundary condition is")
+    display(entropy_initial)
+    display("Projection error is ")
+    display(projection_error)
+    display("Entropy preservation:")
+    display(entropy_final - entropy_initial + projection_error)
+    display("Without projection correction:")
+    display(entropy_final - entropy_initial)
+    return entropy_final - entropy_initial + projection_error
+
+end
+
 function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     # N_elem_per_dim is number of elements PER DIM
     # N is poly order
@@ -212,6 +272,11 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
             energy_initial += (u_hat0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
         end
     end
+
+    if param.usespacetime
+        proj_error = calculate_projection_corrected_entropy_change(u_hat, dg, param)
+    end
+
     L2_error = sqrt(L2_error)
 
     Linf_error = maximum(abs.(u_diff))

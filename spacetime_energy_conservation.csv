@@ -3,10 +3,11 @@ n_times_to_solve,2
 dim,2
 P,2
 usespacetime,true
-spacetime_decouple_slabs,true
+spacetime_decouple_slabs,false
 numerical_flux_type,split
 n_times_to_solve,3
 include_source,false
-volumenodes,GLL
+volumenodes,GL
+basisnodes,GL
 use_skew_symmetric_stiffness_operator,true
 debugmode,false

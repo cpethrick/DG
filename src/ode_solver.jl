@@ -51,7 +51,7 @@ function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
             end
 
             residual = residualnew
-            Printf.@printf("Residual =  %.3E \n", residual)
+            #Printf.@printf("Residual =  %.3E \n", residual)
             u_hat = u_hatnew
             iterctr_all += 1
 
@@ -78,7 +78,7 @@ function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
             residualnew = sqrt(sum(u_change.^2))
 
             residual = residualnew
-            Printf.@printf("Residual =  %.3E \n", residual)
+            #Printf.@printf("Residual =  %.3E \n", residual)
             u_hat = u_hatnew
             iterctr += 1
             if iterctr > 50
@@ -133,7 +133,7 @@ function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
         end
 
         residual = residualnew
-        Printf.@printf("Residual =  %.3E \n", residual)
+        #Printf.@printf("Residual =  %.3E \n", residual)
         u_hat = u_hatnew
         iterctr_all += 1
 
@@ -149,7 +149,7 @@ function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
     end
     iterctr = 0
     # converge once more and decrease time step size every 100 iters
-    while residual > 1E-12
+    while residual > 5E-16
 
         # solve a time step with RK
         # check difference between old and new solutions
@@ -160,7 +160,7 @@ function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
         residualnew = sqrt(sum(u_change.^2))
 
         residual = residualnew
-        Printf.@printf("Residual =  %.3E \n", residual)
+        #Printf.@printf("Residual =  %.3E \n", residual)
         u_hat = u_hatnew
         iterctr += 1
         if iterctr > 50

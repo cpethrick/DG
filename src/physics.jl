@@ -4,6 +4,35 @@
 
 include("set_up_dg.jl")
 include("parameters.jl")
+
+function get_entropy_variables(solution, param::PhysicsAndFluxParams)
+
+    if  occursin("burgers",param.pde_type)
+        return solution
+    else
+        display("Warning: entropy variables not defined for this PDE!")
+        return solution
+    end
+end
+
+function get_entropy_potential(solution, param::PhysicsAndFluxParams)
+    if  occursin("burgers",param.pde_type)
+        return 0.5 * solution .* solution 
+    else
+        display("Warning: entropy potential not defined for this PDE!")
+        return solution
+    end
+end
+
+function get_numerical_entropy_function(solution, param::PhysicsAndFluxParams)
+    if  occursin("burgers",param.pde_type)
+        return 0.5 * solution .* solution 
+    else
+        display("Warning: entropy potential not defined for this PDE!")
+        return solution
+    end
+end
+
 function transform_physical_to_reference(f_physical, direction, dg::DG)
     return dg.C_m[direction,direction] * f_physical 
 end
@@ -173,7 +202,7 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
     if param.include_source
         return  cos.(π * (x-y))
     elseif cmp(param.pde_type, "burgers1D")==0
-        return 0.1*sin.(π * (x))
+        return 0.15*sin.(π * (x))
     else
         return sin.(π * (x)) .+ 0.01
     end
