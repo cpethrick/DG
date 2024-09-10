@@ -203,7 +203,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                 energy_final_calc += u_face' * dg.W_f * dg.J_f * u_face
             end
             if param.fluxreconstructionC > 0
-                display("WARNING: Energy calculation is probably unreliable for c != 0.")
+  #              display("WARNING: Energy calculation is probably unreliable for c != 0.")
             end
         else
             energy_final_calc += (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
@@ -408,4 +408,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-main()
+main("spacetime_with_FR.csv")

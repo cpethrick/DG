@@ -9,6 +9,9 @@ function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
     display("Decoupled PS")
 
     u_hat = u_hat0
+
+
+    solution_ctr = 0
     for iTS=1:dg.N_elem_per_dim
         subset_EIDs = dg.TSIDtoEID[iTS,:]
     
@@ -21,6 +24,7 @@ function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
         first_residual = -1
 
         iterctr_all = 0
+        solution_ctr_reset = solution_ctr
 
         # converge loosly with large time step
         while residual > 1E-5
@@ -29,6 +33,7 @@ function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
             # compare to residual
             # if residual is decreasing, increase the CFL # to expidite solution
             (u_hatnew,current_time) = physicaltimesolve(u_hat, dt, 10, dg, param, subset_EIDs)
+            solution_ctr += 10
             u_change = u_hatnew - u_hat
 
             if first_residual < 0
@@ -45,10 +50,11 @@ function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
                 residual=1
                 residualnew=1
                 dt *= 0.8
+                solution_ctr_reset = solution_ctr
             end
 
             residual = residualnew
-            Printf.@printf("Residual =  %.3E \n", residual)
+            #Printf.@printf("Residual =  %.3E \n", residual)
             u_hat = u_hatnew
             iterctr_all += 1
 
@@ -70,11 +76,12 @@ function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
             # compare to residual
             # if residual is decreasing, increase the CFL # to expidite solution
             (u_hatnew,current_time) = physicaltimesolve(u_hat, dt, 1, dg, param, subset_EIDs)
+            solution_ctr+= 1
             u_change = u_hatnew - u_hat
             residualnew = sqrt(sum(u_change.^2))
 
             residual = residualnew
-            Printf.@printf("Residual =  %.3E \n", residual)
+            #Printf.@printf("Residual =  %.3E \n", residual)
             u_hat = u_hatnew
             iterctr += 1
             if iterctr > 50
@@ -86,6 +93,9 @@ function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
 
         u_hat0 = u_hat # Store u_hat in u_hat0 because the restarts use u_hat0.
     end
+
+    display("Solution took this many RK4 steps:")
+    display(solution_ctr)
 
     return u_hat
 end
@@ -103,6 +113,8 @@ function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
 
     iterctr_all = 0
 
+    solution_ctr = 0
+
     # converge loosly with large time step
     while residual > 1E-5
         # solve a time step with RK
@@ -110,6 +122,7 @@ function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
         # compare to residual
         # if residual is decreasing, increase the CFL # to expidite solution
         (u_hatnew,current_time) = physicaltimesolve(u_hat, dt, 10, dg, param)
+        solution_ctr+=10
         u_change = u_hatnew - u_hat
 
         if first_residual < 0
@@ -129,7 +142,7 @@ function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
         end
 
         residual = residualnew
-        Printf.@printf("Residual =  %.3E \n", residual)
+        #Printf.@printf("Residual =  %.3E \n", residual)
         u_hat = u_hatnew
         iterctr_all += 1
 
@@ -152,11 +165,12 @@ function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
         # compare to residual
         # if residual is decreasing, increase the CFL # to expidite solution
         (u_hatnew,current_time) = physicaltimesolve(u_hat, dt, 1, dg, param)
+        solution_ctr+=1
         u_change = u_hatnew - u_hat
         residualnew = sqrt(sum(u_change.^2))
 
         residual = residualnew
-        Printf.@printf("Residual =  %.3E \n", residual)
+        #Printf.@printf("Residual =  %.3E \n", residual)
         u_hat = u_hatnew
         iterctr += 1
         if iterctr > 50
@@ -165,6 +179,8 @@ function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
         end
     end
 
+    display("Solution took this many RK4 steps:")
+    display(solution_ctr)
     return u_hat
 end
 

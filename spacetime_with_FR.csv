@@ -5,5 +5,6 @@ pde_type,linear_adv_1D
 alpha_split,1.0
 include_source,false
 n_times_to_solve,4
+spacetime_decouple_slabs,false
 P,3
-fr_c_name,cHU
+fr_c_name,c-
