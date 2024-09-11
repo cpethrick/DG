@@ -1,0 +1,8 @@
+name,value
+dim,2
+P,4
+n_times_to_solve,3
+pde_type,linear_adv_1D
+usespacetime,true
+alpha_split,1.0
+include_source,false
