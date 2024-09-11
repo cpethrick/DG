@@ -1,8 +1,9 @@
 name,value
 n_times_to_solve,5
-P,4
+P,2
 numerical_flux_type,split
 use_skew_symmetric_stiffness_operator,true
 volumenodes,GL
 basisnodes,GLL
-fr_c_name,cHU
+fr_c_name,cDG
+debugmode,false

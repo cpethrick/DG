@@ -15,6 +15,16 @@ function get_entropy_variables(solution, param::PhysicsAndFluxParams)
     end
 end
 
+function get_solution_variables(entropy_variables, param::PhysicsAndFluxParams)
+
+    if  occursin("burgers",param.pde_type)
+        return entropy_variables
+    else
+        display("Warning: entropy variables not defined for this PDE!")
+        return solution
+    end
+end
+
 function get_entropy_potential(solution, param::PhysicsAndFluxParams)
     if  occursin("burgers",param.pde_type)
         return 0.5 * solution .* solution 
@@ -36,6 +46,17 @@ end
 function transform_physical_to_reference(f_physical, direction, dg::DG)
     return dg.C_m[direction,direction] * f_physical 
 end
+
+function entropy_project(chi_project, u_hat, dg::DG, param::PhysicsAndFluxParams)
+    # chi_project is the basis functions evaluated at the desired projection points
+    # (i.e., volume or face pts)
+    v_volume = get_entropy_variables(dg.chi_v * u_hat, param)
+    v_hat = dg.Pi * v_volume
+    
+    return get_solution_variables(chi_project * v_hat, param)
+
+end
+
 
 function calculate_numerical_flux(uM_face,uP_face,n_face, direction, bc_type::Int, dg::DG, param::PhysicsAndFluxParams)
     # bc_type is int indicating the type of boundary
@@ -107,6 +128,8 @@ function calculate_two_point_flux(ui,uj, direction, dg::DG, param::PhysicsAndFlu
 
     if param.usespacetime && direction == 2
         flux_physical = 0.5 * (ui .+ uj)
+    elseif cmp("burgers1D", param.pde_type) == 0 && direction == 2
+        flux_physical = 0*ui
     elseif occursin("burgers", param.pde_type)
         flux_physical = 1.0/6.0 * (ui.* ui + ui .* uj + uj .* uj)
     else

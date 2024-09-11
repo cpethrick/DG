@@ -132,6 +132,8 @@ function calculate_dim_cellwise_residual(ielem,u_hat,u_hat_local,u_local,directi
         volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local,direction, dg, param)
         volume_terms_dim = param.alpha_split * volume_terms_dim + (1-param.alpha_split) * volume_terms_nonconservative
     end
+    display("volume term (face portion removed!)")
+    display(volume_terms_dim)
     rhs_local += volume_terms_dim
     for iface in 1:dg.Nfaces
 
@@ -154,11 +156,15 @@ function calculate_volume_terms_skew_symm(u_local, u_hat_local, direction, dg::D
     #u_local is only on volume nodes. Need to append u on face nodes.
     
     u_vf = zeros(dg.Np+dg.Nfaces*dg.Nfp)
-    u_vf[1:dg.Np] .= u_local
+    u_vf[1:dg.Np] .= entropy_project(dg.chi_v, u_hat_local, dg, param)
+
     for iface = 1:dg.Nfaces
-        u_face=dg.chi_f[:,:,iface]*u_hat_local
+        u_face=entropy_project(dg.chi_f[:,:,iface],u_hat_local, dg, param)
         u_vf[(dg.Np+(iface-1)*dg.Nfp)+1:(dg.Np+(iface)*dg.Nfp)].=u_face
     end
+
+    display("u_vf")
+    display(u_vf)
 
     # Problem: how to select u_face? Alex's paper seems contradictory of whether we eant to select Nf * Nfp or Nfp. Can't possibly select Nfp to calculate the two point flux?
     reference_two_point_flux = zeros(dg.Np+dg.Nfaces*dg.Nfp,dg.Np+dg.Nfaces*dg.Nfp)
@@ -173,6 +179,11 @@ function calculate_volume_terms_skew_symm(u_local, u_hat_local, direction, dg::D
     end
 
     volume_term = dg.chi_vf * hadamard_product(dg.QtildemQtildeT[:,:,direction], reference_two_point_flux, length(u_vf), length(u_vf)) * ones(length(u_vf))
+
+    display(volume_term)
+    display(hadamard_product(dg.QtildemQtildeT[:,:,direction], reference_two_point_flux, length(u_vf), length(u_vf)))
+    display(dg.QtildemQtildeT[:,:,direction])
+    display(reference_two_point_flux)
 
     return volume_term
 end
@@ -190,6 +201,7 @@ function calculate_dim_cellwise_residual_skew_symm(ielem,u_hat,u_hat_local,u_loc
         rhs_local.+= calculate_face_numerical_flux_term(ielem, iface, u_hat_local, uM, uP, direction, dg, param)
 
     end
+    
     return rhs_local
 end
 
@@ -214,6 +226,7 @@ function assemble_local_residual(ielem, u_hat, t, dg::DG, param::PhysicsAndFluxP
     end
 
     rhs_local = -1* dg.M_inv * (rhs_local)
+            display(rhs_local)
 
     if param.include_source
         x_local = zeros(Float64, dg.N_vol)
