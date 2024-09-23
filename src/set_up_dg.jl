@@ -59,7 +59,9 @@ mutable struct DG
     J::AbstractMatrix{Float64}
     J_f::AbstractMatrix{Float64}
     M::AbstractMatrix{Float64}
+    MpK::AbstractMatrix{Float64}
     M_inv::AbstractMatrix{Float64}
+    MpK_inv::AbstractMatrix{Float64}
     S_xi::AbstractMatrix{Float64}
     S_eta::AbstractMatrix{Float64}
     S_noncons_xi::AbstractMatrix{Float64}
@@ -374,13 +376,17 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     end
     display("FR K")
     display(dg.K) # Verified against PHiLiP for 1D and 2D using C from PHiLiP
-    dg.M = dg.M + dg.K # Here, modified mass matrix.
+
+
+    dg.M_inv = inv(dg.M) # unmodified mass matrix.
+    dg.MpK = dg.M + dg.K # Here, modified mass matrix.
     display("Adjusted Mass matrix")
-    display(dg.M)
-    dg.M_inv = inv(dg.M)
+    display(dg.MpK)
+    dg.MpK_inv = inv(dg.MpK)
 
     display("Next line is dg.chi_v*dg.Pi, which should be identity.")
     display(dg.chi_v*dg.Pi) #should be identity
+
 
     return dg
 

@@ -94,6 +94,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         display("Beginning time loop")
         (u_hat,current_time) = physicaltimesolve(u_hat0, dt, Nsteps, dg, param)
         display("Done time loop")
+        display("Reminder, c is ")
+        display(param.fluxreconstructionC)
     else
         if param.spacetime_decouple_slabs
             display("Decoupled PS")
@@ -102,6 +104,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
             display("Normal PS")
             u_hat = pseudotimesolve(u_hat0, dg, param)
         end
+        display("Reminder, c is ")
+        display(param.fluxreconstructionC)
     end
     #==============================================================================
     Analysis
@@ -132,6 +136,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         u_exact_overint = sin.(π * (x_overint.- param.advection_speed * current_time)) .+ 0.01
     elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == true 
         u_exact_overint = sin.(π * (x_overint - param.advection_speed * y_overint)) .+ 0.01
+    else
+        display("Warning - no exact solution defined!")
     end
     u_calc_final_overint = zeros(size(x_overint))
     u0_overint = zeros(size(x_overint))
@@ -203,7 +209,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                 energy_final_calc += u_face' * dg.W_f * dg.J_f * u_face
             end
             if param.fluxreconstructionC > 0
-                display("WARNING: Energy calculation is probably unreliable for c != 0.")
+                #display("WARNING: Energy calculation is probably unreliable for c != 0.")
             end
         else
             energy_final_calc += (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
