@@ -215,6 +215,7 @@ function assemble_local_residual(ielem, u_hat, t, dg::DG, param::PhysicsAndFluxP
     end
 
     u_local = dg.chi_v * u_hat_local # nodal solution
+<<<<<<< HEAD
     # volume_terms = zeros(Float64, size(u_hat_local))
     # face_terms = zeros(Float64, size(u_hat_local))
     for idim = 1:dg.dim
@@ -222,11 +223,41 @@ function assemble_local_residual(ielem, u_hat, t, dg::DG, param::PhysicsAndFluxP
             rhs_local += calculate_dim_cellwise_residual_skew_symm(ielem,u_hat,u_hat_local,u_local,idim,dg,param)
         else
             rhs_local += calculate_dim_cellwise_residual(ielem,u_hat,u_hat_local,u_local,idim,dg,param)
+=======
+    volume_terms = zeros(Float64, size(u_hat_local))
+    face_terms = zeros(Float64, size(u_hat_local))
+
+    rhs_local = zeros(size(u_hat_local))
+    for idim = 1:dg.dim
+        f_hat_local = calculate_flux(u_local,idim, dg, param)
+
+        volume_terms_dim = calculate_volume_terms(f_hat_local,idim, dg)
+        use_split::Bool = param.alpha_split < 1 && (idim == 1 || (idim == 2 && !param.usespacetime))
+        if use_split
+            volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local,idim, dg, param)
+            volume_terms_dim = param.alpha_split * volume_terms_dim + (1-param.alpha_split) * volume_terms_nonconservative
+        end
+        volume_terms = volume_terms_dim
+        face_terms=zeros(size(volume_terms))
+        for iface in 1:dg.Nfaces
+
+            #How to get exterior values if those are all modal?? Would be doing double work...
+            # I'm also doing extra work here by calculating the external solution one per dim. Think about how to improve this.
+            uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
+            uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg, param)
+
+            face_terms .+= calculate_face_term(iface, f_hat_local, u_hat_local, uM, uP, idim, dg, param)
+
+        end
+        rhs_local += -1 * dg.M_inv * volume_terms
+        if idim == 2 && param.usespacetime #time
+            rhs_local += -1 * dg.M_inv * face_terms
+        else
+            rhs_local += -1 * dg.MpK_inv * face_terms
         end
     end
 
-    rhs_local = -1* dg.M_inv * (rhs_local)
-            display(rhs_local)
+    #rhs_local = -1* dg.M_inv * (volume_terms .+ face_terms)
 
     if param.include_source
         x_local = zeros(Float64, dg.N_vol)

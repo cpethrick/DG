@@ -94,6 +94,9 @@ function set_FR_value(param::PhysicsAndFluxParams)
         cp = factorial(2*P)/2^P / factorial(P)^2 # eq. 24 of cicchino 2021 tensor product
         # table 1, cicchino 2021
         param.fluxreconstructionC = -1 / (  ((2*P+1) * (factorial(P) * cp) ^2)   ) 
+    else
+        param.fluxreconstructionC = 0.0
+        display("Warning! Illegal FR c name!")
     end
 
     display("Value of C is:")

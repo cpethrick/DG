@@ -225,7 +225,19 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
     if param.include_source
         return  cos.(π * (x-y))
     elseif cmp(param.pde_type, "burgers1D")==0
-        return 0.15*sin.(π * (x))
+        return 0.2*sin.(π * (x .- 0.314159265359878323))
+        out = 0.2* ones(size(x))
+        first1 = true # double-valued at 1.0 if using GLL, so force it to set 0 on left side
+        for i in 1:length(x)
+            xcoord = x[i]
+            if xcoord == 1.0 && first1
+                first1=false
+            elseif xcoord >=  1.0
+                out[i] = 0
+            end
+        end
+        return out
+
     else
         return sin.(π * (x)) .+ 0.01
     end
