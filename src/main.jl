@@ -232,6 +232,39 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     energy_change = energy_final_calc - energy_initial
 
+
+    if param.usespacetime && !param.spacetime_decouple_slabs
+        # calculate projection error
+        proj_error = 0
+        for ielem = 1:dg.N_elem_per_dim #loop through only bottom elements
+            u_hat_local = u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
+            # Find initial energy from the Dirichlet BC on lower face
+            x_local = zeros(Float64, dg.N_vol_per_dim)
+            y_local = zeros(Float64, dg.N_vol_per_dim)
+            for inode = 1:dg.N_vol_per_dim
+                # The node numbering used in this code allows us
+                # to choose the first N_vol_per_dim x-points
+                # to get a vector of x-coords on the face.
+                x_local[inode] = dg.x[dg.EIDLIDtoGID_vol[ielem,inode]]
+                # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
+                # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
+            end
+            u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
+
+
+            v_face_BC = u_face # for Burgers
+            v_face_interior = dg.chi_f[:,:,3] * u_hat_local
+
+            phi_face_BC = 0.5 * u_face.*u_face
+            phi_face_interior = 0.5 * v_face_interior .* v_face_interior
+
+            proj_error += ( (phi_face_interior .- phi_face_BC) .- (v_face_interior .- v_face_BC) .* u_face)' * dg.J_f * dg.W_f * ones(size(u_face))
+        end
+        display(proj_error)
+
+        energy_change += proj_error
+    end
+
     PyPlot.figure("Solution", figsize=(6,4))
     PyPlot.clf()
     ax = PyPlot.gca()
@@ -263,7 +296,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     PyPlot.savefig(pltname)
 
 
-    if dim == 2 && N_elem_per_dim == 4
+    if dim == 2# && N_elem_per_dim == 4
         PyPlot.figure("Initial cond, overintegrated")
         PyPlot.clf()
         PyPlot.tricontourf(x_overint, y_overint, u0_overint, 20)
