@@ -194,14 +194,24 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         if param.usespacetime
             # for spacetime, we want to consider initial as t=0 (bottom surface of the computational domain) and final as t=t_f (top surface)
 
-            # check if the element is on a surface of interest
-            # use chi_f to interpolate to face
-            # Probably use W_f and J_f (need to construct!) to integrate on face.
-            # (Which won't work exactly if FR c is nonzero!)
-
             if ielem < N_elem_per_dim+1
                 # face on bottom
-                u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
+                #u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
+                
+
+                # Find initial energy from the Dirichlet BC on lower face
+                x_local = zeros(Float64, dg.N_vol_per_dim)
+                y_local = zeros(Float64, dg.N_vol_per_dim)
+                for inode = 1:dg.N_vol_per_dim
+                    # The node numbering used in this code allows us
+                    # to choose the first N_vol_per_dim x-points
+                    # to get a vector of x-coords on the face.
+                    x_local[inode] = dg.x[dg.EIDLIDtoGID_vol[ielem,inode]]
+                    # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
+                    # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
+                end
+                u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
+
                 energy_initial += u_face' * dg.W_f * dg.J_f * u_face
             elseif ielem > N_elem_per_dim^dim - N_elem_per_dim
                 # face on top
@@ -209,7 +219,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                 energy_final_calc += u_face' * dg.W_f * dg.J_f * u_face
             end
             if param.fluxreconstructionC > 0
-                #display("WARNING: Energy calculation is probably unreliable for c != 0.")
+                display("WARNING: Energy calculation is probably unreliable for c != 0.")
             end
         else
             energy_final_calc += (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
@@ -303,12 +313,14 @@ function run(param::PhysicsAndFluxParams)
             conv_rate_L2 = 0.0
             conv_rate_Linf = 0.0
             conv_rate_time = 0.0
+            conv_rate_energy = 0.0
             if j>1
                 conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
                 conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
                 conv_rate_time = log(time_store[j]/time_store[j-1]) / log(dx[j]/dx[j-1])
+                conv_rate_energy = log(abs(energy_change_store[j]/energy_change_store[j-1])) / log(dx[j]/dx[j-1])
             end
-            Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f \t%.5e \t%.2f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j], time_store[j], conv_rate_time)
+            Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f \t%.2f \t%.5e \t%.2f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j], conv_rate_energy, time_store[j], conv_rate_time)
             DelimitedFiles.writedlm(f, [N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j    ], time_store[j], conv_rate_time]', ",")
         end
 
@@ -415,3 +427,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
 end
 
 main()
+main("spacetime_energy_conservation.csv")
