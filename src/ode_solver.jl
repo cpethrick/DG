@@ -2,10 +2,83 @@ include("build_dg_residual.jl")
 include("set_up_dg.jl")
 include("parameters.jl")
 
+import LinearMaps
+import IterativeSolvers
+
 function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
 
-    u_hat = pseudotimesolve(u_hat0, param.spacetime_decouple_slabs, dg, param)
+    if cmp(param.spacetime_solver_type, "pseudotime")==0
+        return pseudotimesolve(u_hat0, param.spacetime_decouple_slabs, dg, param)
+    elseif cmp(param.spacetime_solver_type, "JFNK")==0
+        return JFNKsolve(u_hat0, param.spacetime_decouple_slabs, dg, param)
+    else
+        display("Error: Space-time solver type is illegal!")
+        return zeros(size(u_hat0))
+    end
 
+
+end
+
+function JFNKsolve(u_hat0, do_decouple::Bool, dg::DG,param::PhysicsAndFluxParams)
+
+
+    if do_decouple
+        display("Decoupled PS")
+        N_time_slabs = dg.N_elem_per_dim
+    else
+        display("Coupled PS")
+        N_time_slabs = 1
+    end
+
+    u_hat = u_hat0
+    for iTS = 1:N_time_slabs
+        if do_decouple
+            subset_EIDs = dg.TSIDtoEID[iTS,:]
+            Printf.@printf("Time-slab ID: %d\n", iTS)
+        else
+            subset_EIDs = nothing
+        end
+
+        #========================
+        # Meat of the solver here
+        ========================#
+
+        tol_NL = 1E-6
+        NL_iterlim = 100
+        residual_NL = 1
+        u_hat_NLiter = u_hat
+        NL_iterctr = 0
+        #Outer loop: nonlinear iterations (Newton)
+        while residual_NL > tol_NL && NL_iterctr < NL_iterlim 
+
+            #Define function of only u_hat_in. Passing zero as time - not used in PS (as far as I recall).
+            DG_residual_function(u_hat_in) =  assemble_residual(u_hat_in, 0.0, dg, param, subset_EIDs)
+            perturbation = sqrt(eps())
+
+            jacobian_vector_product(v) = 1/perturbation * ( DG_residual_function(u_hat_NLiter .+ perturbation * v) - DG_residual_function(u_hat_NLiter))
+
+            
+
+            FMap_DG_residual = LinearMaps.FunctionMap{Float64,false}(jacobian_vector_product, length(u_hat)) #second argument is size of the square linear map
+
+            #Inner loop: linear iterations (GMRES - use package)
+            u_hat_delta,log = IterativeSolvers.gmres(FMap_DG_residual, -1.0 * DG_residual_function(u_hat_NLiter); 
+                                                     log=true, restart=500, abstol=1E-8, reltol=1E-8, verbose=false ) #Note: gmres() initializes with zeros, while gmres!(x, FMap, b) initializes with x.)
+            display(log)
+            u_hat_NLiter += u_hat_delta
+            residual_NL = sqrt(sum(u_hat_delta .^ 2))
+            NL_iterctr+=1
+
+            Printf.@printf("NL residual at iteration %d was %.3e\n", NL_iterctr, residual_NL)
+
+        end
+        u_hat = u_hat_NLiter
+
+        u_hat0 = u_hat # Store u_hat in u_hat0 because the restarts use u_hat0. Unsure if this would be needed for JFNK
+
+    end
+
+    return u_hat
 end
 
 

@@ -15,6 +15,7 @@ mutable struct PhysicsAndFluxParams
     pde_type::AbstractString
     usespacetime::Bool
     spacetime_decouple_slabs::Bool
+    spacetime_solver_type::AbstractString #pseudotime or JFNK
     include_source::Bool
     alpha_split::Float64
     advection_speed::Float64
@@ -38,6 +39,7 @@ mutable struct PhysicsAndFluxParams
                          pde_type::AbstractString,
                          usespacetime::Bool,
                          spacetime_decouple_slabs::Bool,
+                         spacetime_solver_type::AbstractString, 
                          include_source::Bool,
                          alpha_split::Float64,
                          advection_speed::Float64,
@@ -54,6 +56,7 @@ mutable struct PhysicsAndFluxParams
                                 pde_type::AbstractString,
                                 usespacetime::Bool,
                                 spacetime_decouple_slabs::Bool,
+                                spacetime_solver_type::AbstractString,
                                 include_source::Bool,
                                 alpha_split::Float64,
                                 advection_speed::Float64,
@@ -131,6 +134,7 @@ function parse_default_parameters()
     pde_type = parse_param_String("pde_type", paramDF)
     usespacetime = parse_param_Bool("usespacetime", paramDF)
     spacetime_decouple_slabs = parse_param_Bool("spacetime_decouple_slabs", paramDF)
+    spacetime_solver_type = parse_param_String("spacetime_solver_type", paramDF)
     include_source = parse_param_Bool("include_source", paramDF)
     alpha_split = parse_param_Float64("alpha_split", paramDF)
     advection_speed = parse_param_Float64("advection_speed", paramDF)
@@ -148,6 +152,7 @@ function parse_default_parameters()
                                  pde_type, 
                                  usespacetime, 
                                  spacetime_decouple_slabs,
+                                 spacetime_solver_type,
                                  include_source, 
                                  alpha_split, 
                                  advection_speed, 
@@ -191,6 +196,9 @@ function parse_parameters(fname::String)
         end
         if "spacetime_decouple_slabs" in newparamDF.name
             default_params.spacetime_decouple_slabs= parse_param_Bool("spacetime_decouple_slabs", newparamDF)
+        end
+        if "spacetime_solver_type" in newparamDF.name
+            default_params.spacetime_solver_type = parse_param_String("spacetime_solver_type", newparamDF)
         end
         if "include_source" in newparamDF.name
             default_params.include_source = parse_param_Bool("include_source", newparamDF)

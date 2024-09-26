@@ -5,3 +5,4 @@ n_times_to_solve,5
 usespacetime,true
 debugmode,false
 spacetime_decouple_slabs,true
+spacetime_solver_type,JFNK

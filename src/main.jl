@@ -452,4 +452,5 @@ function main(paramfile::AbstractString="default_parameters.csv")
 end
 
 main()
-main("spacetime_energy_conservation.csv")
+#main("spacetime_energy_conservation.csv")
+main("spacetime_burgers_OOA.csv")
