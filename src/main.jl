@@ -94,19 +94,11 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         display("Beginning time loop")
         (u_hat,current_time) = physicaltimesolve(u_hat0, dt, Nsteps, dg, param)
         display("Done time loop")
-        display("Reminder, c is ")
-        display(param.fluxreconstructionC)
     else
-        if param.spacetime_decouple_slabs
-            display("Decoupled PS")
-            u_hat = pseudotimesolve_decoupled(u_hat0, dg, param)
-        else
-            display("Normal PS")
-            u_hat = pseudotimesolve(u_hat0, dg, param)
-        end
-        display("Reminder, c is ")
-        display(param.fluxreconstructionC)
+        u_hat = spacetimeimplicitsolve(u_hat0 ,dg, param)
     end
+    display("Reminder, c is ")
+    display(param.fluxreconstructionC)
     #==============================================================================
     Analysis
     ==============================================================================#
