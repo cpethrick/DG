@@ -5,6 +5,39 @@
 include("set_up_dg.jl")
 include("parameters.jl")
 
+function jump(exterior_val,interior_val)
+    if size(interior_val) != size(exterior_val)
+        display("Warning! Size mismatch in jump()!")
+    end
+    return exterior_val.-interior_val
+end
+
+function average(exterior_val, interior_val)
+    if size(interior_val) != size(exterior_val)
+        display("Warning! Size mismatch in average()!")
+    end
+    return 0.5 * (exterior_val.+interior_val)
+end
+
+function ln_average(exterior_val,interior_val)
+    if size(interior_val) != size(exterior_val)
+        display("Warning! Size mismatch in ln_average()!")
+    end
+    #Implementation per Appendix B [Ismail and Roe, 2009, Entropy-Consistent Euler Flux Functions II]
+    zeta = exterior_val./interior_val
+    f = (zeta.-1.0)/(zeta.+1.0)
+    u = f .* f
+
+    if u < 1E-2
+         F = 1.0 .+ u/3.0 .+ u.*u/5.0 .+ u.*u.*u/7.0
+     else
+         F = 0.5 * log.(zeta) ./ f
+     end
+
+     return (exterior_val .+ interior_val) ./ (2.0 * F)
+
+end
+
 function get_entropy_variables(solution, param::PhysicsAndFluxParams)
 
     if  occursin("burgers",param.pde_type)
@@ -43,6 +76,11 @@ function get_numerical_entropy_function(solution, param::PhysicsAndFluxParams)
     end
 end
 
+function get_pressure_ideal_gas(u)
+    gamma = 1.4
+    return (gamma-1)* (u[3] - 0.5 * u[2]^2/u[1])
+end
+
 function transform_physical_to_reference(f_physical, direction, dg::DG)
     return dg.C_m[direction,direction] * f_physical 
 end
@@ -73,7 +111,11 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, direction, bc_type::In
         if direction == 2 && param.usespacetime 
             if param.spacetime_decouple_slabs == false
                 # use decouple time slabs option as a proxy for applying U# as U*
-                f_numerical = 0.5 * ( uM_face + uP_face )
+                if cmp(param.pde_type, "burgers1D")
+                    f_numerical = 0.5 * ( uM_face + uP_face )
+                else
+                    display("Warning: Need to impement returning of the two-pt flux")
+                end
             else
                 #apply upwind if decoupling time slabs.
                 # second direction corresponding to time.
@@ -137,12 +179,49 @@ function calculate_two_point_flux(ui,uj, direction, dg::DG, param::PhysicsAndFlu
         display("Illegal PDE type! No two point flux is defined.")
     end
     
+    return flux_physical
+end
+
+function calculate_two_point_flux_state(ui,uj, direction, istate::Int64, dg::DG, param::PhysicsAndFluxParams)
+    f=0
+    if cmp(param.pde_type, "euler1D") != 0
+        # Redirect to scalar-valued version
+        flux_physical = calculate_two_point_flux(ui,uj, direction, dg::DG, param::PhysicsAndFluxParams)
+    end
+
+    # NOTE TO SELF: The input u to this function is a vector across the quad points in the cell.
+    # Need to figure out indexing.
+    if direction == 1
+        #Add Ra flux here
+    elseif direction == 2
+        #From Eq. 3.5 of Friedrichs 2019
+        if istate == 1
+            flux_physical = ln_average(ui[1], uj[1])
+        elseif istate == 2
+            flux_physical = ln_average(ui[1], uj[1]) * average(ui[2]/ui[1], uj[2]/uj[1])
+        elseif istate == 3
+            pressurei = get_pressure_ideal_gas(ui)
+            pressurej = get_pressure_ideal_gas(uj)
+            betai = 0.5 * ui[1] / pressurei
+            betaj = 0.5 * uj[1] / pressurej
+            vi = ui[2]/ui[1]
+            vj = ui[2]/ui[1]
+
+            rho_ln = ln_average(ui[1],uj[1])
+            beta_ln = ln_average(betai,betaj)
+
+            gamma = 1.4
+
+            flux_physical = 0.5 * rho_ln / (beta_ln * (gamma-1)) + rho_ln * (
+                                        average(vi,vj)^2 - 0.5 * average(vi^2,vj^2)   )
+
     if dg.dim == 2
         return transform_physical_to_reference(flux_physical, direction, dg)
     else
         return flux_physical
     end
 end
+
 
 function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
     f = zeros(dg.N_vol)
@@ -157,8 +236,44 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
         f += 0.5 .* (u.*u) # nodal flux
     end
 
-    #display("f_physical")
-    #display(f)
+    return f
+
+end
+
+function calculate_flux_state(u, direction, istate::Int64, dg::DG, param::PhysicsAndFluxParams)
+    f=0
+    if cmp(param.pde_type, "euler1D") != 0
+        # Redirect to scalar-valued version
+        f = calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
+    end
+
+    # No pde_type check as the only vector-valued PDE is Euler
+    # Reminder: conservative variables are u=[density, momentum, total energy]]
+    #
+    #
+    # NOTE TO SELF: The input u to this function is a vector across the quad points in the cell.
+    # Need to figure out indexing.
+    if direction == 1
+        if istate == 1
+            f = u[2]
+        elseif istate == 2
+            v = u[2]/u[1]
+            p = get_pressure_ideal_gas(u)
+            f = u[1] * v * v + p
+        elseif istate == 3
+            v = u[2]/u[1]
+            p = get_pressure_ideal_gas(u)
+            f = (u[3] +p)*v
+        else
+            display("Warning! There should only be three states for 1D Euler.")
+            f = 0
+        end
+    elseif direction == 2
+        # Time - physical flux will just be advective.
+        f = u[istate]
+    end
+
+        
     if dg.dim == 2
         # in 1D, C_m = 1 so we don't need this step
         f = transform_physical_to_reference(f, direction, dg)
@@ -167,7 +282,6 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
     f_hat = dg.Pi * f
 
     return f_hat#,f_f
-
 end
 
 function calculate_face_terms_nonconservative(chi_face, u_hat, direction, dg::DG, param::PhysicsAndFluxParams)
