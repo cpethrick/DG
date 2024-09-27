@@ -44,6 +44,7 @@ function JFNKsolve(u_hat0, do_decouple::Bool, dg::DG,param::PhysicsAndFluxParams
         ========================#
 
         tol_NL = 1E-6
+        tol_lin = 1E-10
         NL_iterlim = 100
         residual_NL = 1
         u_hat_NLiter = u_hat
@@ -63,7 +64,7 @@ function JFNKsolve(u_hat0, do_decouple::Bool, dg::DG,param::PhysicsAndFluxParams
 
             #Inner loop: linear iterations (GMRES - use package)
             u_hat_delta,log = IterativeSolvers.gmres(FMap_DG_residual, -1.0 * DG_residual_function(u_hat_NLiter); 
-                                                     log=true, restart=500, abstol=1E-8, reltol=1E-8, verbose=false ) #Note: gmres() initializes with zeros, while gmres!(x, FMap, b) initializes with x.)
+                                                     log=true, restart=500, abstol=tol_lin, reltol=tol_lin, verbose=false ) #Note: gmres() initializes with zeros, while gmres!(x, FMap, b) initializes with x.)
             display(log)
             u_hat_NLiter += u_hat_delta
             residual_NL = sqrt(sum(u_hat_delta .^ 2))

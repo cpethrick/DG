@@ -1,5 +1,5 @@
 name,value
-n_times_to_solve,2
+n_times_to_solve,3
 dim,2
 P,2
 usespacetime,true
@@ -11,3 +11,4 @@ volumenodes,GL
 basisnodes,GL
 use_skew_symmetric_stiffness_operator,true
 debugmode,false
+spacetime_solver_type,JFNK

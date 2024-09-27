@@ -279,9 +279,6 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         end
     end
 
-    if param.usespacetime
-        proj_error = calculate_projection_corrected_entropy_change(u_hat, dg, param)
-    end
 
     L2_error = sqrt(L2_error)
 
@@ -289,7 +286,11 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     energy_change = energy_final_calc - energy_initial
 
-
+    if param.usespacetime
+        proj_corrected_error = calculate_projection_corrected_entropy_change(u_hat, dg, param)
+        energy_change = proj_corrected_error
+    end
+#====
     if param.usespacetime && !param.spacetime_decouple_slabs
         # calculate projection error
         proj_error = 0
@@ -321,7 +322,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
         energy_change += proj_error
     end
-
+===#
     PyPlot.figure("Solution", figsize=(6,4))
     PyPlot.clf()
     ax = PyPlot.gca()
@@ -397,7 +398,7 @@ function run(param::PhysicsAndFluxParams)
         #Evalate convergence, print, and save to file
         Printf.@printf("P =  %d \n", P)
         dx = 2.0./N_elem_range
-        Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change   Time   Time scaling\n")
+        Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change         Time   Time scaling\n")
         fname = "result.csv" #Note: this should be changed to something useful in the future...
         f = open(fname, "w")
         DelimitedFiles.writedlm(f, ["n cells_per_dim" "dx" "L2 Error" "L2  Error rate" "Linf Error" "Linf rate" "Energy change" "Time" "Time scaling"], ",")
@@ -519,5 +520,5 @@ function main(paramfile::AbstractString="default_parameters.csv")
 end
 
 main()
-#main("spacetime_energy_conservation.csv")
-main("spacetime_burgers_OOA.csv")
+main("spacetime_energy_conservation.csv")
+#main("spacetime_burgers_OOA.csv")
