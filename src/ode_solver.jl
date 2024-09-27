@@ -2,18 +2,104 @@ include("build_dg_residual.jl")
 include("set_up_dg.jl")
 include("parameters.jl")
 
-function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
-    # Pseudotime solve while decoupling the time-slabs.
-    # for now, copy-paste from other function mostly. That is uneligant and shoud be fixed.
+import LinearMaps
+import IterativeSolvers
 
-    display("Decoupled PS")
+function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
+
+    if cmp(param.spacetime_solver_type, "pseudotime")==0
+        return pseudotimesolve(u_hat0, param.spacetime_decouple_slabs, dg, param)
+    elseif cmp(param.spacetime_solver_type, "JFNK")==0
+        return JFNKsolve(u_hat0, param.spacetime_decouple_slabs, dg, param)
+    else
+        display("Error: Space-time solver type is illegal!")
+        return zeros(size(u_hat0))
+    end
+
+
+end
+
+function JFNKsolve(u_hat0, do_decouple::Bool, dg::DG,param::PhysicsAndFluxParams)
+
+
+    if do_decouple
+        display("Decoupled PS")
+        N_time_slabs = dg.N_elem_per_dim
+    else
+        display("Coupled PS")
+        N_time_slabs = 1
+    end
 
     u_hat = u_hat0
-    for iTS=1:dg.N_elem_per_dim
-        subset_EIDs = dg.TSIDtoEID[iTS,:]
-    
-        ########################### COPY STARTS HERE
-        #initial dt
+    for iTS = 1:N_time_slabs
+        if do_decouple
+            subset_EIDs = dg.TSIDtoEID[iTS,:]
+            Printf.@printf("Time-slab ID: %d\n", iTS)
+        else
+            subset_EIDs = nothing
+        end
+
+        #========================
+        # Meat of the solver here
+        ========================#
+
+        tol_NL = 1E-6
+        NL_iterlim = 100
+        residual_NL = 1
+        u_hat_NLiter = u_hat
+        NL_iterctr = 0
+        #Outer loop: nonlinear iterations (Newton)
+        while residual_NL > tol_NL && NL_iterctr < NL_iterlim 
+
+            #Define function of only u_hat_in. Passing zero as time - not used in PS (as far as I recall).
+            DG_residual_function(u_hat_in) =  assemble_residual(u_hat_in, 0.0, dg, param, subset_EIDs)
+            perturbation = sqrt(eps())
+
+            jacobian_vector_product(v) = 1/perturbation * ( DG_residual_function(u_hat_NLiter .+ perturbation * v) - DG_residual_function(u_hat_NLiter))
+
+            
+
+            FMap_DG_residual = LinearMaps.FunctionMap{Float64,false}(jacobian_vector_product, length(u_hat)) #second argument is size of the square linear map
+
+            #Inner loop: linear iterations (GMRES - use package)
+            u_hat_delta,log = IterativeSolvers.gmres(FMap_DG_residual, -1.0 * DG_residual_function(u_hat_NLiter); 
+                                                     log=true, restart=500, abstol=1E-8, reltol=1E-8, verbose=false ) #Note: gmres() initializes with zeros, while gmres!(x, FMap, b) initializes with x.)
+            display(log)
+            u_hat_NLiter += u_hat_delta
+            residual_NL = sqrt(sum(u_hat_delta .^ 2))
+            NL_iterctr+=1
+
+            Printf.@printf("NL residual at iteration %d was %.3e\n", NL_iterctr, residual_NL)
+
+        end
+        u_hat = u_hat_NLiter
+
+        u_hat0 = u_hat # Store u_hat in u_hat0 because the restarts use u_hat0. Unsure if this would be needed for JFNK
+
+    end
+
+    return u_hat
+end
+
+
+function pseudotimesolve(u_hat0, do_decouple::Bool, dg::DG, param::PhysicsAndFluxParams)
+
+    if do_decouple
+        display("Decoupled PS")
+        N_time_slabs = dg.N_elem_per_dim
+    else
+        display("Coupled PS")
+        N_time_slabs = 1
+    end
+
+    u_hat = u_hat0
+    for iTS = 1:N_time_slabs
+        if do_decouple
+            subset_EIDs = dg.TSIDtoEID[iTS,:]
+        else
+            subset_EIDs = nothing
+        end
+
         dt = 0.3* (dg.delta_x / dg.Np_per_dim) 
         residual = 1
         u_hat = u_hat0
@@ -81,95 +167,21 @@ function pseudotimesolve_decoupled(u_hat0, dg::DG, param::PhysicsAndFluxParams)
             #Printf.@printf("Residual =  %.3E \n", residual)
             u_hat = u_hatnew
             iterctr += 1
+            iterctr_all +=1
             if iterctr > 50
                 iterctr = 1
                 dt *= 0.9
             end
         end
-        ######################3 COPY ENDS HERE
+
+        Printf.@printf("Converged in %d iterations\n", iterctr_all)
 
         u_hat0 = u_hat # Store u_hat in u_hat0 because the restarts use u_hat0.
+
     end
 
     return u_hat
-end
-
-function pseudotimesolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
-
-    display("Normal PS")
-
-    #initial dt
-    dt = 0.3* (dg.delta_x / dg.Np_per_dim) 
-    residual = 1
-    u_hat = u_hat0
-    residual_scaling = sqrt(sum(u_hat.^2))
-    first_residual = -1
-
-    iterctr_all = 0
-
-    # converge loosly with large time step
-    while residual > 1E-5
-        # solve a time step with RK
-        # check difference between old and new solutions
-        # compare to residual
-        # if residual is decreasing, increase the CFL # to expidite solution
-        (u_hatnew,current_time) = physicaltimesolve(u_hat, dt, 10, dg, param)
-        u_change = u_hatnew - u_hat
-
-        if first_residual < 0
-            residual = sqrt(sum(u_change.^2))
-            first_residual = residual
-            display("First residual")
-            display(first_residual)
-        end
-        residualnew = sqrt(sum(u_change.^2))/first_residual
-
-        if isnan(residualnew)
-            display("NaN detected, decreasing dt and restarting")
-            u_hatnew = u_hat0
-            residual=1
-            residualnew=1
-            dt *= 0.8
-        end
-
-        residual = residualnew
-        #Printf.@printf("Residual =  %.3E \n", residual)
-        u_hat = u_hatnew
-        iterctr_all += 1
-
-        if iterctr_all == 1000
-            display("WARNING: not converged by 1000 iterations! Finishing the run.")
-            residual = 1E-14
-        end
-
-        if param.debugmode
-            # setting residual = 1E-14 ensures that we only do 1 time step
-            residual = 1E-14
-        end
-    end
-    iterctr = 0
-    # converge once more and decrease time step size every 100 iters
-    while residual > 5E-16
-
-        # solve a time step with RK
-        # check difference between old and new solutions
-        # compare to residual
-        # if residual is decreasing, increase the CFL # to expidite solution
-        (u_hatnew,current_time) = physicaltimesolve(u_hat, dt, 1, dg, param)
-        u_change = u_hatnew - u_hat
-        residualnew = sqrt(sum(u_change.^2))
-
-        residual = residualnew
-        #Printf.@printf("Residual =  %.3E \n", residual)
-        u_hat = u_hatnew
-        iterctr += 1
-        if iterctr > 50
-            iterctr = 1
-            dt *= 0.9
-        end
-    end
-
-    return u_hat
+    
 end
 
 

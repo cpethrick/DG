@@ -6,6 +6,7 @@ numerical_flux_type,split_with_LxF
 pde_type,burgers1D
 usespacetime,false
 spacetime_decouple_slabs,true
+spacetime_solver_type,pseudotime
 include_source,true
 alpha_split,0.666666666666667
 use_skew_symmetric_stiffness_operator,false
