@@ -96,7 +96,7 @@ function entropy_project(chi_project, u_hat, dg::DG, param::PhysicsAndFluxParams
 end
 
 
-function calculate_numerical_flux(uM_face,uP_face,n_face, direction, bc_type::Int, dg::DG, param::PhysicsAndFluxParams)
+function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_type::Int, dg::DG, param::PhysicsAndFluxParams)
     # bc_type is int indicating the type of boundary
     # bc_type > 0 indicates boundary to another element (face within the domain
     #             or a periodic boundary condition), assigned according to 
@@ -214,6 +214,8 @@ function calculate_two_point_flux_state(ui,uj, direction, istate::Int64, dg::DG,
 
             flux_physical = 0.5 * rho_ln / (beta_ln * (gamma-1)) + rho_ln * (
                                         average(vi,vj)^2 - 0.5 * average(vi^2,vj^2)   )
+        end
+    end
 
     if dg.dim == 2
         return transform_physical_to_reference(flux_physical, direction, dg)
@@ -240,7 +242,7 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
 
 end
 
-function calculate_flux_state(u, direction, istate::Int64, dg::DG, param::PhysicsAndFluxParams)
+function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFluxParams)
     f=0
     if cmp(param.pde_type, "euler1D") != 0
         # Redirect to scalar-valued version
@@ -290,6 +292,7 @@ function calculate_face_terms_nonconservative(chi_face, u_hat, direction, dg::DG
         f_physical =  0.5 * (u_physical) .* (u_physical)
         f_reference = transform_physical_to_reference(f_physical, direction, dg)
     else
+        display("Warning: Nonconservative is only defined for Burgers!")
         return 0*(chi_face*u_hat)
     end
     return f_reference

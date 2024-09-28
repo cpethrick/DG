@@ -117,7 +117,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     #==============================================================================
     Start Up
     ==============================================================================#
-    dg = init_DG(P, dim, N_elem_per_dim, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxreconstructionC, param.usespacetime)
+    N_state = 1
+    dg = init_DG(P, dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxreconstructionC, param.usespacetime)
 
     #==============================================================================
     Initialization
@@ -519,6 +520,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-main()
-main("spacetime_energy_conservation.csv")
-#main("spacetime_burgers_OOA.csv")
+main("1D_burgers_OOA_oddP.csv")

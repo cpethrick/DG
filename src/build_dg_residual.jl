@@ -20,8 +20,8 @@ function hadamard_product(A::AbstractMatrix, B::AbstractMatrix, N_rows::Int, N_c
     
 end
 
-function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
-    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction,1,dg, param) #pass s.t. numerical flux chosen by problem physics.
+function calculate_face_term(iface,istate, f_hat, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
+    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction,1,dg, param) #pass s.t. numerical flux chosen by problem physics.
 
     face_flux::AbstractVector{Float64} = dg.chi_f[:,:,iface] * f_hat
     use_split::Bool = param.alpha_split < 1 && (direction == 1 || (direction == 2 && !param.usespacetime))
@@ -36,12 +36,12 @@ function calculate_face_term(iface, f_hat, u_hat, uM, uP, direction, dg::DG, par
     return face_term
 end
 
-function calculate_face_numerical_flux_term(ielem, iface, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
+function calculate_face_numerical_flux_term(ielem, istate, iface, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
     # For the skew-symmetric stiffness operator, only the numerical flux part is needed.
 
     # EIDofexterior is used to detect the type of numerical flux to apply.
     EID_of_exterior = dg.EIDLFIDtoEIDofexterior[ielem,iface]
-    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], direction,EID_of_exterior, dg, param)
+    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction, EID_of_exterior, dg, param)
 
     face_term = dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface, direction] * (f_numerical)
 
@@ -53,7 +53,10 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
 
     if find_interior_values
         # interpolate to face
-        u_face = dg.chi_f[:,:,iface]*u_hat_local
+        u_face = zeros(dg.Np_per_dim * dg.N_state)
+        for istate = 1:dg.N_state
+            u_face[(istate-1)*dg.Np_per_dim+1 : istate*dg.Np_per_dim] = dg.chi_f[:,:,iface]*u_hat_local[(istate-1)*Np+1 : istate*Np]
+        end
     else
         # Select the appropriate elem to find values from
         elem = dg.EIDLFIDtoEIDofexterior[ielem,iface]
@@ -62,12 +65,17 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
             face = dg.LFIDtoLFIDofexterior[iface]
             # find solution from the element whose ID was found 
             #Find local solution of the element of interest if we seek an exterior value
-            u_hat_local_exterior_elem = zeros(dg.Np)
+            u_hat_local_exterior_elem = zeros(dg.N_dof)
             for inode = 1:dg.Np
-                u_hat_local_exterior_elem[inode] = u_hat_global[dg.EIDLIDtoGID_basis[elem,inode]]
+                for istate = 1:dg.N_state
+                    u_hat_local_exterior_elem[dg.StIDLIDtoLSID[istate,inode]] = u_hat_global[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_basis[elem,inode]]]
+                end
             end
             # interpolate to face
-            u_face = dg.chi_f[:,:,face] * u_hat_local_exterior_elem
+            u_face = zeros(dg.Np_per_dim * dg.N_state)
+            for istate = 1:dg.N_state
+                u_face[(istate-1)*dg.Np_per_dim+1 : istate*dg.Np_per_dim] = dg.chi_f[:,:,iface]*u_hat_local_exterior_elem[(istate-1)*Np+1 : istate*Np]
+            end
         elseif elem == 0 
             # elemID of 0 corresponds to Dirichlet boundary (weak imposition).
             # Find x and y coords of the face and pass to a physics function
@@ -83,15 +91,18 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
             end
             if ielem > dg.N_elem_per_dim
                 #assign u_face as interior value
-                u_face =  dg.chi_f[:,:,iface]*u_hat_local
+                u_face = zeros(dg.Np_per_dim * dg.N_state)
+                for istate = 1:dg.N_state
+                    u_face[(istate-1)*dg.Np_per_dim+1 : istate*dg.Np_per_dim] = dg.chi_f[:,:,iface]*u_hat_local[(istate-1)*Np+1 : istate*Np]
+                end
             else
-                u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
+                u_face = calculate_solution_on_Dirichlet_boundary(istate, x_local, y_local, param)
             end
         elseif elem == -1
             # elemID == -1 corresponds to outflow (transmissive) boundary
             # return interior value.
             # Note that this value shouldn't be used; returned as a dummy value.
-            u_face =  dg.chi_f[:,:,iface]*u_hat_local
+            u_face =  zeros(dg.Np_per_dim * dg.N_state)
         end
 
     end
@@ -115,24 +126,28 @@ function calculate_volume_terms_nonconservative(u, u_hat, direction, dg::DG, par
     elseif direction == 2 && cmp(param.pde_type, "burgers2D") == 0
         volume_term_physical = dg.chi_v' * ((u) .* (dg.S_noncons_eta * u_hat))
     else
+        display("Warning: Nonconservative version only defined for Burgers!!")
         volume_term_physical = 0 * dg.chi_v' * ((u) .* (dg.S_noncons_xi * u_hat)) #expensive way to get the right size
     end 
     return transform_physical_to_reference(volume_term_physical, direction, dg) 
 end
 
-function calculate_dim_cellwise_residual(ielem,u_hat,u_hat_local,u_local,direction, dg::DG, param::PhysicsAndFluxParams)
+function calculate_dim_cellwise_residual(ielem, istate, u_hat,u_hat_local,u_local,direction, dg::DG, param::PhysicsAndFluxParams)
 
-    rhs_local = zeros(Float64, dg.Np)
+    rhs_local_state = zeros(Float64, dg.Np)
     
-    f_hat_local = calculate_flux(u_local,direction, dg, param)
+    f_hat_local_state = calculate_flux(u_local,direction,istate, dg, param)
+    display(f_hat_local_state)
 
-    volume_terms_dim = calculate_volume_terms(f_hat_local,direction, dg)
+    volume_terms_dim = calculate_volume_terms(f_hat_local_state,direction, dg)
+    display(volume_terms_dim)
     use_split::Bool = param.alpha_split < 1 && (direction== 1 || (direction== 2 && !param.usespacetime))
     if use_split
         volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local,direction, dg, param)
+    display(volume_terms_nonconservative)
         volume_terms_dim = param.alpha_split * volume_terms_dim + (1-param.alpha_split) * volume_terms_nonconservative
     end
-    rhs_local += volume_terms_dim
+    rhs_local_state += volume_terms_dim
     for iface in 1:dg.Nfaces
 
         #How to get exterior values if those are all modal?? Would be doing double work...
@@ -140,7 +155,7 @@ function calculate_dim_cellwise_residual(ielem,u_hat,u_hat_local,u_local,directi
         uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
         uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg, param)
 
-        rhs_local.+= calculate_face_term(iface, f_hat_local, u_hat_local, uM, uP, direction, dg, param)
+        rhs_local_state.+= calculate_face_term(iface,istate, f_hat_local, u_hat_local, uM, uP, direction, dg, param)
 
     end
 
@@ -153,22 +168,26 @@ function calculate_volume_terms_skew_symm(u_local, u_hat_local, direction, dg::D
 
     #u_local is only on volume nodes. Need to append u on face nodes.
     
-    u_vf = zeros(dg.Np+dg.Nfaces*dg.Nfp)
-    u_vf[1:dg.Np] .= entropy_project(dg.chi_v, u_hat_local, dg, param)
+    u_vf = zeros(dg.Np+dg.Nfaces*dg.Nfp, dg.N_state) # columns are states.
+    for istate = 1:dg.N_state
+        u_vf[1:dg.Np,istate] .= entropy_project(dg.chi_v, u_hat_local[dg.StIDLIDtoLSID[istate,1:dg.Np]], dg, param)
+    end
 
-    for iface = 1:dg.Nfaces
-        u_face=entropy_project(dg.chi_f[:,:,iface],u_hat_local, dg, param)
-        u_vf[(dg.Np+(iface-1)*dg.Nfp)+1:(dg.Np+(iface)*dg.Nfp)].=u_face
+    for istate = 1:dg.N_state
+        for iface = 1:dg.Nfaces
+            u_face=entropy_project(dg.chi_f[:,:,iface],u_hat_local[dg.StIDLIDtoLSID[istate,1:dg.Np]], dg, param)
+            u_vf[(dg.Np+(iface-1)*dg.Nfp)+1:(dg.Np+(iface)*dg.Nfp), istate].=u_face
+        end
     end
     # Problem: how to select u_face? Alex's paper seems contradictory of whether we eant to select Nf * Nfp or Nfp. Can't possibly select Nfp to calculate the two point flux?
     reference_two_point_flux = zeros(dg.Np+dg.Nfaces*dg.Nfp,dg.Np+dg.Nfaces*dg.Nfp)
     # Efficiency note: Some terms of QtildemQtildeT are zero, so those shouldn' be computed.
     # Can also take advantage of symmetry.
     for i =1:length(u_vf)
-        ui = u_vf[i]
+        ui = u_vf[i,:]
         for j = 1:length(u_vf)
-            uj=u_vf[j]
-            reference_two_point_flux[i,j] = calculate_two_point_flux(ui, uj, direction, dg, param)
+            uj=u_vf[j,:]
+            reference_two_point_flux[i,j] = calculate_two_point_flux(ui, uj, direction,istate, dg, param)
         end
     end
 
@@ -178,7 +197,7 @@ function calculate_volume_terms_skew_symm(u_local, u_hat_local, direction, dg::D
     return volume_term
 end
 
-function calculate_dim_cellwise_residual_skew_symm(ielem,u_hat,u_hat_local,u_local,direction, dg::DG, param::PhysicsAndFluxParams)
+function calculate_dim_cellwise_residual_skew_symm(ielem,istate,u_hat,u_hat_local,u_local,direction, dg::DG, param::PhysicsAndFluxParams)
     rhs_local = zeros(Float64, dg.Np)
 
 
@@ -188,34 +207,38 @@ function calculate_dim_cellwise_residual_skew_symm(ielem,u_hat,u_hat_local,u_loc
         uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
         uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg, param)
 
-        rhs_local.+= calculate_face_numerical_flux_term(ielem, iface, u_hat_local, uM, uP, direction, dg, param)
+        rhs_local .+= calculate_face_numerical_flux_term(ielem,istate, iface, u_hat_local, uM, uP, direction, dg, param)
 
     end
     
     return rhs_local
 end
 
-function assemble_local_residual(ielem, u_hat, t, dg::DG, param::PhysicsAndFluxParams)
-    rhs_local = zeros(Float64, dg.Np)
-    u_hat_local = zeros(Float64, dg.Np)
-    u_local = zeros(Float64, dg.Np)
-    f_hat_local = zeros(Float64, dg.Np)
+function assemble_local_state_residual(ielem,istate, u_hat, t, dg::DG, param::PhysicsAndFluxParams)
+    rhs_local_state = zeros(Float64, dg.Np)
+    u_hat_local = zeros(Float64, dg.N_dof)
+    u_local = zeros(Float64, dg.N_dof)
+    f_hat_local_state = zeros(Float64, dg.Np)
     for inode = 1:dg.Np
-        u_hat_local[inode] = u_hat[dg.EIDLIDtoGID_basis[ielem,inode]]
+        for istate = 1:dg.N_state
+            u_hat_local[dg.StIDLIDtoLSID[istate,inode]] = u_hat[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_basis[ielem,inode]]]
+        end
     end
 
-    u_local = dg.chi_v * u_hat_local # nodal solution
+    for istate = 1:dg.N_state
+        u_local[(istate-1)*dg.Np+1 : istate*dg.Np] = dg.chi_v * u_hat_local[(istate-1)*dg.Np+1 : istate*dg.Np] # nodal solution
+    end
     # volume_terms = zeros(Float64, size(u_hat_local))
     # face_terms = zeros(Float64, size(u_hat_local))
     for idim = 1:dg.dim
         if param.use_skew_symmetric_stiffness_operator
-            rhs_local += calculate_dim_cellwise_residual_skew_symm(ielem,u_hat,u_hat_local,u_local,idim,dg,param)
+            rhs_local_state += calculate_dim_cellwise_residual_skew_symm(ielem,istate,u_hat,u_hat_local,u_local,idim,dg,param)
         else
-            rhs_local += calculate_dim_cellwise_residual(ielem,u_hat,u_hat_local,u_local,idim,dg,param)
+            rhs_local_state += calculate_dim_cellwise_residual(ielem,istate,u_hat,u_hat_local,u_local,idim,dg,param)
         end
     end
 
-    rhs_local = -1* dg.M_inv * (rhs_local)
+    rhs_local_state = -1* dg.M_inv * (rhs_local)
 
     if param.include_source
         x_local = zeros(Float64, dg.N_vol)
@@ -224,7 +247,7 @@ function assemble_local_residual(ielem, u_hat, t, dg::DG, param::PhysicsAndFluxP
             x_local[inode] = dg.x[dg.EIDLIDtoGID_vol[ielem,inode]]
             y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
         end
-        rhs_local+=dg.Pi*calculate_source_terms(x_local,y_local,t, param)
+        rhs_local+=dg.Pi*calculate_source_terms(istate,x_local,y_local,t, param)
     end
 
     return rhs_local
@@ -245,11 +268,13 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams, subset
     end
     for ielem in elem_range
 
-        rhs_local = assemble_local_residual(ielem, u_hat, t, dg, param)
+        for istate = 1:dg.N_state
+            rhs_local = assemble_local_state_residual(ielem, istate, u_hat, t, dg, param)
 
-        # store local rhs in global rhs
-        for inode in 1:dg.Np 
-            rhs[dg.EIDLIDtoGID_basis[ielem,inode]] = rhs_local[inode]
+            # store local rhs in global rhs
+            for inode in 1:dg.Np 
+                rhs[dg.StIDGIDtoGSID[istate, dg.EIDLIDtoGID_basis[ielem,inode]]] = rhs_local[inode]
+            end
         end
     end
     return rhs
