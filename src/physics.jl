@@ -187,13 +187,12 @@ function calculate_two_point_flux_state(ui,uj, direction, istate::Int64, dg::DG,
     if cmp(param.pde_type, "euler1D") != 0
         # Redirect to scalar-valued version
         flux_physical = calculate_two_point_flux(ui,uj, direction, dg::DG, param::PhysicsAndFluxParams)
-    end
-
-    # NOTE TO SELF: The input u to this function is a vector across the quad points in the cell.
-    # Need to figure out indexing.
-    if direction == 1
+    elseif direction == 1  && cmp(param.pde_type, "euler1D") == 0
+        # NOTE TO SELF: The input u to this function is a vector across the quad points in the cell.
+        # Need to figure out indexing.
         #Add Ra flux here
-    elseif direction == 2
+        display("Warning!! Euler numerical flux has not been imlemented!")
+    elseif direction == 2  && cmp(param.pde_type, "euler1D") == 0
         #From Eq. 3.5 of Friedrichs 2019
         if istate == 1
             flux_physical = ln_average(ui[1], uj[1])
@@ -247,7 +246,7 @@ function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFl
     if cmp(param.pde_type, "euler1D") != 0
         # Redirect to scalar-valued version
         f = calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
-    elseif direction == 1
+    elseif direction == 1 && cmp(param.pde_type, "euler1D") == 0
         if istate == 1
             f = u[2]
         elseif istate == 2
@@ -262,7 +261,7 @@ function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFl
             display("Warning! There should only be three states for 1D Euler.")
             f = 0
         end
-    elseif direction == 2
+    elseif direction == 2  && cmp(param.pde_type, "euler1D") == 0
         # Time - physical flux will just be advective.
         f = u[istate]
     end

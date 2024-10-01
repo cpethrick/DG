@@ -3,3 +3,4 @@ n_times_to_solve,2
 P,2
 debugmode,false
 dim,1
+finaltime,0.1

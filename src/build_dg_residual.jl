@@ -74,7 +74,7 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
             # interpolate to face
             u_face = zeros(dg.Nfp* dg.N_state)
             for istate = 1:dg.N_state
-                u_face[(istate-1)*dg.Nfp+1 : istate*dg.Nfp] = dg.chi_f[:,:,iface]*u_hat_local_exterior_elem[(istate-1)*dg.Np+1 : istate*dg.Np]
+                u_face[(istate-1)*dg.Nfp+1 : istate*dg.Nfp] = dg.chi_f[:,:,face]*u_hat_local_exterior_elem[(istate-1)*dg.Np+1 : istate*dg.Np]
             end
         elseif elem == 0 
             # elemID of 0 corresponds to Dirichlet boundary (weak imposition).
