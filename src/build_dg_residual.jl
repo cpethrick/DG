@@ -23,6 +23,7 @@ end
 function calculate_face_term(iface,istate, f_hat, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
     f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction,1,dg, param) #pass s.t. numerical flux chosen by problem physics.
 
+    display(f_numerical)
     face_flux::AbstractVector{Float64} = dg.chi_f[:,:,iface] * f_hat
     use_split::Bool = param.alpha_split < 1 && (direction == 1 || (direction == 2 && !param.usespacetime))
     if use_split
@@ -137,6 +138,7 @@ function calculate_dim_cellwise_residual(ielem, istate, u_hat,u_hat_local,u_loca
     rhs_local_state = zeros(Float64, dg.Np)
     
     f_hat_local_state = calculate_flux(u_local,direction,istate, dg, param)
+    display(f_hat_local_state)
 
     volume_terms_dim = calculate_volume_terms(f_hat_local_state,direction, dg)
     use_split::Bool = param.alpha_split < 1 && (direction== 1 || (direction== 2 && !param.usespacetime))

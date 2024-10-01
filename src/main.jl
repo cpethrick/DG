@@ -117,7 +117,11 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     #==============================================================================
     Start Up
     ==============================================================================#
-    N_state = 1
+    if cmp(param.pde_type, "euler1D") == 0
+        N_state = 3
+    else
+        N_state = 1
+    end
     dg = init_DG(P, dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxreconstructionC, param.usespacetime)
 
     #==============================================================================
@@ -126,15 +130,17 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     finaltime = param.finaltime
 
-    u0 = calculate_initial_solution(dg.x, dg.y, param)
-    u_hat0 = zeros(dg.N_elem*dg.Np)
-    u_local = zeros(dg.N_vol)
+    u0 = calculate_initial_solution(dg, param)
+    u_hat0 = zeros(dg.N_dof_global)
+    u_local_state = zeros(dg.Np)
     for ielem = 1:dg.N_elem
-        for inode = 1:dg.N_vol
-            u_local[inode] = u0[dg.EIDLIDtoGID_vol[ielem,inode]]
+        for istate = 1:dg.N_state
+            for inode = 1:dg.N_vol
+                u_local_state[inode] = u0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_vol[ielem,inode]]]
+            end
+            u_hat_local_state = dg.Pi*u_local_state
+            u_hat0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_basis[ielem,:]]] = u_hat_local_state
         end
-        u_hat_local = dg.Pi*u_local
-        u_hat0[dg.EIDLIDtoGID_basis[ielem,:]] = u_hat_local
     end
 
     #==============================================================================

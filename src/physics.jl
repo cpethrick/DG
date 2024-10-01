@@ -146,7 +146,15 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
                 max_eigenvalue = findmax(abs.(stacked_MP))[1]
                 f_numerical += n_face[direction] * 0.5 .* max_eigenvalue .* (uM_face .- uP_face)
             end
+        elseif cmp(param.pde_type,"euler1D")==0 
+            if param.usespacetime == true
+                display("Warning!! Need to fix spacetime here!")
+            end
+             f_numerical = calculate_Ch_entropy_stable_flux(uM_face,uP_face,istate, dg, param)
+        else
+            display("Warning: No numerical flux is defined for this PDE type!!")
         end
+
     elseif bc_type == 0
         # Dirichlet
             f_numerical = uP_face # uP_face has been set to be the analtical value in the 
@@ -163,6 +171,51 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
         f_numerical = transform_physical_to_reference(f_numerical, direction, dg)
     end
     return f_numerical
+
+end
+
+
+function calculate_Ch_entropy_stable_flux(uM,uP,istate, dg::DG, param::PhysicsAndFluxParams)
+    N_nodes = length(uM) / dg.N_state # Calculating from uM to allow for generality betwen numerical flux and two-point flux.
+    N_nodes = trunc(Int,N_nodes)
+
+    f_Ch = zeros(N_nodes)
+    u_node = zeros(dg.N_state)
+    gam = 1.4
+    gamm1 = 0.4
+    for inode in 1:N_nodes
+        node_indices = inode * 1:dg.N_state
+        uM_node = uM[node_indices]
+        uP_node = uP[node_indices]
+
+        rho_ln = ln_average(uM_node[1], uP_node[1])
+        pM = get_pressure_ideal_gas(uM)
+        pP = get_pressure_ideal_gas(uP)
+
+        betaM = uM_node[1]/(2.0*pM)
+        betaP = uP_node[1]/(2.0*pP)
+        beta_ln = ln_average(betaM,betaP)
+
+        vM = uM_node[2]/uM_node[1]
+        vP = uP_node[2]/uP_node[1]
+        v_avg = 0.5*(vM+vP)
+        v_square_avg = (v_avg)^2
+
+
+        if istate == 1
+            f_Ch[inode] = rho_ln * v_avg
+        elseif istate == 2
+            f_Ch[inode] = rho_ln * v_square_avg
+        elseif istate == 3
+            p_hat = 0.5 * (uM_node[1] + uP_node[1])/(betaM+betaP)
+
+            enthalpy_hat = 1.0/(2.0 * beta_ln * gamm1) + v_square_avg + p_hat / rho_ln - 0.25 * (vM^2 + vP^2)
+            f_Ch[inode] = rho_ln * v_avg * enthalpy_hat
+        end
+
+    end
+
+    return f_Ch # physical flux
 
 end
 
@@ -247,27 +300,36 @@ end
 
 function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFluxParams)
     f=0
+    display("In calculate_flux")
+    display(istate)
+    display(u)
     if cmp(param.pde_type, "euler1D") != 0
         # Redirect to scalar-valued version
         f = calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
     elseif direction == 1 && cmp(param.pde_type, "euler1D") == 0
-        if istate == 1
-            f = u[2]
-        elseif istate == 2
-            v = u[2]/u[1]
-            p = get_pressure_ideal_gas(u)
-            f = u[1] * v * v + p
-        elseif istate == 3
-            v = u[2]/u[1]
-            p = get_pressure_ideal_gas(u)
-            f = (u[3] +p)*v
-        else
-            display("Warning! There should only be three states for 1D Euler.")
-            f = 0
+        f = zeros(dg.Np) # calculated for one state at a time
+        u_node = zeros(dg.N_state)
+        for inode = 1:dg.Np
+            u_node = u[dg.StIDLIDtoLSID[:,inode]]
+            if istate == 1
+                f_node = u_node[2]
+            elseif istate == 2
+                v = u_node[2]/u_node[1]
+                p = get_pressure_ideal_gas(u)
+                f_node = u_node[1] * v * v + p
+            elseif istate == 3
+                v = u_node[2]/u_node[1]
+                p = get_pressure_ideal_gas(u_node)
+                f_node = (u_node[3] +p)*v
+            else
+                display("Warning! There should only be three states for 1D Euler.")
+                f_node = 0
+            end
+            f[inode] = f_node
         end
     elseif direction == 2  && cmp(param.pde_type, "euler1D") == 0
         # Time - physical flux will just be advective.
-        f = u[istate]
+        f = u[dg.StIDLIDtoLSID[istate,inode]]
     end
 
     # No pde_type check as the only vector-valued PDE is Euler
@@ -281,7 +343,6 @@ function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFl
     if dg.dim == 2
         # in 1D, C_m = 1 so we don't need this step
         f = transform_physical_to_reference(f, direction, dg)
-        #display(f)
     end
     f_hat = dg.Pi * f
 
@@ -300,8 +361,10 @@ function calculate_face_terms_nonconservative(chi_face, u_hat, direction, dg::DG
     return f_reference
 end 
 
-function calculate_initial_solution(x::AbstractVector{Float64},y::AbstractVector{Float64}, param::PhysicsAndFluxParams)
+function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
 
+    x = dg.x
+    y = dg.y
 
     if param.usespacetime
         #u0 = cos.(π * (x))
@@ -313,6 +376,22 @@ function calculate_initial_solution(x::AbstractVector{Float64},y::AbstractVector
         u0 = cos.(π * (x))
     elseif cmp(param.pde_type, "burgers2D") == 0
         u0 = exp.(-10*((x .-1).^2 .+(y .-1).^2))
+    elseif cmp(param.pde_type, "euler1D") == 0
+        # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
+        u0 = zeros(dg.N_dof_global)
+        for ielem in 1:dg.N_elem
+            node_indices = dg.Np*(ielem-1) +1 : dg.Np*ielem
+            x_local = x[node_indices]
+            y_local = y[node_indices]
+            # Initial condition per 4.4 Friedrichs
+            rho_local = 2 .+ sin.(2 * π * (x_local))
+            rhov_local = 2 .+ sin.(2 * π * (x_local))
+            E_local = (2 .+ sin.(2 * π * (x_local))).^2
+            u0[dg.StIDGIDtoGSID[1,node_indices]] = rho_local
+            u0[dg.StIDGIDtoGSID[2,node_indices]] = rhov_local
+            u0[dg.StIDGIDtoGSID[3,node_indices]] = E_local
+
+        end
     else
         #u0 = 0.2* sin.(π * x) .+ 0.01
         u0 = sin.(π * (x))

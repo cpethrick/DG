@@ -1,7 +1,9 @@
 name,value
 n_times_to_solve,2
-P,2
-debugmode,false
-use_skew_symmetric_stiffness_operator,true
+P,3
+debugmode,true
+pde_type,euler1D
+use_skew_symmetric_stiffness_operator,false
+alpha_split,1.0
 dim,1
 finaltime,0.1
