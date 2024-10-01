@@ -195,6 +195,13 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         u_exact_overint = sin.(π * (x_overint.- param.advection_speed * current_time)) .+ 0.01
     elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == true 
         u_exact_overint = sin.(π * (x_overint - param.advection_speed * y_overint)) .+ 0.01
+    elseif cmp(param.pde_type, "euler1D")==0
+        u_exact_overint_allstates = calculate_euler_exact_solution(current_time, x_overint, y_overint, Np_overint, dg)
+        # extract only density
+        u_exact_overint = zeros(size(x_overint))
+        for ielem = 1:dg.N_elem
+            u_exact_overint[(1:Np_overint) .+ (ielem-1)*Np_overint]=u_exact_overint_allstates[ (1:Np_overint) .+ Np_overint*3*(ielem-1) .+ (1-1)*Np_overint]
+        end
     else
         display("Warning - no exact solution defined!")
     end
@@ -205,8 +212,10 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         u_hat_local = zeros(length(dg.r_basis)^dim) 
         u0_hat_local = zeros(size(u_hat_local)) 
         for inode = 1:dg.Np
-            u_hat_local[inode] = u_hat[dg.EIDLIDtoGID_basis[ielem,inode]]
-            u0_hat_local[inode] = u_hat0[dg.EIDLIDtoGID_basis[ielem,inode]]
+            # only istate = 1, which is velocity for lin adv or burgers
+            # and density for euler
+            u_hat_local[inode] = u_hat[dg.StIDGIDtoGSID[1,dg.EIDLIDtoGID_basis[ielem,inode]]]
+            u0_hat_local[inode] = u_hat0[dg.StIDGIDtoGSID[1,dg.EIDLIDtoGID_basis[ielem,inode]]]
         end
         u_calc_final_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u_hat_local
         u0_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u0_hat_local
@@ -401,6 +410,10 @@ function run(param::PhysicsAndFluxParams)
         (L2_err_store[i],Linf_err_store[i], energy_change_store[i]) = setup_and_solve(N_elem,P,param)
         # End timer
         time_store[i] = time() - t
+
+        if cmp(param.pde_type, "euler1D")==0
+            display("Convergence is for density. Energy is probably not valid.")
+        end
 
         #Evalate convergence, print, and save to file
         Printf.@printf("P =  %d \n", P)

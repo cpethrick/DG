@@ -244,7 +244,8 @@ function calculate_two_point_flux(ui,uj, direction, istate::Int64, dg::DG, param
         # NOTE TO SELF: The input u to this function is a vector across the quad points in the cell.
         # Need to figure out indexing.
         #Add Ra flux here
-        display("Warning!! Euler numerical flux has not been imlemented!")
+        flux_physical = calculate_Ch_entropy_stable_flux(ui, uj, istate, dg, param)
+        display("Warning!! Euler numerical flux has not been verified!")
     elseif direction == 2  && cmp(param.pde_type, "euler1D") == 0
         #From Eq. 3.5 of Friedrichs 2019
         if istate == 1
@@ -300,9 +301,6 @@ end
 
 function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFluxParams)
     f=0
-    display("In calculate_flux")
-    display(istate)
-    display(u)
     if cmp(param.pde_type, "euler1D") != 0
         # Redirect to scalar-valued version
         f = calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
@@ -377,26 +375,33 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
     elseif cmp(param.pde_type, "burgers2D") == 0
         u0 = exp.(-10*((x .-1).^2 .+(y .-1).^2))
     elseif cmp(param.pde_type, "euler1D") == 0
-        # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
-        u0 = zeros(dg.N_dof_global)
-        for ielem in 1:dg.N_elem
-            node_indices = dg.Np*(ielem-1) +1 : dg.Np*ielem
-            x_local = x[node_indices]
-            y_local = y[node_indices]
-            # Initial condition per 4.4 Friedrichs
-            rho_local = 2 .+ sin.(2 * π * (x_local))
-            rhov_local = 2 .+ sin.(2 * π * (x_local))
-            E_local = (2 .+ sin.(2 * π * (x_local))).^2
-            u0[dg.StIDGIDtoGSID[1,node_indices]] = rho_local
-            u0[dg.StIDGIDtoGSID[2,node_indices]] = rhov_local
-            u0[dg.StIDGIDtoGSID[3,node_indices]] = E_local
-
-        end
+        u0 = calculate_euler_exact_solution(0, x, y, dg.Np, dg)
     else
         #u0 = 0.2* sin.(π * x) .+ 0.01
         u0 = sin.(π * (x))
     end
     return u0
+end
+
+function calculate_euler_exact_solution(t, x, y, Np, dg)
+
+        # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
+        u_exact = zeros(dg.N_elem * Np*3) #Hard-code 3 states
+        for ielem in 1:dg.N_elem
+            node_indices = Np*(ielem-1) +1 : Np*ielem
+            x_local = x[node_indices]
+            y_local = y[node_indices]
+            # Initial condition per 4.4 Friedrichs
+            rho_local = 2 .+ sin.(2 * π * (x_local.-t))
+            rhov_local = 2 .+ sin.(2 * π * (x_local.-t))
+            E_local = (2 .+ sin.(2 * π * (x_local.-t))).^2
+            # Indexing: 1:Np .+ Np*3*(ielem-1) .+ (istate-1)*Np
+            u_exact[ (1:Np) .+ Np*3*(ielem-1) .+ (1-1)*Np] = rho_local
+            u_exact[(1:Np) .+ Np*3*(ielem-1) .+ (2-1)*Np]= rhov_local
+            u_exact[(1:Np) .+ Np*3*(ielem-1) .+ (3-1)*Np]= E_local
+
+        end
+        return u_exact
 end
 
 function calculate_source_terms(x::AbstractVector{Float64},y::AbstractVector{Float64},t::Float64, param::PhysicsAndFluxParams)
@@ -418,12 +423,27 @@ function calculate_source_terms(x::AbstractVector{Float64},y::AbstractVector{Flo
     end
 end
 
-function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::AbstractVector{Float64},t::Float64, param::PhysicsAndFluxParams)
+function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::AbstractVector{Float64},t::Float64, dg::DG, param::PhysicsAndFluxParams)
     if cmp(param.pde_type, "euler1D") != 0
         return calculate_source_terms(x, y, t, param)
     else
-        display("Warning! Euler source terms not yet defined!!")
-        return zeros(size(x))
+        if param.usespacetime
+            display("Warning! Source will need to be checked when implementing space-time!")
+        end
+        # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
+        Q = zeros(dg.Np)
+        gamm1=0.4
+        for ielem in 1:dg.N_elem
+            # Source per 4.5 Friedrichs
+            if istate == 1
+                Q .= 0
+            elseif istate == 2 || istate == 3
+                Q .= gamm1 * π * (7 .+ 4 * sin.( 2 * π * (x .- t))) .* cos.(2 * π * (x .- t))
+            else
+                display("Warning! There should only be 3 states.")
+            end
+        end
+        return Q
     end
 end
 
