@@ -247,15 +247,7 @@ function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFl
     if cmp(param.pde_type, "euler1D") != 0
         # Redirect to scalar-valued version
         f = calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
-    end
-
-    # No pde_type check as the only vector-valued PDE is Euler
-    # Reminder: conservative variables are u=[density, momentum, total energy]]
-    #
-    #
-    # NOTE TO SELF: The input u to this function is a vector across the quad points in the cell.
-    # Need to figure out indexing.
-    if direction == 1
+    elseif direction == 1
         if istate == 1
             f = u[2]
         elseif istate == 2
@@ -274,6 +266,13 @@ function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFl
         # Time - physical flux will just be advective.
         f = u[istate]
     end
+
+    # No pde_type check as the only vector-valued PDE is Euler
+    # Reminder: conservative variables are u=[density, momentum, total energy]]
+    #
+    #
+    # NOTE TO SELF: The input u to this function is a vector across the quad points in the cell.
+    # Need to figure out indexing.
 
         
     if dg.dim == 2
@@ -333,6 +332,15 @@ function calculate_source_terms(x::AbstractVector{Float64},y::AbstractVector{Flo
             return π*sin.(π*(x .+ y.- sqrt(2) * t)).*(1 .- cos.(π*(x .+ y .- sqrt(2) * t)))
         end
     else
+        return zeros(size(x))
+    end
+end
+
+function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::AbstractVector{Float64},t::Float64, param::PhysicsAndFluxParams)
+    if cmp(param.pde_type, "euler1D") != 0
+        return calculate_source_terms(x, y, t, param)
+    else
+        display("Warning! Euler source terms not yet defined!!")
         return zeros(size(x))
     end
 end

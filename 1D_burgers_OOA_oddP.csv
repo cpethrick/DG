@@ -1,5 +1,5 @@
 name,value
-n_times_to_solve,1
+n_times_to_solve,2
 P,2
-debugmode,true
+debugmode,false
 dim,1
