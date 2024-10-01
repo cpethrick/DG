@@ -159,7 +159,7 @@ function calculate_dim_cellwise_residual(ielem, istate, u_hat,u_hat_local,u_loca
     return rhs_local_state
 end
 
-function calculate_volume_terms_skew_symm(u_local, u_hat_local, direction, dg::DG, param::PhysicsAndFluxParams)
+function calculate_volume_terms_skew_symm(istate,u_local, u_hat_local, direction, dg::DG, param::PhysicsAndFluxParams)
 
     volume_term = zeros(Float64, dg.Np)
 
@@ -180,11 +180,12 @@ function calculate_volume_terms_skew_symm(u_local, u_hat_local, direction, dg::D
     reference_two_point_flux = zeros(dg.Np+dg.Nfaces*dg.Nfp,dg.Np+dg.Nfaces*dg.Nfp)
     # Efficiency note: Some terms of QtildemQtildeT are zero, so those shouldn' be computed.
     # Can also take advantage of symmetry.
-    for i =1:length(u_vf)
+    for i =1:size(u_vf)[1]
         ui = u_vf[i,:]
-        for j = 1:length(u_vf)
+        for j = 1:size(u_vf)[1]
             uj=u_vf[j,:]
-            reference_two_point_flux[i,j] = calculate_two_point_flux(ui, uj, direction,istate, dg, param)
+            two_pt_flux = calculate_two_point_flux(ui, uj, direction,istate, dg, param)
+            reference_two_point_flux[i,j] = two_pt_flux[1]
         end
     end
 
@@ -198,7 +199,7 @@ function calculate_dim_cellwise_residual_skew_symm(ielem,istate,u_hat,u_hat_loca
     rhs_local = zeros(Float64, dg.Np)
 
 
-    rhs_local .+= calculate_volume_terms_skew_symm(u_local, u_hat_local,direction, dg, param)
+    rhs_local .+= calculate_volume_terms_skew_symm(istate, u_local, u_hat_local,direction, dg, param)
     
     for iface in 1:dg.Nfaces
         uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)

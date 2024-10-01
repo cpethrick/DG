@@ -182,7 +182,7 @@ function calculate_two_point_flux(ui,uj, direction, dg::DG, param::PhysicsAndFlu
     return flux_physical
 end
 
-function calculate_two_point_flux_state(ui,uj, direction, istate::Int64, dg::DG, param::PhysicsAndFluxParams)
+function calculate_two_point_flux(ui,uj, direction, istate::Int64, dg::DG, param::PhysicsAndFluxParams)
     f=0
     if cmp(param.pde_type, "euler1D") != 0
         # Redirect to scalar-valued version
@@ -214,6 +214,10 @@ function calculate_two_point_flux_state(ui,uj, direction, istate::Int64, dg::DG,
             flux_physical = 0.5 * rho_ln / (beta_ln * (gamma-1)) + rho_ln * (
                                         average(vi,vj)^2 - 0.5 * average(vi^2,vj^2)   )
         end
+    end
+
+    if length(f) > 1
+        display("Warning! Flux is a vector, this will cause issues!!")
     end
 
     if dg.dim == 2
