@@ -282,7 +282,7 @@ function calculate_Ch_entropy_stable_flux(uM,uP,istate, dg::DG, param::PhysicsAn
     gamm1 = 0.4
     for inode in 1:N_nodes
         node_indices = inode * 1:dg.N_state
-        uM_node = uM[node_indices]
+        uM_node = uM[node_indices] # length of 3
         uP_node = uP[node_indices]
 
         rho_ln = ln_average(uM_node[1], uP_node[1])
@@ -302,7 +302,8 @@ function calculate_Ch_entropy_stable_flux(uM,uP,istate, dg::DG, param::PhysicsAn
         if istate == 1
             f_Ch[inode] = rho_ln * v_avg
         elseif istate == 2
-            f_Ch[inode] = rho_ln * v_square_avg
+            p_hat = 0.5 * (uM_node[1] + uP_node[1])/(betaM+betaP)
+            f_Ch[inode] = rho_ln * v_square_avg + p_hat
         elseif istate == 3
             p_hat = 0.5 * (uM_node[1] + uP_node[1])/(betaM+betaP)
 
