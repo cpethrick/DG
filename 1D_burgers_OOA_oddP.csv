@@ -1,9 +1,9 @@
 name,value
 n_times_to_solve,2
 P,2
-debugmode,false
+debugmode,true
 pde_type,euler1D
-use_skew_symmetric_stiffness_operator,false
+use_skew_symmetric_stiffness_operator,true
 alpha_split,1.0
 volumenodes,GLL
 dim,1

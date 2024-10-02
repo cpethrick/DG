@@ -166,16 +166,19 @@ function calculate_volume_terms_skew_symm(istate,u_local, u_hat_local, direction
     #u_local is only on volume nodes. Need to append u on face nodes.
     
     u_vf = zeros(dg.Np+dg.Nfaces*dg.Nfp, dg.N_state) # columns are states.
-    for istate = 1:dg.N_state
-        u_vf[1:dg.Np,istate] .= entropy_project(dg.chi_v, u_hat_local[dg.StIDLIDtoLSID[istate,1:dg.Np]], dg, param)
-    end
 
+    u_tilde_volume = entropy_project(dg.chi_v, u_hat_local, dg, param)
     for istate = 1:dg.N_state
-        for iface = 1:dg.Nfaces
-            u_face=entropy_project(dg.chi_f[:,:,iface],u_hat_local[dg.StIDLIDtoLSID[istate,1:dg.Np]], dg, param)
-            u_vf[(dg.Np+(iface-1)*dg.Nfp)+1:(dg.Np+(iface)*dg.Nfp), istate].=u_face
+        u_vf[1:dg.Np, istate] = u_tilde_volume[(1:dg.Np) .+ (istate-1) * dg.Np]
+    end
+    for iface = 1:dg.Nfaces
+        u_tilde_face =  entropy_project(dg.chi_f[:,:,iface], u_hat_local, dg, param)
+        for istate = 1:dg.N_state
+            u_vf[(1:dg.Nfp) .+ dg.Np .+ (iface-1)*dg.Nfp, istate] = u_tilde_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
         end
     end
+
+    
     # Problem: how to select u_face? Alex's paper seems contradictory of whether we eant to select Nf * Nfp or Nfp. Can't possibly select Nfp to calculate the two point flux?
     reference_two_point_flux = zeros(dg.Np+dg.Nfaces*dg.Nfp,dg.Np+dg.Nfaces*dg.Nfp)
     # Efficiency note: Some terms of QtildemQtildeT are zero, so those shouldn' be computed.
@@ -189,7 +192,7 @@ function calculate_volume_terms_skew_symm(istate,u_local, u_hat_local, direction
         end
     end
 
-    volume_term = dg.chi_vf * hadamard_product(dg.QtildemQtildeT[:,:,direction], reference_two_point_flux, length(u_vf), length(u_vf)) * ones(length(u_vf))
+    volume_term = dg.chi_vf * hadamard_product(dg.QtildemQtildeT[:,:,direction], reference_two_point_flux, size(u_vf)[1], size(u_vf)[1]) * ones(size(u_vf)[1])
 
 
     return volume_term

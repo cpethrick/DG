@@ -25,13 +25,17 @@ function ln_average(exterior_val,interior_val)
     end
     #Implementation per Appendix B [Ismail and Roe, 2009, Entropy-Consistent Euler Flux Functions II]
     zeta = exterior_val./interior_val
-    f = (zeta.-1.0)/(zeta.+1.0)
+    f = (zeta.-1.0)./(zeta.+1.0)
     u = f .* f
 
-    if u < 1E-2
-         F = 1.0 .+ u/3.0 .+ u.*u/5.0 .+ u.*u.*u/7.0
-     else
-         F = 0.5 * log.(zeta) ./ f
+    F = zeros(size(u))
+    for i in 1:length(u)
+
+        if u[i] < 1E-2
+            F[i] = 1.0 .+ u[i]/3.0 .+ u[i].*u[i]/5.0 .+ u[i].*u[i].*u[i]/7.0
+         else
+             F[i] = 0.5 * log.(zeta[i]) ./ f[i]
+         end
      end
 
      return (exterior_val .+ interior_val) ./ (2.0 * F)
@@ -42,6 +46,29 @@ function get_entropy_variables(solution, param::PhysicsAndFluxParams)
 
     if  occursin("burgers",param.pde_type)
         return solution
+    elseif cmp(param.pde_type, "euler1D") == 0
+        N_state = 3
+        N_nodes = trunc(Int, length(solution)/N_state)
+        entropy_variables = zeros(size(solution))
+
+        gamm1 = 0.4
+        gam = 1.4
+        
+        rho = solution[1:N_nodes]
+        rhov = solution[N_nodes+1:N_nodes*2]
+        E = solution[N_nodes*2+1:N_nodes*3]
+
+        pressure = get_pressure_ideal_gas(solution)
+
+        entropy = log.(pressure .* rho .^(-gam))
+
+        rhoe = pressure/gamm1
+
+        entropy_variables[1:N_nodes] = (rhoe .*(gam .+ 1.0 .- entropy) .- E)./rhoe
+        entropy_variables[N_nodes+1:N_nodes*2] = rhov./rhoe
+        entropy_variables[N_nodes*2+1:N_nodes*3] = -rho ./ rhoe
+
+        return entropy_variables
     else
         display("Warning: entropy variables not defined for this PDE!")
         return solution
@@ -52,9 +79,31 @@ function get_solution_variables(entropy_variables, param::PhysicsAndFluxParams)
 
     if  occursin("burgers",param.pde_type)
         return entropy_variables
+    elseif cmp(param.pde_type, "euler1D") == 0
+        N_state = 3
+        N_nodes = trunc(Int, length(entropy_variables)/N_state)
+        solution = zeros(size(entropy_variables))
+
+        gamm1 =  0.4
+        gam = 1.4
+        
+        e1 = entropy_variables[1:N_nodes]
+        e2 = entropy_variables[N_nodes+1:N_nodes*2]
+        e3 = entropy_variables[N_nodes*2+1:N_nodes*3]
+
+        e_vel_sq = e2 .^2
+
+        entropy = gam .- e1 .+ 0.5 * e_vel_sq ./ e3
+        rhoe = (gamm1 ./ ((-1.0*e3).^gam)).^(1.0/gamm1) .* exp.(-1.0 * entropy / gamm1)
+
+        solution[1:N_nodes] = -rhoe .* e3
+        solution[N_nodes+1:N_nodes*2] = rhoe .* e2
+        solution[N_nodes*2+1:N_nodes*3] = rhoe .* (1.0 .- 0.5 * e_vel_sq ./  e3)
+
+        return solution
     else
         display("Warning: entropy variables not defined for this PDE!")
-        return solution
+        return entropy_variables
     end
 end
 
@@ -70,15 +119,41 @@ end
 function get_numerical_entropy_function(solution, param::PhysicsAndFluxParams)
     if  occursin("burgers",param.pde_type)
         return 0.5 * solution .* solution 
+    elseif cmp(param.pde_type, "euler1D")
+        N_state = 3
+        N_nodes = trunc(Int, length(solution)/N_state)
+        entropy_variables = zeros(size(solution))
+
+        gamm1 = 0.4
+        gam = 1.4
+        
+        rho = solution[1:N_nodes]
+        rhov = solution[N_nodes+1:N_nodes*2]
+        E = solution[N_nodes*2+1:N_nodes*3]
+
+        pressure = get_pressure_ideal_gas(solution)
+
+        entropy = log.(pressure .* rho .^(-gam))
+
+        return  -1.0 * rho .* entropy
     else
         display("Warning: entropy potential not defined for this PDE!")
         return solution
     end
 end
 
-function get_pressure_ideal_gas(u)
-    gamma = 1.4
-    return (gamma-1)* (u[3] - 0.5 * u[2]^2/u[1])
+function get_pressure_ideal_gas(solution)
+    N_state = 3
+    N_nodes = trunc(Int, length(solution)/N_state)
+
+    gamm1 = 0.4
+
+
+    rho = solution[1:N_nodes]
+    rhov = solution[N_nodes+1:N_nodes*2]
+    E = solution[N_nodes*2+1:N_nodes*3]
+    pressure = (gamm1)* (E .- 0.5 * rhov.^2 ./rho)
+    return pressure
 end
 
 function transform_physical_to_reference(f_physical, direction, dg::DG)
@@ -88,10 +163,24 @@ end
 function entropy_project(chi_project, u_hat, dg::DG, param::PhysicsAndFluxParams)
     # chi_project is the basis functions evaluated at the desired projection points
     # (i.e., volume or face pts)
-    v_volume = get_entropy_variables(dg.chi_v * u_hat, param)
-    v_hat = dg.Pi * v_volume
-    
-    return get_solution_variables(chi_project * v_hat, param)
+    # Per eq 42 in Alex Euler preprint
+    u_volume_nodes = zeros(dg.N_dof)
+    for istate = 1:dg.N_state
+        u_volume_nodes[dg.StIDLIDtoLSID[istate, :]] = dg.chi_v * u_hat[dg.StIDLIDtoLSID[istate, :]]
+    end
+    v_volume = get_entropy_variables(u_volume_nodes, param)
+    v_hat = zeros(dg.N_dof)
+    for istate = 1:dg.N_state
+        v_hat[dg.StIDLIDtoLSID[istate, :]] = dg.Pi * v_volume[dg.StIDLIDtoLSID[istate, :]]
+    end
+
+    N_nodes_proj = size(chi_project)[1]
+    v_projected_nodes = zeros(N_nodes_proj* dg.N_state)
+    for istate = 1:dg.N_state
+        v_projected_nodes[(1:N_nodes_proj) .+ (dg.N_state-1)*N_nodes_proj] = chi_project * v_hat[dg.StIDLIDtoLSID[istate, :]]
+    end
+
+    return get_solution_variables(v_projected_nodes, param)
 
 end
 
@@ -189,8 +278,8 @@ function calculate_Ch_entropy_stable_flux(uM,uP,istate, dg::DG, param::PhysicsAn
         uP_node = uP[node_indices]
 
         rho_ln = ln_average(uM_node[1], uP_node[1])
-        pM = get_pressure_ideal_gas(uM)
-        pP = get_pressure_ideal_gas(uP)
+        pM = get_pressure_ideal_gas(uM_node)[1]
+        pP = get_pressure_ideal_gas(uP_node)[1]
 
         betaM = uM_node[1]/(2.0*pM)
         betaP = uP_node[1]/(2.0*pP)
@@ -245,7 +334,7 @@ function calculate_two_point_flux(ui,uj, direction, istate::Int64, dg::DG, param
         # Need to figure out indexing.
         #Add Ra flux here
         flux_physical = calculate_Ch_entropy_stable_flux(ui, uj, istate, dg, param)
-        display("Warning!! Euler numerical flux has not been verified!")
+        #display("Warning!! Euler numerical flux has not been verified!")
     elseif direction == 2  && cmp(param.pde_type, "euler1D") == 0
         #From Eq. 3.5 of Friedrichs 2019
         if istate == 1

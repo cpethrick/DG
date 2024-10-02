@@ -295,7 +295,6 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         end
     end
 
-
     L2_error = sqrt(L2_error)
 
     Linf_error = maximum(abs.(u_diff))
@@ -303,6 +302,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     energy_change = energy_final_calc - energy_initial
 
     if param.usespacetime
+        display("Warning! Euler will probably cause some problems here!")
         proj_corrected_error = calculate_projection_corrected_entropy_change(u_hat, dg, param)
         energy_change = proj_corrected_error
     end
