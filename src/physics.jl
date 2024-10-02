@@ -47,6 +47,7 @@ function get_entropy_variables(solution, param::PhysicsAndFluxParams)
     if  occursin("burgers",param.pde_type)
         return solution
     elseif cmp(param.pde_type, "euler1D") == 0
+        # Have verified that u(v(u)) = u, i.e. mapping is invertible
         N_state = 3
         N_nodes = trunc(Int, length(solution)/N_state)
         entropy_variables = zeros(size(solution))
@@ -60,7 +61,7 @@ function get_entropy_variables(solution, param::PhysicsAndFluxParams)
 
         pressure = get_pressure_ideal_gas(solution)
 
-        entropy = log.(pressure .* rho .^(-gam))
+        entropy = log.(pressure .* (rho .^(-gam)))
 
         rhoe = pressure/gamm1
 
@@ -80,6 +81,7 @@ function get_solution_variables(entropy_variables, param::PhysicsAndFluxParams)
     if  occursin("burgers",param.pde_type)
         return entropy_variables
     elseif cmp(param.pde_type, "euler1D") == 0
+        # Have verified that u(v(u)) = u, i.e. mapping is invertible
         N_state = 3
         N_nodes = trunc(Int, length(entropy_variables)/N_state)
         solution = zeros(size(entropy_variables))
@@ -96,7 +98,7 @@ function get_solution_variables(entropy_variables, param::PhysicsAndFluxParams)
         entropy = gam .- e1 .+ 0.5 * e_vel_sq ./ e3
         rhoe = (gamm1 ./ ((-1.0*e3).^gam)).^(1.0/gamm1) .* exp.(-1.0 * entropy / gamm1)
 
-        solution[1:N_nodes] = -rhoe .* e3
+        solution[1:N_nodes] = -1.0 * rhoe .* e3
         solution[N_nodes+1:N_nodes*2] = rhoe .* e2
         solution[N_nodes*2+1:N_nodes*3] = rhoe .* (1.0 .- 0.5 * e_vel_sq ./  e3)
 
@@ -164,10 +166,14 @@ function entropy_project(chi_project, u_hat, dg::DG, param::PhysicsAndFluxParams
     # chi_project is the basis functions evaluated at the desired projection points
     # (i.e., volume or face pts)
     # Per eq 42 in Alex Euler preprint
+
+
+
     u_volume_nodes = zeros(dg.N_dof)
     for istate = 1:dg.N_state
         u_volume_nodes[dg.StIDLIDtoLSID[istate, :]] = dg.chi_v * u_hat[dg.StIDLIDtoLSID[istate, :]]
     end
+
     v_volume = get_entropy_variables(u_volume_nodes, param)
     v_hat = zeros(dg.N_dof)
     for istate = 1:dg.N_state
@@ -177,10 +183,12 @@ function entropy_project(chi_project, u_hat, dg::DG, param::PhysicsAndFluxParams
     N_nodes_proj = size(chi_project)[1]
     v_projected_nodes = zeros(N_nodes_proj* dg.N_state)
     for istate = 1:dg.N_state
-        v_projected_nodes[(1:N_nodes_proj) .+ (dg.N_state-1)*N_nodes_proj] = chi_project * v_hat[dg.StIDLIDtoLSID[istate, :]]
+        v_projected_nodes[(1:N_nodes_proj) .+ (istate-1)*N_nodes_proj] = chi_project * v_hat[dg.StIDLIDtoLSID[istate, :]]
     end
 
-    return get_solution_variables(v_projected_nodes, param)
+
+    projected_soln = get_solution_variables(v_projected_nodes, param)
+    return projected_soln
 
 end
 
