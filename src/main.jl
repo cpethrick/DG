@@ -207,6 +207,9 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == true 
         u_exact_overint = sin.(π * (x_overint - param.advection_speed * y_overint)) .+ 0.01
     elseif cmp(param.pde_type, "euler1D")==0
+        if param.usespacetime
+            display("Warning: exact soln not correct for space time!")
+        end
         u_exact_overint_allstates = calculate_euler_exact_solution(current_time, x_overint, y_overint, Np_overint, dg)
         # extract only density
         u_exact_overint = zeros(size(x_overint))
@@ -429,10 +432,10 @@ function run(param::PhysicsAndFluxParams)
         #Evalate convergence, print, and save to file
         Printf.@printf("P =  %d \n", P)
         dx = 2.0./N_elem_range
-        Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change         Time   Time scaling\n")
+        Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Entropy change         Time   Time scaling\n")
         fname = "result.csv" #Note: this should be changed to something useful in the future...
         f = open(fname, "w")
-        DelimitedFiles.writedlm(f, ["n cells_per_dim" "dx" "L2 Error" "L2  Error rate" "Linf Error" "Linf rate" "Energy change" "Time" "Time scaling"], ",")
+        DelimitedFiles.writedlm(f, ["n cells_per_dim" "dx" "L2 Error" "L2  Error rate" "Linf Error" "Linf rate" "Entropy change" "Time" "Time scaling"], ",")
         for j = 1:i
             conv_rate_L2 = 0.0
             conv_rate_Linf = 0.0
