@@ -121,7 +121,7 @@ end
 function get_numerical_entropy_function(solution, param::PhysicsAndFluxParams)
     if  occursin("burgers",param.pde_type)
         return 0.5 * solution .* solution 
-    elseif cmp(param.pde_type, "euler1D")
+    elseif cmp(param.pde_type, "euler1D") == 0
         N_state = 3
         N_nodes = trunc(Int, length(solution)/N_state)
         entropy_variables = zeros(size(solution))

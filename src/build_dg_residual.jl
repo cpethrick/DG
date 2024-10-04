@@ -25,9 +25,10 @@ function project(chi_project, u_hat, do_entropy_projection::Bool, dg::DG, param:
     if do_entropy_projection
         return entropy_project(chi_project, u_hat, dg, param)
     else
-        u_projected = zeros(size(chi_project)[1]) # Take size from chi_project
+        N_nodes = size(chi_project)[1]
+        u_projected = zeros(N_nodes*dg.N_state) # Take size from chi_project
         for istate = 1:dg.N_state
-            u_projected[(istate-1)*dg.Nfp+1 : istate*dg.Nfp] = chi_project*u_hat[(istate-1)*dg.Np+1 : istate*dg.Np]
+            u_projected[(istate-1)*N_nodes+1 : istate*N_nodes] = chi_project*u_hat[(istate-1)*dg.Np+1 : istate*dg.Np]
         end
         return u_projected
     end

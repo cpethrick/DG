@@ -105,6 +105,17 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
 
 end
 
+function calculate_integrated_numerical_entropy(u_hat, dg::DG, param::PhysicsAndFluxParams)
+    
+    if cmp(param.pde_type, "euler1D")==0
+        u = project(dg.chi_v,u_hat,false,dg, param)
+        s = get_numerical_entropy_function(u, param)
+        return s' * dg.W * dg.J * ones(size(s))
+    else
+        return u_hat' * dg.M * u_hat
+    end
+end
+
 function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     # N_elem_per_dim is number of elements PER DIM
     # N is poly order
@@ -254,8 +265,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     end
 
     L2_error::Float64 = 0
-    energy_final_calc = 0
-    energy_initial = 0
+    entropy_final_calc = 0
+    entropy_initial = 0
     for ielem = 1:dg.N_elem
         L2_error += (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])
 
@@ -280,18 +291,18 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                 end
                 u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
 
-                energy_initial += u_face' * dg.W_f * dg.J_f * u_face
+                entropy_initial += u_face' * dg.W_f * dg.J_f * u_face
             elseif ielem > N_elem_per_dim^dim - N_elem_per_dim
                 # face on top
                 u_face = dg.chi_f[:,:,4] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
-                energy_final_calc += u_face' * dg.W_f * dg.J_f * u_face
+                entropy_final_calc += u_face' * dg.W_f * dg.J_f * u_face
             end
             if param.fluxreconstructionC > 0
                 display("WARNING: Energy calculation is probably unreliable for c != 0.")
             end
         else
-            energy_final_calc += (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
-            energy_initial += (u_hat0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
+            entropy_final_calc += calculate_integrated_numerical_entropy(u_hat[(ielem-1)*dg.N_dof+1:(ielem)*dg.N_dof], dg, param)
+            entropy_initial += calculate_integrated_numerical_entropy(u_hat0[(ielem-1)*dg.N_dof+1:(ielem)*dg.N_dof], dg, param)
         end
     end
 
@@ -299,12 +310,12 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     Linf_error = maximum(abs.(u_diff))
 
-    energy_change = energy_final_calc - energy_initial
+    entropy_change = entropy_final_calc - entropy_initial
 
     if param.usespacetime
         display("Warning! Euler will probably cause some problems here!")
         proj_corrected_error = calculate_projection_corrected_entropy_change(u_hat, dg, param)
-        energy_change = proj_corrected_error
+        entropy_change = proj_corrected_error
     end
 #====
     if param.usespacetime && !param.spacetime_decouple_slabs
@@ -336,7 +347,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         end
         display(proj_error)
 
-        energy_change += proj_error
+        entropy_change += proj_error
     end
 ===#
     PyPlot.figure("Solution", figsize=(6,4))
@@ -386,7 +397,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         PyPlot.tricontourf(x_overint, y_overint, u_exact_overint, 20)
         PyPlot.colorbar()
     end
-    return L2_error, Linf_error, energy_change#, solution
+    return L2_error, Linf_error, entropy_change#, solution
 end
 
 function run(param::PhysicsAndFluxParams)
@@ -396,7 +407,7 @@ function run(param::PhysicsAndFluxParams)
     N_elem_range = 2 .^(1:param.n_times_to_solve)*2
     L2_err_store = zeros(length(N_elem_range))
     Linf_err_store = zeros(length(N_elem_range))
-    energy_change_store = zeros(length(N_elem_range))
+    entropy_change_store = zeros(length(N_elem_range))
     time_store = zeros(length(N_elem_range))
 
     for i=1:length(N_elem_range)
@@ -407,7 +418,7 @@ function run(param::PhysicsAndFluxParams)
         # Start timer (NOTE: should change to BenchmarkTools.jl in the future)
         t = time()
         # Solve
-        (L2_err_store[i],Linf_err_store[i], energy_change_store[i]) = setup_and_solve(N_elem,P,param)
+        (L2_err_store[i],Linf_err_store[i], entropy_change_store[i]) = setup_and_solve(N_elem,P,param)
         # End timer
         time_store[i] = time() - t
 
@@ -431,10 +442,10 @@ function run(param::PhysicsAndFluxParams)
                 conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
                 conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
                 conv_rate_time = log(time_store[j]/time_store[j-1]) / log(dx[j]/dx[j-1])
-                conv_rate_energy = log(abs(energy_change_store[j]/energy_change_store[j-1])) / log(dx[j]/dx[j-1])
+                conv_rate_energy = log(abs(entropy_change_store[j]/entropy_change_store[j-1])) / log(dx[j]/dx[j-1])
             end
-            Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f \t%.2f \t%.5e \t%.2f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j], conv_rate_energy, time_store[j], conv_rate_time)
-            DelimitedFiles.writedlm(f, [N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j    ], time_store[j], conv_rate_time]', ",")
+            Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.4e \t%.2f \t%.5e \t%.2f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, entropy_change_store[j], conv_rate_energy, time_store[j], conv_rate_time)
+            DelimitedFiles.writedlm(f, [N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, entropy_change_store[j    ], time_store[j], conv_rate_time]', ",")
         end
 
         close(f)
@@ -539,4 +550,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-main("1D_burgers_OOA_oddP.csv")
+main("1D_euler_entropy_conservation.csv")
