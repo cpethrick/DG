@@ -167,8 +167,6 @@ function entropy_project(chi_project, u_hat, dg::DG, param::PhysicsAndFluxParams
     # (i.e., volume or face pts)
     # Per eq 42 in Alex Euler preprint
 
-
-
     u_volume_nodes = zeros(dg.N_dof)
     for istate = 1:dg.N_state
         u_volume_nodes[dg.StIDLIDtoLSID[istate, :]] = dg.chi_v * u_hat[dg.StIDLIDtoLSID[istate, :]]

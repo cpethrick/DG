@@ -2,6 +2,7 @@ name,value
 n_times_to_solve,3
 dim,2
 P,2
+domain_size,1.0
 usespacetime,true
 spacetime_decouple_slabs,false
 numerical_flux_type,split

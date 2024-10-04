@@ -1,11 +1,3 @@
 name,value
-n_times_to_solve,4
-P,4
-debugmode,false
-pde_type,euler1D
-use_skew_symmetric_stiffness_operator,true
-alpha_split,1.0
-volumenodes,GL
-basisnodes,GL
-dim,1
-finaltime,0.333
+n_times_to_solve,5
+P,3
