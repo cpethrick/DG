@@ -476,7 +476,7 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
         u0 = calculate_euler_exact_solution(0, x, y, dg.Np, dg)
     else
         #u0 = 0.2* sin.(π * x) .+ 0.01
-        u0 = sin.(π * (x))
+        u0 = sin.(π * (x)) .+ 0.01
     end
     return u0
 end
