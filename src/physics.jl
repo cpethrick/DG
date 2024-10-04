@@ -243,7 +243,16 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
             end
         elseif cmp(param.pde_type,"euler1D")==0 
             if param.usespacetime == true
-                display("Warning!! Need to fix spacetime here!")
+                # upwind 
+                if n_face[direction] == -1
+                    # face is bottom. Use the information from the external element
+                    # which corresponds to the past
+                    f_numerical = uP_face
+                elseif n_face[direction] == 1
+                    # face is bottom. Use internal solution
+                    # which corresonds to the past
+                    f_numerical = uM_face
+                end
             end
              f_numerical = calculate_Ch_entropy_stable_flux(uM_face,uP_face,istate, dg, param)
         else
@@ -278,8 +287,9 @@ function calculate_Ch_entropy_stable_flux(uM,uP,istate, dg::DG, param::PhysicsAn
     u_node = zeros(dg.N_state)
     gam = 1.4
     gamm1 = 0.4
+
     for inode in 1:N_nodes
-        node_indices = inode * 1:dg.N_state
+        node_indices = inode * (1:dg.N_state)
         uM_node = uM[node_indices] # length of 3
         uP_node = uP[node_indices]
 
@@ -462,7 +472,7 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
 
     if param.usespacetime
         #u0 = cos.(π * (x))
-        u0 = 0.1*sin.(π * (x))
+        u0 = ones(dg.N_dof_global)
         #u0 = 0*x
     elseif param.include_source && cmp(param.pde_type, "burgers2D")==0
         u0 = cos.(π * (x + y))
@@ -480,10 +490,12 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
 end
 
 function calculate_euler_exact_solution(t, x, y, Np, dg)
+    # take Np as an input because we may be using an overintegrated or surface mesh.
 
         # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
-        u_exact = zeros(dg.N_elem * Np*3) #Hard-code 3 states
-        for ielem in 1:dg.N_elem
+        u_exact = zeros(length(x) * 3) #Hard-code 3 states
+        N_elem = trunc(Int, length(x)/Np) # Need to detect this as sometimes we're only in one element.
+        for ielem in 1:N_elem
             node_indices = Np*(ielem-1) +1 : Np*ielem
             x_local = x[node_indices]
             y_local = y[node_indices]
@@ -543,7 +555,7 @@ function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::Abstr
     end
 end
 
-function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::AbstractVector{Float64}, param::PhysicsAndFluxParams)
+function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::AbstractVector{Float64}, dg::DG, param::PhysicsAndFluxParams)
 
     if param.include_source
         return  cos.(π * (x-y))
@@ -560,7 +572,8 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
             end
         end
         return out
-
+    elseif cmp(param.pde_type, "euler1D") == 0
+        return calculate_euler_exact_solution(0, x, y, dg.Nfp, dg) 
     else
         return sin.(π * (x)) .+ 0.01
     end

@@ -117,7 +117,7 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
                 #    u_face[(istate-1)*dg.Nfp+1 : istate*dg.Nfp] = project(dg.chi_f[:,:,iface], u_hat_local, param.use_skew_symmetric_stiffness_operator, dg, param)
                 #end
             else
-                u_face = calculate_solution_on_Dirichlet_boundary(istate, x_local, y_local, param)
+                u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, dg, param)
             end
         elseif elem == -1
             # elemID == -1 corresponds to outflow (transmissive) boundary

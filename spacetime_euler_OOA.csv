@@ -1,12 +1,12 @@
 name,value
-n_times_to_solve,4
-P,3
+n_times_to_solve,1
+P,2
 domain_size,1.0
-debugmode,false
+debugmode,true
 pde_type,euler1D
 use_skew_symmetric_stiffness_operator,true
 alpha_split,1.0
 volumenodes,GLL
 basisnodes,GLL
-dim,1
-finaltime,0.5324
+dim,2
+usespacetime,true
