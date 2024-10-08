@@ -4,6 +4,7 @@ include("parameters.jl")
 
 import LinearMaps
 import IterativeSolvers
+import PyPlot
 
 function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
 
@@ -31,7 +32,7 @@ function JFNKsolve(u_hat0, do_decouple::Bool, dg::DG,param::PhysicsAndFluxParams
     end
 
     u_hat = u_hat0
-    for iTS = 1:N_time_slabs
+    for iTS = 1:1#N_time_slabs
         if do_decouple
             subset_EIDs = dg.TSIDtoEID[iTS,:]
             Printf.@printf("Time-slab ID: %d\n", iTS)
@@ -43,9 +44,9 @@ function JFNKsolve(u_hat0, do_decouple::Bool, dg::DG,param::PhysicsAndFluxParams
         # Meat of the solver here
         ========================#
 
-        tol_NL = 1E-6
-        tol_lin = 1E-10
-        NL_iterlim = 100
+        tol_NL = 1E-4
+        tol_lin = 1E-2
+        NL_iterlim = 2
         residual_NL = 1
         u_hat_NLiter = u_hat
         NL_iterctr = 0
@@ -56,6 +57,17 @@ function JFNKsolve(u_hat0, do_decouple::Bool, dg::DG,param::PhysicsAndFluxParams
         #Outer loop: nonlinear iterations (Newton)
         while residual_NL > tol_NL && NL_iterctr < NL_iterlim 
 
+            PyPlot.figure("Intermediate solutions")
+            PyPlot.clf()
+            u_NLiter = zeros(dg.Np*dg.N_elem)
+            for ielem in 1:dg.N_elem
+                u_hat_local = zeros(dg.Np)
+                for inode in 1:dg.Np
+                    u_hat_local[inode] = u_hat[dg.StIDGIDtoGSID[1,dg.EIDLIDtoGID_basis[ielem,inode]]]
+                end
+                u_NLiter[dg.EIDLIDtoGID_vol[ielem,:]] = dg.chi_v*u_hat_local
+            end
+            PyPlot.tricontourf(dg.x, dg.y, u_NLiter,20)
             #Define function of only u_hat_in. Passing zero as time - not used in PS (as far as I recall).
             DG_residual_function(u_hat_in) =  assemble_residual(u_hat_in, 0.0, dg, param, subset_EIDs)
             perturbation = sqrt(eps())
@@ -67,12 +79,13 @@ function JFNKsolve(u_hat0, do_decouple::Bool, dg::DG,param::PhysicsAndFluxParams
             FMap_DG_residual = LinearMaps.FunctionMap{Float64,false}(jacobian_vector_product, length(u_hat)) #second argument is size of the square linear map
 
             #Inner loop: linear iterations (GMRES - use package)
-            u_hat_delta,log = IterativeSolvers.gmres!(u_hat,FMap_DG_residual, -1.0 * DG_residual_function(u_hat_NLiter); 
-                                                     log=true, restart=500, abstol=tol_lin, reltol=tol_lin, verbose=false,
+            u_hat_delta,log = IterativeSolvers.gmres(FMap_DG_residual, -1.0 * DG_residual_function(u_hat_NLiter); 
+                                                     log=true, restart=500, abstol=tol_lin, reltol=tol_lin, verbose=true,
                                                      maxiter=max_iterations
                                                     ) #Note: gmres() initializes with zeros, while gmres!(x, FMap, b) initializes with x.)
             display(log)
             u_hat_NLiter += u_hat_delta
+            display(u_hat_delta)
             residual_NL = sqrt(sum(u_hat_delta .^ 2))
             NL_iterctr+=1
             if param.debugmode
@@ -142,6 +155,7 @@ function pseudotimesolve(u_hat0, do_decouple::Bool, dg::DG, param::PhysicsAndFlu
                 u_hatnew = u_hat0
                 residual=1
                 residualnew=1
+                first_residual = -1
                 dt *= 0.8
             end
 

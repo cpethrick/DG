@@ -12,6 +12,19 @@ function jump(exterior_val,interior_val)
     return exterior_val.-interior_val
 end
 
+function limit(value)
+
+    if value < 0
+        return 1E-5
+    elseif value > 100
+        return 10
+    elseif isnan(value)
+        return 1
+    else
+        return value
+    end
+end
+
 function average(exterior_val, interior_val)
     if size(interior_val) != size(exterior_val)
         display("Warning! Size mismatch in average()!")
@@ -24,12 +37,8 @@ function ln_average(exterior_val,interior_val)
         display("Warning! Size mismatch in ln_average()!")
     end
 
-    if interior_val < 0
-        interior_val = 1E-5
-    end
-    if exterior_val < 0
-        exterior_val = 1e-5
-    end
+    interior_val = limit.(interior_val)
+    exterior_val = limit.(exterior_val)
 
     #Implementation per Appendix B [Ismail and Roe, 2009, Entropy-Consistent Euler Flux Functions II]
     zeta = exterior_val./interior_val
@@ -64,6 +73,7 @@ function get_entropy_variables(solution, param::PhysicsAndFluxParams)
         gam = 1.4
         
         rho = solution[1:N_nodes]
+        rho = limit.(rho)
         rhov = solution[N_nodes+1:N_nodes*2]
         E = solution[N_nodes*2+1:N_nodes*3]
 
@@ -163,6 +173,7 @@ function get_pressure_ideal_gas(solution)
     rhov = solution[N_nodes+1:N_nodes*2]
     E = solution[N_nodes*2+1:N_nodes*3]
     pressure = (gamm1)* (E .- 0.5 * rhov.^2 ./rho)
+    pressure = limit.(pressure)
     return pressure
 end
 
@@ -359,7 +370,7 @@ function calculate_two_point_flux(ui,uj, direction, istate::Int64, dg::DG, param
             betai = 0.5 * ui[1] / pressurei
             betaj = 0.5 * uj[1] / pressurej
             vi = ui[2]/ui[1]
-            vj = ui[2]/ui[1]
+            vj = uj[2]/uj[1]
 
             rho_ln = ln_average(ui[1],uj[1])
             beta_ln = ln_average(betai,betaj)
@@ -468,7 +479,8 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
     if param.usespacetime
         #u0 = cos.(π * (x))
         if cmp(param.pde_type,  "euler1D")==0
-            u0 = calculate_euler_exact_solution(0, x, y, dg.Np, dg)
+            display("Initializing as exacct solution!")
+            u0 = calculate_euler_exact_solution(-1, x, y, dg.Np, dg)
         else
             u0 = ones(dg.N_dof_global)
         end
@@ -490,25 +502,38 @@ end
 
 function calculate_euler_exact_solution(t, x, y, Np, dg)
     # take Np as an input because we may be using an overintegrated or surface mesh.
+    # time is passed as scalar current_time for MoL
+    # or as t=-1 for space-time.
+    # In the space-time case, the y vector will be interpreted as a time vector.
+    
+    if t >=0
+        time = t* ones(size(x))
+    elseif t == -1.0
+        time = y
+    else
+        display("Time not recognized in euler exact soln")
+    end
 
-        # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
-        u_exact = zeros(length(x) * 3) #Hard-code 3 states
-        N_elem = trunc(Int, length(x)/Np) # Need to detect this as sometimes we're only in one element.
-        for ielem in 1:N_elem
-            node_indices = Np*(ielem-1) +1 : Np*ielem
-            x_local = x[node_indices]
-            y_local = y[node_indices]
-            # Initial condition per 4.4 Friedrichs
-            rho_local = 2 .+ sin.(2 * π * (x_local.-t))
-            rhov_local = 2 .+ sin.(2 * π * (x_local.-t))
-            E_local = (2 .+ sin.(2 * π * (x_local.-t))).^2
-            # Indexing: 1:Np .+ Np*3*(ielem-1) .+ (istate-1)*Np
-            u_exact[ (1:Np) .+ Np*3*(ielem-1) .+ (1-1)*Np] = rho_local
-            u_exact[(1:Np) .+ Np*3*(ielem-1) .+ (2-1)*Np]= rhov_local
-            u_exact[(1:Np) .+ Np*3*(ielem-1) .+ (3-1)*Np]= E_local
+    # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
+    u_exact = zeros(length(x) * 3) #Hard-code 3 states
+    N_elem = trunc(Int, length(x)/Np) # Need to detect this as sometimes we're only in one element.
 
-        end
-        return u_exact
+    for ielem in 1:N_elem
+        node_indices = Np*(ielem-1) +1 : Np*ielem
+        x_local = x[node_indices]
+        y_local = y[node_indices]
+        time_local = time[node_indices]
+        # Initial condition per 4.4 Friedrichs
+        rho_local = 2 .+ sin.(2 * π * (x_local - time_local))
+        rhov_local = 2 .+ sin.(2 * π * (x_local - time_local))
+        E_local = (2 .+ sin.(2 * π * (x_local - time_local))).^2
+        # Indexing: 1:Np .+ Np*3*(ielem-1) .+ (istate-1)*Np
+        u_exact[ (1:Np) .+ Np*3*(ielem-1) .+ (1-1)*Np] = rho_local
+        u_exact[(1:Np) .+ Np*3*(ielem-1) .+ (2-1)*Np]= rhov_local
+        u_exact[(1:Np) .+ Np*3*(ielem-1) .+ (3-1)*Np]= E_local
+
+    end
+    return u_exact
 end
 
 function calculate_source_terms(x::AbstractVector{Float64},y::AbstractVector{Float64},t::Float64, param::PhysicsAndFluxParams)
@@ -535,7 +560,9 @@ function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::Abstr
         return calculate_source_terms(x, y, t, param)
     else
         if param.usespacetime
-            display("Warning! Source will need to be checked when implementing space-time!")
+            time = y
+        else
+            time = t* ones(size(x))
         end
         # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
         Q = zeros(dg.Np)
@@ -545,7 +572,7 @@ function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::Abstr
             if istate == 1
                 Q .= 0
             elseif istate == 2 || istate == 3
-                Q .= gamm1 * π * (7 .+ 4 * sin.( 2 * π * (x .- t))) .* cos.(2 * π * (x .- t))
+                Q .= gamm1 * π * (7 .+ 4 * sin.( 2 * π * (x .- time))) .* cos.(2 * π * (x .- time))
             else
                 display("Warning! There should only be 3 states.")
             end

@@ -66,7 +66,7 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
                 # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
                 # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
             end
-            u_face_Dirichlet = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
+            u_face_Dirichlet = calculate_solution_on_Dirichlet_boundary(x_local, y_local, dg,param)
             u_face_interior = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
 
             s_vec = get_numerical_entropy_function(u_face_Dirichlet,param)
@@ -176,6 +176,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         display("Done time loop")
     else
         u_hat = spacetimeimplicitsolve(u_hat0 ,dg, param)
+        #u_hat = u0
     end
     display("Reminder, c is ")
     display(param.fluxreconstructionC)
@@ -212,7 +213,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         if param.usespacetime
             display("Warning: exact soln not correct for space time!")
         end
-        u_exact_overint_allstates = calculate_euler_exact_solution(current_time, x_overint, y_overint, Np_overint, dg)
+        u_exact_overint_allstates = calculate_euler_exact_solution(-1.0, x_overint, y_overint, Np_overint, dg)
         # extract only density
         u_exact_overint = zeros(size(x_overint))
         for ielem = 1:dg.N_elem
@@ -294,13 +295,14 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                     # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
                     # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
                 end
-                u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
+                u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
 
-                entropy_initial += u_face' * dg.W_f * dg.J_f * u_face
+                entropy_initial += 0#u_face' * dg.W_f * dg.J_f * u_face
+                display("Warning: entropy for space-time not implemented correctly")
             elseif ielem > N_elem_per_dim^dim - N_elem_per_dim
                 # face on top
                 u_face = dg.chi_f[:,:,4] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
-                entropy_final_calc += u_face' * dg.W_f * dg.J_f * u_face
+                entropy_final_calc += 0#u_face' * dg.W_f * dg.J_f * u_face
             end
             if param.fluxreconstructionC > 0
                 display("WARNING: Energy calculation is probably unreliable for c != 0.")
@@ -317,7 +319,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     entropy_change = entropy_final_calc - entropy_initial
 
-    if param.usespacetime
+    if param.usespacetime && cmp(param.pde_type,"euler1D") != 0
         display("Warning! Euler will probably cause some problems here!")
         proj_corrected_error = calculate_projection_corrected_entropy_change(u_hat, dg, param)
         entropy_change = proj_corrected_error
@@ -387,6 +389,11 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     pltname = string("grid", N_elem_per_dim, ".pdf")
     PyPlot.savefig(pltname)
 
+    for i in 1:length(u_calc_final_overint)
+        if isnan(u_calc_final_overint[i])
+            u_calc_final_overint[i]=0
+        end
+    end
 
     if dim == 2# && N_elem_per_dim == 4
         PyPlot.figure("Initial cond, overintegrated")
@@ -409,7 +416,7 @@ function run(param::PhysicsAndFluxParams)
 
 
     P = param.P
-    N_elem_range = 2 .^(1:param.n_times_to_solve)
+    N_elem_range = 2 .^(1:param.n_times_to_solve)*2
     L2_err_store = zeros(length(N_elem_range))
     Linf_err_store = zeros(length(N_elem_range))
     entropy_change_store = zeros(length(N_elem_range))
