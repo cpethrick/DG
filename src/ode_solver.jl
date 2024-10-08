@@ -49,6 +49,10 @@ function JFNKsolve(u_hat0, do_decouple::Bool, dg::DG,param::PhysicsAndFluxParams
         residual_NL = 1
         u_hat_NLiter = u_hat
         NL_iterctr = 0
+        max_iterations = 2000
+        if param.debugmode == true
+            max_iterations= 1
+        end
         #Outer loop: nonlinear iterations (Newton)
         while residual_NL > tol_NL && NL_iterctr < NL_iterlim 
 
@@ -63,13 +67,17 @@ function JFNKsolve(u_hat0, do_decouple::Bool, dg::DG,param::PhysicsAndFluxParams
             FMap_DG_residual = LinearMaps.FunctionMap{Float64,false}(jacobian_vector_product, length(u_hat)) #second argument is size of the square linear map
 
             #Inner loop: linear iterations (GMRES - use package)
-            u_hat_delta,log = IterativeSolvers.gmres(FMap_DG_residual, -1.0 * DG_residual_function(u_hat_NLiter); 
-                                                     log=true, restart=500, abstol=tol_lin, reltol=tol_lin, verbose=false ) #Note: gmres() initializes with zeros, while gmres!(x, FMap, b) initializes with x.)
+            u_hat_delta,log = IterativeSolvers.gmres!(u_hat,FMap_DG_residual, -1.0 * DG_residual_function(u_hat_NLiter); 
+                                                     log=true, restart=500, abstol=tol_lin, reltol=tol_lin, verbose=false,
+                                                     maxiter=max_iterations
+                                                    ) #Note: gmres() initializes with zeros, while gmres!(x, FMap, b) initializes with x.)
             display(log)
             u_hat_NLiter += u_hat_delta
             residual_NL = sqrt(sum(u_hat_delta .^ 2))
             NL_iterctr+=1
-
+            if param.debugmode
+                residual_NL = 0.1*tol_NL
+            end
             Printf.@printf("NL residual at iteration %d was %.3e\n", NL_iterctr, residual_NL)
 
         end

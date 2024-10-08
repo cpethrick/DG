@@ -23,6 +23,14 @@ function ln_average(exterior_val,interior_val)
     if size(interior_val) != size(exterior_val)
         display("Warning! Size mismatch in ln_average()!")
     end
+
+    if interior_val < 0
+        interior_val = 1E-5
+    end
+    if exterior_val < 0
+        exterior_val = 1e-5
+    end
+
     #Implementation per Appendix B [Ismail and Roe, 2009, Entropy-Consistent Euler Flux Functions II]
     zeta = exterior_val./interior_val
     f = (zeta.-1.0)./(zeta.+1.0)
