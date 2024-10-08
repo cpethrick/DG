@@ -142,6 +142,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     finaltime = param.finaltime
 
     u0 = calculate_initial_solution(dg, param)
+    display(u0)
+    display(dg.x)
     u_hat0 = zeros(dg.N_dof_global)
     u_local_state = zeros(dg.Np)
     for ielem = 1:dg.N_elem

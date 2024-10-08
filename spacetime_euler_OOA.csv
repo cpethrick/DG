@@ -5,6 +5,8 @@ domain_size,1.0
 debugmode,true
 pde_type,euler1D
 use_skew_symmetric_stiffness_operator,true
+spacetime_decouple_slabs,true
+include_source,false
 alpha_split,1.0
 volumenodes,GLL
 basisnodes,GLL

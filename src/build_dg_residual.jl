@@ -57,7 +57,6 @@ function calculate_face_numerical_flux_term(ielem, istate, iface, u_hat, uM, uP,
     # EIDofexterior is used to detect the type of numerical flux to apply.
     EID_of_exterior = dg.EIDLFIDtoEIDofexterior[ielem,iface]
     f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction, EID_of_exterior, dg, param)
-
     face_term = dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface, direction] * (f_numerical)
 
     return face_term

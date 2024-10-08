@@ -198,7 +198,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
     #             the problem physics
     # bc_type = 0 indicates a Dirichlet boundary for time dimension, returning the exterior value
     # bc_type = -1 indicates an outflow (transmissive) boundary for time dimension, returning the interior value 
-    f_numerical=zeros(size(uM_face))
+    f_numerical=zeros(dg.Nfp)
 
     if bc_type > 0
         # assign boundary according to problem physics.
@@ -220,12 +220,12 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
                 if n_face[direction] == -1
                     # face is bottom. Use the information from the external element
                     # which corresponds to the past
-                    f_numerical = uP_face
+                    f_numerical = uP_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
                 elseif n_face[direction] == 1
                     # face is bottom. Use internal solution
                     # which corresonds to the past
-                    f_numerical = uM_face
-                end
+                    f_numerical = uM_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
+                end # if face normal ==0,  leave f_numercal as zeros.
             end
         elseif cmp(param.pde_type, "linear_adv_1D")==0
             a = param.advection_speed
@@ -242,30 +242,17 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
                 f_numerical += n_face[direction] * 0.5 .* max_eigenvalue .* (uM_face .- uP_face)
             end
         elseif cmp(param.pde_type,"euler1D")==0 
-            if param.usespacetime == true
-                # upwind 
-                if n_face[direction] == -1
-                    # face is bottom. Use the information from the external element
-                    # which corresponds to the past
-                    f_numerical = uP_face
-                elseif n_face[direction] == 1
-                    # face is bottom. Use internal solution
-                    # which corresonds to the past
-                    f_numerical = uM_face
-                end
-            end
              f_numerical = calculate_Ch_entropy_stable_flux(uM_face,uP_face,istate, dg, param)
         else
             display("Warning: No numerical flux is defined for this PDE type!!")
         end
 
     elseif bc_type == 0
-        # Dirichlet
-            f_numerical = uP_face # uP_face has been set to be the analtical value in the 
-                                  # get_solution_at_face() function 
+        # Dirichlet: uP_face has been set to be the analtical value in get_solution_at_face()
+        f_numerical = uP_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
     elseif bc_type == -1
-        # Outflow
-            f_numerical = uM_face # return interior solution
+        # Outflow: return interior soln
+        f_numerical = uM_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
     else
         display("Warning: Numerical flux boundary type not recognized!")
     end
@@ -359,8 +346,8 @@ function calculate_two_point_flux(ui,uj, direction, istate::Int64, dg::DG, param
         elseif istate == 2
             flux_physical = ln_average(ui[1], uj[1]) * average(ui[2]/ui[1], uj[2]/uj[1])
         elseif istate == 3
-            pressurei = get_pressure_ideal_gas(ui)
-            pressurej = get_pressure_ideal_gas(uj)
+            pressurei = get_pressure_ideal_gas(ui)[1]
+            pressurej = get_pressure_ideal_gas(uj)[1]
             betai = 0.5 * ui[1] / pressurei
             betaj = 0.5 * uj[1] / pressurej
             vi = ui[2]/ui[1]
@@ -472,7 +459,11 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
 
     if param.usespacetime
         #u0 = cos.(π * (x))
-        u0 = ones(dg.N_dof_global)
+        if cmp(param.pde_type,  "euler1D")==0
+            u0 = calculate_euler_exact_solution(0, x, y, dg.Np, dg)
+        else
+            u0 = ones(dg.N_dof_global)
+        end
         #u0 = 0*x
     elseif param.include_source && cmp(param.pde_type, "burgers2D")==0
         u0 = cos.(π * (x + y))
@@ -557,7 +548,7 @@ end
 
 function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::AbstractVector{Float64}, dg::DG, param::PhysicsAndFluxParams)
 
-    if param.include_source
+    if param.include_source && cmp(param.pde_type, "burgers1D")==0
         return  cos.(π * (x-y))
     elseif cmp(param.pde_type, "burgers1D")==0
         #return 0.2*sin.(π * (x .- 0.314159265359878323))
