@@ -11,7 +11,15 @@ function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
     if cmp(param.spacetime_solver_type, "pseudotime")==0
         return pseudotimesolve(u_hat0, param.spacetime_decouple_slabs, dg, param)
     elseif cmp(param.spacetime_solver_type, "JFNK")==0
-        return JFNKsolve(u_hat0, param.spacetime_decouple_slabs, dg, param)
+        if !param.spacetime_decouple_slabs
+            # To accelerate convergence, first solve as a decoupled system, then use that to initialize.
+            param.spacetime_decouple_slabs = true
+            init_from_decoupled = JFNKsolve(u_hat0, true, 1.0*10^7, dg, param)
+            param.spacetime_decouple_slabs = false
+            return JFNKsolve(init_from_decoupled, false, 1.0, dg, param)
+        else
+            return JFNKsolve(u_hat0, param.spacetime_decouple_slabs, 1.0*10^5, dg, param)
+        end
     else
         display("Error: Space-time solver type is illegal!")
         return zeros(size(u_hat0))
@@ -20,19 +28,19 @@ function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
 
 end
 
-function JFNKsolve(u_hat0, do_decouple::Bool, dg::DG,param::PhysicsAndFluxParams)
+function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,param::PhysicsAndFluxParams)
 
 
     if do_decouple
-        display("Decoupled PS")
+        display("Decoupled JFNK")
         N_time_slabs = dg.N_elem_per_dim
     else
-        display("Coupled PS")
+        display("Coupled JFNK")
         N_time_slabs = 1
     end
 
     u_hat = u_hat0
-    for iTS = 1:1#N_time_slabs
+    for iTS = 1:N_time_slabs
         if do_decouple
             subset_EIDs = dg.TSIDtoEID[iTS,:]
             Printf.@printf("Time-slab ID: %d\n", iTS)
@@ -44,9 +52,9 @@ function JFNKsolve(u_hat0, do_decouple::Bool, dg::DG,param::PhysicsAndFluxParams
         # Meat of the solver here
         ========================#
 
-        tol_NL = 1E-4
-        tol_lin = 1E-2
-        NL_iterlim = 2
+        tol_NL = 1E-10*tol_multiplier
+        tol_lin = 1E-14*tol_multiplier
+        NL_iterlim = 100
         residual_NL = 1
         u_hat_NLiter = u_hat
         NL_iterctr = 0
@@ -80,12 +88,11 @@ function JFNKsolve(u_hat0, do_decouple::Bool, dg::DG,param::PhysicsAndFluxParams
 
             #Inner loop: linear iterations (GMRES - use package)
             u_hat_delta,log = IterativeSolvers.gmres(FMap_DG_residual, -1.0 * DG_residual_function(u_hat_NLiter); 
-                                                     log=true, restart=500, abstol=tol_lin, reltol=tol_lin, verbose=true,
+                                                     log=true, restart=500, abstol=tol_lin, reltol=tol_lin, verbose=false,
                                                      maxiter=max_iterations
                                                     ) #Note: gmres() initializes with zeros, while gmres!(x, FMap, b) initializes with x.)
             display(log)
             u_hat_NLiter += u_hat_delta
-            display(u_hat_delta)
             residual_NL = sqrt(sum(u_hat_delta .^ 2))
             NL_iterctr+=1
             if param.debugmode
@@ -122,7 +129,7 @@ function pseudotimesolve(u_hat0, do_decouple::Bool, dg::DG, param::PhysicsAndFlu
             subset_EIDs = nothing
         end
 
-        dt = 0.3* (dg.delta_x / dg.Np_per_dim) 
+        dt = 0.01* (dg.delta_x / dg.Np_per_dim) 
         residual = 1
         u_hat = u_hat0
         residual_scaling = sqrt(sum(u_hat.^2))
@@ -136,8 +143,21 @@ function pseudotimesolve(u_hat0, do_decouple::Bool, dg::DG, param::PhysicsAndFlu
             # check difference between old and new solutions
             # compare to residual
             # if residual is decreasing, increase the CFL # to expidite solution
-            (u_hatnew,current_time) = physicaltimesolve(u_hat, dt, 10, dg, param, subset_EIDs)
+            (u_hatnew,current_time) = physicaltimesolve(u_hat, dt, 1, dg, param, subset_EIDs)
             u_change = u_hatnew - u_hat
+            PyPlot.figure("Intermediate solutions")
+            PyPlot.clf()
+            u_NLiter = zeros(dg.Np*dg.N_elem)
+            for ielem in 1:dg.N_elem
+                u_hat_local = zeros(dg.Np)
+                for inode in 1:dg.Np
+                    u_hat_local[inode] = u_hatnew[dg.StIDGIDtoGSID[1,dg.EIDLIDtoGID_basis[ielem,inode]]]
+                end
+                u_NLiter[dg.EIDLIDtoGID_vol[ielem,:]] = dg.chi_v*u_hat_local
+            end
+            u_NLiter = limit.(u_NLiter)
+            PyPlot.tricontourf(dg.x, dg.y, u_NLiter,20)
+            PyPlot.colorbar()
 
             if param.debugmode
                 residual = 1E-14

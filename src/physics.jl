@@ -37,9 +37,6 @@ function ln_average(exterior_val,interior_val)
         display("Warning! Size mismatch in ln_average()!")
     end
 
-    interior_val = limit.(interior_val)
-    exterior_val = limit.(exterior_val)
-
     #Implementation per Appendix B [Ismail and Roe, 2009, Entropy-Consistent Euler Flux Functions II]
     zeta = exterior_val./interior_val
     f = (zeta.-1.0)./(zeta.+1.0)
@@ -65,6 +62,7 @@ function get_entropy_variables(solution, param::PhysicsAndFluxParams)
         return solution
     elseif cmp(param.pde_type, "euler1D") == 0
         # Have verified that u(v(u)) = u, i.e. mapping is invertible
+        # Have verified that I use the same entropy variables as Friedrichs (assuming I divide by gam-1)
         N_state = 3
         N_nodes = trunc(Int, length(solution)/N_state)
         entropy_variables = zeros(size(solution))
@@ -87,7 +85,7 @@ function get_entropy_variables(solution, param::PhysicsAndFluxParams)
         entropy_variables[N_nodes+1:N_nodes*2] = rhov./rhoe
         entropy_variables[N_nodes*2+1:N_nodes*3] = -rho ./ rhoe
 
-        return entropy_variables
+        return entropy_variables ./ (gamm1) #Scale by gamma-1 s.t. we are consistent with the numerical entropy function used in Friedrichs et al.
     else
         display("Warning: entropy variables not defined for this PDE!")
         return solution
@@ -107,6 +105,8 @@ function get_solution_variables(entropy_variables, param::PhysicsAndFluxParams)
         gamm1 =  0.4
         gam = 1.4
         
+        entropy_variables *= gamm1 # Scaling by gamm1 s.t. we are consistent with the numerical entropy function used in Friedrichs et al
+
         e1 = entropy_variables[1:N_nodes]
         e2 = entropy_variables[N_nodes+1:N_nodes*2]
         e3 = entropy_variables[N_nodes*2+1:N_nodes*3]
@@ -130,19 +130,43 @@ end
 function get_entropy_potential(solution, param::PhysicsAndFluxParams)
     if  occursin("burgers",param.pde_type)
         return 0.5 * solution .* solution 
+    elseif cmp(param.pde_type, "euler1D")==0
+        N_state = 3
+        N_nodes = trunc(Int, length(solution)/N_state)
+        entropy_variables = zeros(size(solution))
+
+        gamm1 = 0.4
+        gam = 1.4
+        
+        rho = solution[1:N_nodes]
+        return rho
     else
         display("Warning: entropy potential not defined for this PDE!")
         return solution
     end
 end
-
+#==
+function get_numerical_entropy_function(solution, N_elem, param::PhysicsAndFluxParams)
+    if cmp(param.pde_type,"euler1D")==0
+        N_state = 3
+    else
+        N_state = 1
+    end
+    N_nodes = trunc(Int, length(solution)/N_state)
+    N_nodes_per_elem = trunc(Int, N_nodes/N_elem)
+    numerical_entropy = zeros(size(N_nodes))
+    for ielem = 1:N_elem
+        local_solution = solution[(1:N_nodes_per_elem*N_state) .+ (ielem-1) * (N_nodes_per_elem*N_state)]
+        numerical_entropy[
+    end
+end
+==#
 function get_numerical_entropy_function(solution, param::PhysicsAndFluxParams)
     if  occursin("burgers",param.pde_type)
         return 0.5 * solution .* solution 
     elseif cmp(param.pde_type, "euler1D") == 0
         N_state = 3
         N_nodes = trunc(Int, length(solution)/N_state)
-        entropy_variables = zeros(size(solution))
 
         gamm1 = 0.4
         gam = 1.4
@@ -155,7 +179,7 @@ function get_numerical_entropy_function(solution, param::PhysicsAndFluxParams)
 
         entropy = log.(pressure .* rho .^(-gam))
 
-        return  -1.0 * rho .* entropy
+        return  -1.0 * rho .* entropy ./ gamm1
     else
         display("Warning: entropy potential not defined for this PDE!")
         return solution
@@ -175,6 +199,13 @@ function get_pressure_ideal_gas(solution)
     pressure = (gamm1)* (E .- 0.5 * rhov.^2 ./rho)
     pressure = limit.(pressure)
     return pressure
+end
+
+function get_total_energy_ideal_gas(pressure, rho, rhov)
+    if length(rho) > 1
+        display("Warning!! not implemented for vector valued!")
+    end
+    return pressure/(1.4-1) + 0.5 * rhov * rhov / rho
 end
 
 function transform_physical_to_reference(f_physical, direction, dg::DG)
@@ -225,10 +256,10 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
         if direction == 2 && param.usespacetime 
             if param.spacetime_decouple_slabs == false
                 # use decouple time slabs option as a proxy for applying U# as U*
-                if cmp(param.pde_type, "burgers1D")
+                if cmp(param.pde_type, "burgers1D") == 0
                     f_numerical = 0.5 * ( uM_face + uP_face )
                 else
-                    display("Warning: Need to impement returning of the two-pt flux")
+                    f_numerical = calculate_two_point_euler_temporal_state(uM_face, uP_face, istate, dg)
                 end
             else
                 #apply upwind if decoupling time slabs.
@@ -261,7 +292,10 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
                 f_numerical += n_face[direction] * 0.5 .* max_eigenvalue .* (uM_face .- uP_face)
             end
         elseif cmp(param.pde_type,"euler1D")==0 
-             f_numerical = calculate_Ch_entropy_stable_flux(uM_face,uP_face,istate, dg, param)
+             f_numerical = calculate_Ra_entropy_stable_flux(uM_face,uP_face,istate, dg, param)
+             if cmp(param.numerical_flux_type, "CH_with_dissipation")==0
+                 f_numerical += calculate_entropy_stable_spatial_dissipation(uM_face, uP_face, istate, dg, param)
+             end
         else
             display("Warning: No numerical flux is defined for this PDE type!!")
         end
@@ -284,18 +318,66 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
 
 end
 
+function calculate_Ra_entropy_stable_flux(uM,uP,istate, dg::DG, param::PhysicsAndFluxParams)
+
+    N_nodes = length(uM) / dg.N_state # Calculating from uM to allow for generality betwen numerical flux and two-point flux.
+    N_nodes = trunc(Int,N_nodes)
+
+    f_Ra = zeros(N_nodes)
+    gam = 1.4
+    gamm1 = 0.4
+
+    for inode in 1:N_nodes
+        node_indices = N_nodes*(1:dg.N_state) .- N_nodes .+ inode
+        uM_node = uM[node_indices] # length of 3
+        uP_node = uP[node_indices]
+
+        rho_ln = ln_average(uM_node[1], uP_node[1])
+        pM = get_pressure_ideal_gas(uM_node)[1]
+        pP = get_pressure_ideal_gas(uP_node)[1]
+        p_avg = average(pM,pP)
+        #NOTE: should this be p_hat? Need to check Ranocha 2018 thesis
+        # PHiLiP implementation uses standard average
+
+        betaM = uM_node[1]/(2.0*pM)
+        betaP = uP_node[1]/(2.0*pP)
+        beta_ln = ln_average(betaM,betaP)
+        
+        #p_avg = average(uP_node[1], uM_node[1]) /2.0 / average(betaM,betaP)
+
+        vM = uM_node[2]/uM_node[1]
+        vP = uP_node[2]/uP_node[1]
+        v_avg = average(vM,vP)
+        v_sq_bar = 2*v_avg^2 - average(vP^2, vM^2)
+
+        pv_avg = average(pM*vM, pP*vP)
+
+        rho_p_ln = ln_average(uM_node[1]/pM, uP_node[1]/pP )
+
+        if istate == 1
+            f_Ra[inode] = rho_ln * v_avg
+        elseif istate == 2
+            f_Ra[inode] = rho_ln * v_avg^2 + p_avg
+        elseif istate == 3
+            f_Ra[inode] = ( rho_ln * (v_sq_bar)*0.5 + rho_ln / ((gam-1.0)* rho_p_ln)) * v_avg + 2.0 * p_avg * v_avg - pv_avg
+        end
+
+    end
+
+    return f_Ra # physical flux
+
+end
 
 function calculate_Ch_entropy_stable_flux(uM,uP,istate, dg::DG, param::PhysicsAndFluxParams)
     N_nodes = length(uM) / dg.N_state # Calculating from uM to allow for generality betwen numerical flux and two-point flux.
     N_nodes = trunc(Int,N_nodes)
 
     f_Ch = zeros(N_nodes)
-    u_node = zeros(dg.N_state)
     gam = 1.4
     gamm1 = 0.4
 
     for inode in 1:N_nodes
-        node_indices = inode * (1:dg.N_state)
+        node_indices = N_nodes*(1:dg.N_state) .- N_nodes .+ inode
         uM_node = uM[node_indices] # length of 3
         uP_node = uP[node_indices]
 
@@ -331,6 +413,89 @@ function calculate_Ch_entropy_stable_flux(uM,uP,istate, dg::DG, param::PhysicsAn
 
 end
 
+function calculate_entropy_stable_spatial_dissipation(uM, uP, istate, dg::DG, param::PhysicsAndFluxParams)
+    # Per Gassner, Winters, HIndenlang, Kopriva 2018 Appendix A
+    
+    N_nodes = length(uM) / dg.N_state 
+    N_nodes = trunc(Int,N_nodes)
+
+    f_diss = zeros(N_nodes)
+    gam = 1.4
+
+    for inode in 1:N_nodes
+        node_indices = N_nodes*(1:dg.N_state) .- N_nodes .+ inode
+        uM_node = uM[node_indices] # length of 3
+        uP_node = uP[node_indices]
+        v_avg = average(uP_node[2]/uP_node[1], uM_node[2]/uM_node[1])
+        rho_ln = ln_average(uP_node[1], uM_node[1])
+        v_sq_bar = 2*v_avg^2 - average((uP_node[2]/uP_node[1])^2, (uM_node[2]/uM_node[1])^2)
+        pM = get_pressure_ideal_gas(uM_node)[1]
+        pP = get_pressure_ideal_gas(uP_node)[1]
+        betaM = uM_node[1]/(2.0*pM)
+        betaP = uP_node[1]/(2.0*pP)
+        beta_ln = ln_average(betaM,betaP)
+        p_avg = average(uP_node[1], uM_node[1]) /2.0 / average(betaM,betaP)
+
+        h_bar = gam/(2.0*beta_ln*(gam-1.0)) + 0.5 * v_sq_bar
+        a_bar = sqrt(gam * p_avg/rho_ln)
+        
+        R_hat = [ 1.0 1.0 1.0;
+                 (v_avg - a_bar) v_avg (v_avg + a_bar);
+                 (h_bar - v_avg*a_bar) 0.5*v_sq_bar (h_bar + v_avg * a_bar)]
+        Lambda_hat = LinearAlgebra.diagm([v_avg - a_bar, v_avg, v_avg+a_bar])
+        T_hat = LinearAlgebra.diagm([rho_ln/2.0/gam, rho_ln * (gam-1.0)/gam, rho_ln/2.0/gam])
+
+        # Efficiency note: would be way cheaper to only calculate the state we need...
+        entropy_jump = jump.(get_entropy_variables(uP_node,param), get_entropy_variables(uM_node,param))
+                                                                                                       
+        dissipation_vector = - 0.5 * R_hat * abs.(Lambda_hat) * T_hat * R_hat' * entropy_jump
+        f_diss[inode]=dissipation_vector[istate]
+    end
+
+    return f_diss
+end
+
+function calculate_two_point_euler_temporal_state(ui, uj, istate, dg::DG)
+    N_nodes = length(ui) / dg.N_state # Calculating from uM to allow for generality betwen numerical flux and two-point flux.
+    N_nodes = trunc(Int,N_nodes)
+    u_hash = zeros(N_nodes)
+
+    #From Eq. 3.5 of Friedrichs 2019
+    for inode in 1:N_nodes
+        node_indices = N_nodes*(1:dg.N_state) .- N_nodes .+ inode
+        ui_node = ui[node_indices] # length of 3
+        uj_node = uj[node_indices]
+        if istate == 1
+            flux_physical = ln_average(ui_node[1], uj_node[1])
+        elseif istate == 2
+            flux_physical = ln_average(ui_node[1], uj_node[1]) * average(ui_node[2]/ui_node[1], uj_node[2]/uj_node[1])
+        elseif istate == 3
+            pressurei = get_pressure_ideal_gas(ui_node)[1]
+            pressurej = get_pressure_ideal_gas(uj_node)[1]
+            betai = 0.5 * ui_node[1] / pressurei
+            betaj = 0.5 * uj_node[1] / pressurej
+            vi = ui_node[2]/ui_node[1]
+            vj = uj_node[2]/uj_node[1]
+
+            rho_ln = ln_average(ui_node[1],uj_node[1])
+            beta_ln = ln_average(betai,betaj)
+
+            gamma = 1.4
+
+            flux_physical = 0.5 * rho_ln / (beta_ln * (gamma-1)) + rho_ln * (
+                                        average(vi,vj)^2 - 0.5 * average(vi^2,vj^2)   )
+        end
+        u_hash[inode] = flux_physical
+    end
+    
+    if N_nodes == 1
+        #convert to scalar
+        u_hash = u_hash[1]
+    end
+
+    return u_hash
+end
+
 function calculate_two_point_flux(ui,uj, direction, dg::DG, param::PhysicsAndFluxParams)
 
     if param.usespacetime && direction == 2
@@ -356,30 +521,10 @@ function calculate_two_point_flux(ui,uj, direction, istate::Int64, dg::DG, param
         # NOTE TO SELF: The input u to this function is a vector across the quad points in the cell.
         # Need to figure out indexing.
         #Add Ra flux here
-        flux_physical = calculate_Ch_entropy_stable_flux(ui, uj, istate, dg, param)
+        flux_physical = calculate_Ra_entropy_stable_flux(ui, uj, istate, dg, param)
         #display("Warning!! Euler numerical flux has not been verified!")
     elseif direction == 2  && cmp(param.pde_type, "euler1D") == 0
-        #From Eq. 3.5 of Friedrichs 2019
-        if istate == 1
-            flux_physical = ln_average(ui[1], uj[1])
-        elseif istate == 2
-            flux_physical = ln_average(ui[1], uj[1]) * average(ui[2]/ui[1], uj[2]/uj[1])
-        elseif istate == 3
-            pressurei = get_pressure_ideal_gas(ui)[1]
-            pressurej = get_pressure_ideal_gas(uj)[1]
-            betai = 0.5 * ui[1] / pressurei
-            betaj = 0.5 * uj[1] / pressurej
-            vi = ui[2]/ui[1]
-            vj = uj[2]/uj[1]
-
-            rho_ln = ln_average(ui[1],uj[1])
-            beta_ln = ln_average(betai,betaj)
-
-            gamma = 1.4
-
-            flux_physical = 0.5 * rho_ln / (beta_ln * (gamma-1)) + rho_ln * (
-                                        average(vi,vj)^2 - 0.5 * average(vi^2,vj^2)   )
-        end
+        flux_physical = calculate_two_point_euler_temporal_state(ui, uj, istate, dg)
     end
 
     if length(f) > 1
@@ -479,8 +624,12 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
     if param.usespacetime
         #u0 = cos.(π * (x))
         if cmp(param.pde_type,  "euler1D")==0
-            display("Initializing as exacct solution!")
-            u0 = calculate_euler_exact_solution(-1, x, y, dg.Np, dg)
+            if param.include_source
+
+                u0 = calculate_euler_exact_solution(-1, x, y, dg.Np, dg) .+ 0.1
+            else
+                u0 = initial_condition_Friedrichs_4_6(x, dg.Np)
+            end
         else
             u0 = ones(dg.N_dof_global)
         end
@@ -558,7 +707,7 @@ end
 function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::AbstractVector{Float64},t::Float64, dg::DG, param::PhysicsAndFluxParams)
     if cmp(param.pde_type, "euler1D") != 0
         return calculate_source_terms(x, y, t, param)
-    else
+    elseif param.include_source
         if param.usespacetime
             time = y
         else
@@ -578,6 +727,8 @@ function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::Abstr
             end
         end
         return Q
+    else
+        return zeros(size(x))
     end
 end
 
@@ -599,8 +750,60 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
         end
         return out
     elseif cmp(param.pde_type, "euler1D") == 0
-        return calculate_euler_exact_solution(0, x, y, dg.Nfp, dg) 
+        if param.include_source
+            return calculate_euler_exact_solution(0, x, y, dg.Nfp, dg)
+        else
+            return initial_condition_Friedrichs_4_6(x, dg.Nfp)
+        end
+
     else
         return sin.(π * (x)) .+ 0.01
     end
+end
+
+function initial_condition_Friedrichs_4_6(x, Np)
+    #IC from Friedrichs 4.6
+    # Note: Np can be volume or face.
+    # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
+    out = zeros(length(x) * 3) #Hard-code 3 states
+    N_elem = trunc(Int, length(x)/Np) # Need to detect this as sometimes we're only in one element.
+
+    for ielem in 1:N_elem
+        first1 = true 
+        node_indices = Np*(ielem-1) +1 : Np*ielem
+        x_local = x[node_indices]
+        out_local = zeros(Np*3)
+        # Initial condition per 4.4 Friedrichs
+        for i in 1:length(x_local)
+            xcoord = x_local[i]
+            if xcoord == 0
+                first1 = true
+            end
+            if xcoord == 0.3 && first1
+                # to detect double-valued
+                first1=false
+            end
+
+            if xcoord < 0.3 || (xcoord == 0.3 && first1) 
+                out_local[i] = 1
+                out_local[i + length(x_local)] = 0
+                p = 1
+
+                out_local[i + 2*length(x_local)] = get_total_energy_ideal_gas(p, out_local[i], out_local[i + length(x_local)])
+            else
+                out_local[i] = 1.125
+                out_local[i + length(x_local)] = 0
+                p = 1.1
+
+                out_local[i + 2*length(x_local)] = get_total_energy_ideal_gas(p, out_local[i], out_local[i + length(x_local)])
+            end
+        end
+        # Indexing: 1:Np .+ Np*3*(ielem-1) .+ (istate-1)*Np
+        out[ (1:Np) .+ Np*3*(ielem-1) .+ (1-1)*Np] = out_local[1:Np]
+        out[(1:Np) .+ Np*3*(ielem-1) .+ (2-1)*Np]= out_local[(1:Np) .+ Np]
+        out[(1:Np) .+ Np*3*(ielem-1) .+ (3-1)*Np]= out_local[(1:Np) .+ Np*2]
+
+    end
+    return out
+
 end
