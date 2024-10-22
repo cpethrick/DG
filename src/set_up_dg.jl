@@ -3,12 +3,15 @@ mutable struct DG
     P::Int #polynomial degree
     dim::Int #dimension - note that dim must be 1 for now!
     N_elem_per_dim::Int
+    N_state::Int # Number of states in the PDE
     domain_x_limits::Vector{Float64} # x-limits of rectangular domain
 
     #Category 2:defined from Category 1.
     N_elem::Int
     Np_per_dim::Int # Number of points per direction per cell
     Np::Int # Total number of points per cell = Np^dim 
+    N_dof::Int # Total number of DOFs per cell = Np*N_state
+    N_dof_global::Int # Global number of DOFs, i.e. length of the solution vector
     N_vol_per_dim::Int # Number of points per direction per cell
     N_vol::Int # Total number of points per cell = Np^dim 
     Nfaces::Int
@@ -40,6 +43,10 @@ mutable struct DG
                            # and cover the same t (y) vaues.
     TSIDtoEID::AbstractMatrix{Int} # TSID is the index, columns are EID.
 
+    StIDLIDtoLSID::AbstractMatrix{Int} # StID is the state ID, 1:Nstate
+                                       # LID is the ID of the node
+                                       # LSID ("local storage") indicates the index in the storage vector
+    StIDGIDtoGSID::AbstractMatrix{Int}
     #LXIDLYIDtoLID::AbstractMatrix{Int} # local x, y (length Np_per_dim) to local ID (length Np)
     #LIDtoLXIDLYID::AbstractMatrix{Int} # local x, y (length Np_per_dim) to local ID (length Np)
 
@@ -76,9 +83,11 @@ mutable struct DG
     DG(P::Int, 
        dim::Int, 
        N_elem_per_dim::Int,
+       N_state::Int,
        domain_x_limits::Vector{Float64}) = new(P::Int,
                                                dim::Int,
                                                N_elem_per_dim::Int,
+                                               N_state::Int,
                                                domain_x_limits::Vector{Float64})
 
 end
@@ -148,14 +157,13 @@ function build_coords_vectors(ref_vec_1D, dg::DG)
 end
 
 # Outer constructor for DG object. Might be good to move to inner constructor at some point.
-function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{Float64},
+function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_limits::Vector{Float64},
         volumenodes::String, basisnodes::String, fluxreconstructionC::Float64,
         usespacetime::Bool)
     
     #initialize incomplete DG struct
-    dg = DG(P, dim, N_elem_per_dim, domain_x_limits)
+    dg = DG(P, dim, N_elem_per_dim, N_state, domain_x_limits)
     dg.Np_per_dim = P+1
-    
 
     if dim == 1
         dg.Np=dg.Np_per_dim
@@ -171,6 +179,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
     Np_per_dim=P+1 # for convenience
     N_elem = dg.N_elem
     Np = dg.Np
+    dg.N_dof = dg.Np * dg.N_state
+    dg.N_dof_global = dg.N_dof * dg.N_elem
     dg.N_vol_per_dim = dg.Np_per_dim # for testing, assume overintegrate by 1.
     dg.N_vol = dg.N_vol_per_dim^dim # for testing, assume overintegrate by 1.
 
@@ -185,8 +195,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
 
     # Index is local ID, value is local face ID
     # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
-    #dg.LIDtoLFID = zeros(Int64,Np_per_dim)
-    #dg.LIDtoLFID[[1,Np_per_dim]] .= 1:dg.Nfaces
     if dim == 1
         dg.LFIDtoNormal = reshape([-1; 1], 2, 1) # normal of left face is 1, normal of right face is 1.
         dg.LFIDtoLID = reshape([1,Np_per_dim], 2,1)
@@ -263,6 +271,26 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int,domain_x_limits::Vector{F
             iTS = convert(Int, floor((ielem-1)/N_elem_per_dim+1))
             dg.EIDtoTSID[ielem] = iTS
             dg.TSIDtoEID[iTS, mod(ielem-1,N_elem_per_dim)+1] = ielem
+        end
+    end
+
+    dg.StIDLIDtoLSID = zeros(dg.N_state, dg.Np)
+    ctr = 1
+    for istate = 1:dg.N_state
+        for ipoint = 1:dg.Np
+            dg.StIDLIDtoLSID[istate,ipoint]=ctr
+            ctr+=1
+        end
+    end
+
+    dg.StIDGIDtoGSID = zeros(dg.N_state, dg.Np*dg.N_elem)
+    ctr = 1
+    for ielem = 1:dg.N_elem
+        for istate = 1:dg.N_state
+            for ipoint = 1:dg.Np
+                dg.StIDGIDtoGSID[istate,ipoint+Np*(ielem-1)]=ctr
+                ctr+=1
+            end
         end
     end
 

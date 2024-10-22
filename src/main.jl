@@ -66,7 +66,7 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
                 # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
                 # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
             end
-            u_face_Dirichlet = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
+            u_face_Dirichlet = calculate_solution_on_Dirichlet_boundary(x_local, y_local, dg,param)
             u_face_interior = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
 
             s_vec = get_numerical_entropy_function(u_face_Dirichlet,param)
@@ -105,19 +105,35 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
 
 end
 
+function calculate_integrated_numerical_entropy(u_hat, dg::DG, param::PhysicsAndFluxParams)
+    
+    if cmp(param.pde_type, "euler1D")==0
+        u = project(dg.chi_v,u_hat,false,dg, param)
+        s = get_numerical_entropy_function(u, param)
+        return s' * dg.W * dg.J * ones(size(s))
+    else
+        return u_hat' * dg.M * u_hat
+    end
+end
+
 function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     # N_elem_per_dim is number of elements PER DIM
     # N is poly order
 
     # Limits of computational domain
     x_Llim = 0.0
-    x_Rlim = 2.0
+    x_Rlim = param.domain_size
 
     dim = param.dim 
     #==============================================================================
     Start Up
     ==============================================================================#
-    dg = init_DG(P, dim, N_elem_per_dim, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxreconstructionC, param.usespacetime)
+    if cmp(param.pde_type, "euler1D") == 0
+        N_state = 3
+    else
+        N_state = 1
+    end
+    dg = init_DG(param.P, param.dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxreconstructionC, param.usespacetime)
 
     #==============================================================================
     Initialization
@@ -125,15 +141,17 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     finaltime = param.finaltime
 
-    u0 = calculate_initial_solution(dg.x, dg.y, param)
-    u_hat0 = zeros(dg.N_elem*dg.Np)
-    u_local = zeros(dg.N_vol)
+    u0 = calculate_initial_solution(dg, param)
+    u_hat0 = zeros(dg.N_dof_global)
+    u_local_state = zeros(dg.Np)
     for ielem = 1:dg.N_elem
-        for inode = 1:dg.N_vol
-            u_local[inode] = u0[dg.EIDLIDtoGID_vol[ielem,inode]]
+        for istate = 1:dg.N_state
+            for inode = 1:dg.N_vol
+                u_local_state[inode] = u0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_vol[ielem,inode]]]
+            end
+            u_hat_local_state = dg.Pi*u_local_state
+            u_hat0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_basis[ielem,:]]] = u_hat_local_state
         end
-        u_hat_local = dg.Pi*u_local
-        u_hat0[dg.EIDLIDtoGID_basis[ielem,:]] = u_hat_local
     end
 
     #==============================================================================
@@ -156,6 +174,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         display("Done time loop")
     else
         u_hat = spacetimeimplicitsolve(u_hat0 ,dg, param)
+        #u_hat = u0
     end
     display("Reminder, c is ")
     display(param.fluxreconstructionC)
@@ -188,6 +207,18 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         u_exact_overint = sin.(π * (x_overint.- param.advection_speed * current_time)) .+ 0.01
     elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == true 
         u_exact_overint = sin.(π * (x_overint - param.advection_speed * y_overint)) .+ 0.01
+    elseif cmp(param.pde_type, "euler1D")==0
+        if param.usespacetime
+            display("Warning: exact soln not correct for space time!")
+            u_exact_overint_allstates = calculate_euler_exact_solution(-1.0, x_overint, y_overint, Np_overint, dg)
+        else
+            u_exact_overint_allstates = calculate_euler_exact_solution(current_time, x_overint, y_overint, Np_overint, dg)
+        end
+        # extract only density
+        u_exact_overint = zeros(size(x_overint))
+        for ielem = 1:dg.N_elem
+            u_exact_overint[(1:Np_overint) .+ (ielem-1)*Np_overint]=u_exact_overint_allstates[ (1:Np_overint) .+ Np_overint*3*(ielem-1) .+ (1-1)*Np_overint]
+        end
     else
         display("Warning - no exact solution defined!")
     end
@@ -195,11 +226,14 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     u0_overint = zeros(size(x_overint))
     u_calc_final = zeros(dg.N_vol*dg.N_elem)
     for ielem = 1:dg.N_elem
+        #Extract only first state here
         u_hat_local = zeros(length(dg.r_basis)^dim) 
         u0_hat_local = zeros(size(u_hat_local)) 
         for inode = 1:dg.Np
-            u_hat_local[inode] = u_hat[dg.EIDLIDtoGID_basis[ielem,inode]]
-            u0_hat_local[inode] = u_hat0[dg.EIDLIDtoGID_basis[ielem,inode]]
+            # only istate = 1, which is velocity for lin adv or burgers
+            # and density for euler
+            u_hat_local[inode] = u_hat[dg.StIDGIDtoGSID[1,dg.EIDLIDtoGID_basis[ielem,inode]]]
+            u0_hat_local[inode] = u_hat0[dg.StIDGIDtoGSID[1,dg.EIDLIDtoGID_basis[ielem,inode]]]
         end
         u_calc_final_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u_hat_local
         u0_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u0_hat_local
@@ -238,8 +272,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     end
 
     L2_error::Float64 = 0
-    energy_final_calc = 0
-    energy_initial = 0
+    entropy_final_calc = 0
+    entropy_initial = 0
     for ielem = 1:dg.N_elem
         L2_error += (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])
 
@@ -262,40 +296,43 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                     # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
                     # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
                 end
-                u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
+                u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
+                S_face = get_numerical_entropy_function(u_face, param)
 
-                energy_initial += u_face' * dg.W_f * dg.J_f * u_face
+                entropy_initial += S_face' * dg.W_f * dg.J_f * ones(size(S_face))
             elseif ielem > N_elem_per_dim^dim - N_elem_per_dim
                 # face on top
-                u_face = dg.chi_f[:,:,4] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
-                energy_final_calc += u_face' * dg.W_f * dg.J_f * u_face
+                u_face = project(dg.chi_f[:,:,4], u_hat[(ielem-1)*dg.N_dof+1:(ielem)*dg.N_dof], false, dg, param)
+                S_face = get_numerical_entropy_function(u_face, param)
+                entropy_final_calc += S_face' * dg.W_f * dg.J_f * ones(size(S_face))
             end
             if param.fluxreconstructionC > 0
                 display("WARNING: Energy calculation is probably unreliable for c != 0.")
             end
         else
-            energy_final_calc += (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
-            energy_initial += (u_hat0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]') * dg.M * (u_hat0[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol])
+            entropy_final_calc += calculate_integrated_numerical_entropy(u_hat[(ielem-1)*dg.N_dof+1:(ielem)*dg.N_dof], dg, param)
+            entropy_initial += calculate_integrated_numerical_entropy(u_hat0[(ielem-1)*dg.N_dof+1:(ielem)*dg.N_dof], dg, param)
         end
     end
-
 
     L2_error = sqrt(L2_error)
 
     Linf_error = maximum(abs.(u_diff))
 
-    energy_change = energy_final_calc - energy_initial
+    entropy_change = entropy_final_calc - entropy_initial
 
-    if param.usespacetime
+    if param.usespacetime && cmp(param.pde_type,"euler1D") != 0
+        display("Warning! Euler will probably cause some problems here!")
         proj_corrected_error = calculate_projection_corrected_entropy_change(u_hat, dg, param)
-        energy_change = proj_corrected_error
+        entropy_change = proj_corrected_error
     end
-#====
     if param.usespacetime && !param.spacetime_decouple_slabs
+        display("Note to self: I have changed projection error to vector-state in the main function; 
+                 need to update calculate_projection_corrected_entropy_change()")
         # calculate projection error
         proj_error = 0
         for ielem = 1:dg.N_elem_per_dim #loop through only bottom elements
-            u_hat_local = u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
+            u_hat_local = u_hat[(ielem-1)*dg.N_dof+1:(ielem)*dg.N_dof]
             # Find initial energy from the Dirichlet BC on lower face
             x_local = zeros(Float64, dg.N_vol_per_dim)
             y_local = zeros(Float64, dg.N_vol_per_dim)
@@ -307,22 +344,26 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                 # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
                 # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
             end
-            u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, param)
+            u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
+            u_face_interior = project(dg.chi_f[:,:,3],  u_hat_local,false,dg,param)
 
+            v_face_BC = get_entropy_variables(u_face, param)
+            v_face_interior = get_entropy_variables(u_face_interior,param)
 
-            v_face_BC = u_face # for Burgers
-            v_face_interior = dg.chi_f[:,:,3] * u_hat_local
+            phi_face_BC = get_entropy_potential(u_face, param)
+            phi_face_interior= get_entropy_potential(u_face_interior, param)
 
-            phi_face_BC = 0.5 * u_face.*u_face
-            phi_face_interior = 0.5 * v_face_interior .* v_face_interior
-
-            proj_error += ( (phi_face_interior .- phi_face_BC) .- (v_face_interior .- v_face_BC) .* u_face)' * dg.J_f * dg.W_f * ones(size(u_face))
+            vjumpTtimesu = zeros(size(phi_face_BC))
+            for inode = 1:dg.N_vol_per_dim
+                node_indices = dg.N_vol_per_dim*(1:dg.N_state) .- dg.N_vol_per_dim .+ inode
+                vjumpTtimesu[inode] += (v_face_interior[node_indices] .- v_face_BC[node_indices])' * u_face[node_indices]
+            end
+            proj_error += ( (phi_face_interior .- phi_face_BC) .- vjumpTtimesu)' * dg.J_f * dg.W_f * ones(size(phi_face_BC))
         end
         display(proj_error)
 
-        energy_change += proj_error
+        entropy_change += proj_error
     end
-===#
     PyPlot.figure("Solution", figsize=(6,4))
     PyPlot.clf()
     ax = PyPlot.gca()
@@ -355,6 +396,11 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     pltname = string("grid", N_elem_per_dim, ".pdf")
     PyPlot.savefig(pltname)
 
+    for i in 1:length(u_calc_final_overint)
+        if isnan(u_calc_final_overint[i])
+            u_calc_final_overint[i]=0
+        end
+    end
 
     if dim == 2# && N_elem_per_dim == 4
         PyPlot.figure("Initial cond, overintegrated")
@@ -370,7 +416,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         PyPlot.tricontourf(x_overint, y_overint, u_exact_overint, 20)
         PyPlot.colorbar()
     end
-    return L2_error, Linf_error, energy_change#, solution
+    return L2_error, Linf_error, entropy_change#, solution
 end
 
 function run(param::PhysicsAndFluxParams)
@@ -380,7 +426,7 @@ function run(param::PhysicsAndFluxParams)
     N_elem_range = 2 .^(1:param.n_times_to_solve)
     L2_err_store = zeros(length(N_elem_range))
     Linf_err_store = zeros(length(N_elem_range))
-    energy_change_store = zeros(length(N_elem_range))
+    entropy_change_store = zeros(length(N_elem_range))
     time_store = zeros(length(N_elem_range))
 
     for i=1:length(N_elem_range)
@@ -391,17 +437,21 @@ function run(param::PhysicsAndFluxParams)
         # Start timer (NOTE: should change to BenchmarkTools.jl in the future)
         t = time()
         # Solve
-        (L2_err_store[i],Linf_err_store[i], energy_change_store[i]) = setup_and_solve(N_elem,P,param)
+        (L2_err_store[i],Linf_err_store[i], entropy_change_store[i]) = setup_and_solve(N_elem,P,param)
         # End timer
         time_store[i] = time() - t
+
+        if cmp(param.pde_type, "euler1D")==0
+            display("Convergence is for density. Energy is probably not valid.")
+        end
 
         #Evalate convergence, print, and save to file
         Printf.@printf("P =  %d \n", P)
         dx = 2.0./N_elem_range
-        Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Energy change         Time   Time scaling\n")
+        Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Entropy change         Time   Time scaling\n")
         fname = "result.csv" #Note: this should be changed to something useful in the future...
         f = open(fname, "w")
-        DelimitedFiles.writedlm(f, ["n cells_per_dim" "dx" "L2 Error" "L2  Error rate" "Linf Error" "Linf rate" "Energy change" "Time" "Time scaling"], ",")
+        DelimitedFiles.writedlm(f, ["n cells_per_dim" "dx" "L2 Error" "L2  Error rate" "Linf Error" "Linf rate" "Entropy change" "Time" "Time scaling"], ",")
         for j = 1:i
             conv_rate_L2 = 0.0
             conv_rate_Linf = 0.0
@@ -411,10 +461,10 @@ function run(param::PhysicsAndFluxParams)
                 conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
                 conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
                 conv_rate_time = log(time_store[j]/time_store[j-1]) / log(dx[j]/dx[j-1])
-                conv_rate_energy = log(abs(energy_change_store[j]/energy_change_store[j-1])) / log(dx[j]/dx[j-1])
+                conv_rate_energy = log(abs(entropy_change_store[j]/entropy_change_store[j-1])) / log(dx[j]/dx[j-1])
             end
-            Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.16f \t%.2f \t%.5e \t%.2f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j], conv_rate_energy, time_store[j], conv_rate_time)
-            DelimitedFiles.writedlm(f, [N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, energy_change_store[j    ], time_store[j], conv_rate_time]', ",")
+            Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.4e \t%.2f \t%.5e \t%.2f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, entropy_change_store[j], conv_rate_energy, time_store[j], conv_rate_time)
+            DelimitedFiles.writedlm(f, [N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, entropy_change_store[j    ], time_store[j], conv_rate_time]', ",")
         end
 
         close(f)
@@ -520,5 +570,3 @@ function main(paramfile::AbstractString="default_parameters.csv")
 end
 
 main()
-main("spacetime_energy_conservation.csv")
-#main("spacetime_burgers_OOA.csv")
