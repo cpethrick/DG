@@ -509,16 +509,17 @@ function calculate_two_point_flux(ui,uj, direction, istate::Int64, dg::DG, param
         # Redirect to scalar-valued version
         flux_physical = calculate_two_point_flux(ui,uj, direction, dg::DG, param::PhysicsAndFluxParams)
     elseif direction == 1  && cmp(param.pde_type, "euler1D") == 0
-        # NOTE TO SELF: The input u to this function is a vector across the quad points in the cell.
-        # Need to figure out indexing.
-        #Add Ra flux here
-        flux_physical = calculate_Ra_entropy_stable_flux(ui, uj, istate, dg, param)
-        #display("Warning!! Euler numerical flux has not been verified!")
+        if occursin("Ch", param.numerical_flux_type)
+            flux_physical = calculate_Ch_entropy_stable_flux(ui, uj, istate, dg, param)
+        elseif occursin("Ra", param.numerical_flux_type)
+            flux_physical = calculate_Ra_entropy_stable_flux(ui, uj, istate, dg, param)
+        end
     elseif direction == 2  && cmp(param.pde_type, "euler1D") == 0
         flux_physical = calculate_two_point_euler_temporal_state(ui, uj, istate, dg)
     end
 
     if length(f) > 1
+        # protection because we calculate for a single pair, single state
         display("Warning! Flux is a vector, this will cause issues!!")
     end
 
@@ -580,11 +581,6 @@ function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFl
 
     # No pde_type check as the only vector-valued PDE is Euler
     # Reminder: conservative variables are u=[density, momentum, total energy]]
-    #
-    #
-    # NOTE TO SELF: The input u to this function is a vector across the quad points in the cell.
-    # Need to figure out indexing.
-
         
     if dg.dim == 2
         # in 1D, C_m = 1 so we don't need this step

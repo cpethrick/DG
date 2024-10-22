@@ -65,7 +65,7 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
         end
         #Outer loop: nonlinear iterations (Newton)
         while residual_NL > tol_NL && NL_iterctr < NL_iterlim 
-
+            #== Plotting intermediate soln - good for debugging
             PyPlot.figure("Intermediate solutions")
             PyPlot.clf()
             u_NLiter = zeros(dg.Np*dg.N_elem)
@@ -77,6 +77,7 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
                 u_NLiter[dg.EIDLIDtoGID_vol[ielem,:]] = dg.chi_v*u_hat_local
             end
             PyPlot.tricontourf(dg.x, dg.y, u_NLiter,20)
+            ==#
             #Define function of only u_hat_in. Passing zero as time - not used in PS (as far as I recall).
             DG_residual_function(u_hat_in) =  assemble_residual(u_hat_in, 0.0, dg, param, subset_EIDs)
             perturbation = sqrt(eps())

@@ -282,7 +282,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
             ctr+=1
         end
     end
-    display(dg.StIDLIDtoLSID)
 
     dg.StIDGIDtoGSID = zeros(dg.N_state, dg.Np*dg.N_elem)
     ctr = 1
@@ -294,7 +293,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
             end
         end
     end
-    display(dg.StIDGIDtoGSID)
 
 
     # Solution nodes (integration nodes)
