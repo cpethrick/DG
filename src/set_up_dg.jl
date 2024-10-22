@@ -195,8 +195,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
 
     # Index is local ID, value is local face ID
     # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
-    #dg.LIDtoLFID = zeros(Int64,Np_per_dim)
-    #dg.LIDtoLFID[[1,Np_per_dim]] .= 1:dg.Nfaces
     if dim == 1
         dg.LFIDtoNormal = reshape([-1; 1], 2, 1) # normal of left face is 1, normal of right face is 1.
         dg.LFIDtoLID = reshape([1,Np_per_dim], 2,1)

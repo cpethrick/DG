@@ -68,11 +68,6 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
     if find_interior_values
         # interpolate to face
         u_face = project(dg.chi_f[:,:,iface], u_hat_local, param.use_skew_symmetric_stiffness_operator, dg, param)
-        #u_face = zeros(dg.Nfp * dg.N_state)
-        #for istate = 1:dg.N_state
-        #    u_face[(istate-1)*dg.Nfp+1 : istate*dg.Nfp] = project(dg.chi_f[:,:,iface], u_hat_local, param.use_skew_symmetric_stiffness_operator, dg, param)
-        #    #dg.chi_f[:,:,iface]*u_hat_local[(istate-1)*dg.Np+1 : istate*dg.Np]
-        #end
     else
         # Select the appropriate elem to find values from
         elem = dg.EIDLFIDtoEIDofexterior[ielem,iface]
@@ -89,12 +84,6 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
             end
             # interpolate to face
             u_face = project(dg.chi_f[:,:,face], u_hat_local_exterior_elem, param.use_skew_symmetric_stiffness_operator, dg, param)
-            #u_face
-            #u_face = zeros(dg.Nfp* dg.N_state)
-            #for istate = 1:dg.N_state
-            #    u_face[(istate-1)*dg.Nfp+1 : istate*dg.Nfp] = project(dg.chi_f[:,:,iface], u_hat_local_exterior_elem, param.use_skew_symmetric_stiffness_operator, dg, param)
-            #    # dg.chi_f[:,:,face]*u_hat_local_exterior_elem[(istate-1)*dg.Np+1 : istate*dg.Np]
-            #end
         elseif elem == 0 
             # elemID of 0 corresponds to Dirichlet boundary (weak imposition).
             # Find x and y coords of the face and pass to a physics function
@@ -111,10 +100,6 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
             if ielem > dg.N_elem_per_dim
                 #assign u_face as interior value
                 u_face = project(dg.chi_f[:,:,iface], u_hat_local, param.use_skew_symmetric_stiffness_operator, dg, param)
-                #u_face = zeros(dg.Nfp* dg.N_state)
-                #for istate = 1:dg.N_state
-                #    u_face[(istate-1)*dg.Nfp+1 : istate*dg.Nfp] = project(dg.chi_f[:,:,iface], u_hat_local, param.use_skew_symmetric_stiffness_operator, dg, param)
-                #end
             else
                 u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, dg, param)
             end
@@ -249,8 +234,6 @@ function assemble_local_state_residual(ielem,istate, u_hat, t, dg::DG, param::Ph
     for istate = 1:dg.N_state
         u_local[(istate-1)*dg.Np+1 : istate*dg.Np] = dg.chi_v * u_hat_local[(istate-1)*dg.Np+1 : istate*dg.Np] # nodal solution
     end
-    # volume_terms = zeros(Float64, size(u_hat_local))
-    # face_terms = zeros(Float64, size(u_hat_local))
     for idim = 1:dg.dim
         if param.use_skew_symmetric_stiffness_operator
             rhs_local_state += calculate_dim_cellwise_residual_skew_symm(ielem,istate,u_hat,u_hat_local,u_local,idim,dg,param)

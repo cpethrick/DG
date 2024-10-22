@@ -18,7 +18,7 @@ function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
             param.spacetime_decouple_slabs = false
             return JFNKsolve(init_from_decoupled, false, 1.0, dg, param)
         else
-            return JFNKsolve(u_hat0, param.spacetime_decouple_slabs, 1.0*10^5, dg, param)
+            return JFNKsolve(u_hat0, param.spacetime_decouple_slabs, 1.0*10^5,dg, param)
         end
     else
         display("Error: Space-time solver type is illegal!")
@@ -60,7 +60,8 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
         NL_iterctr = 0
         max_iterations = 2000
         if param.debugmode == true
-            max_iterations= 1
+            # max_iterations= 1
+            NL_iterlim = 1
         end
         #Outer loop: nonlinear iterations (Newton)
         while residual_NL > tol_NL && NL_iterctr < NL_iterlim 

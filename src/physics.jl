@@ -145,22 +145,7 @@ function get_entropy_potential(solution, param::PhysicsAndFluxParams)
         return solution
     end
 end
-#==
-function get_numerical_entropy_function(solution, N_elem, param::PhysicsAndFluxParams)
-    if cmp(param.pde_type,"euler1D")==0
-        N_state = 3
-    else
-        N_state = 1
-    end
-    N_nodes = trunc(Int, length(solution)/N_state)
-    N_nodes_per_elem = trunc(Int, N_nodes/N_elem)
-    numerical_entropy = zeros(size(N_nodes))
-    for ielem = 1:N_elem
-        local_solution = solution[(1:N_nodes_per_elem*N_state) .+ (ielem-1) * (N_nodes_per_elem*N_state)]
-        numerical_entropy[
-    end
-end
-==#
+
 function get_numerical_entropy_function(solution, param::PhysicsAndFluxParams)
     if  occursin("burgers",param.pde_type)
         return 0.5 * solution .* solution 
@@ -291,11 +276,17 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
                 max_eigenvalue = findmax(abs.(stacked_MP))[1]
                 f_numerical += n_face[direction] * 0.5 .* max_eigenvalue .* (uM_face .- uP_face)
             end
-        elseif cmp(param.pde_type,"euler1D")==0 
-             f_numerical = calculate_Ra_entropy_stable_flux(uM_face,uP_face,istate, dg, param)
-             if cmp(param.numerical_flux_type, "CH_with_dissipation")==0
-                 f_numerical += calculate_entropy_stable_spatial_dissipation(uM_face, uP_face, istate, dg, param)
-             end
+        elseif cmp(param.pde_type,"euler1D")==0
+            if occursin("Ch", param.numerical_flux_type)
+                f_numerical = calculate_Ch_entropy_stable_flux(uM_face,uP_face,istate, dg, param)
+            elseif occursin("Ra", param.numerical_flux_type)
+                f_numerical = calculate_Ra_entropy_stable_flux(uM_face,uP_face,istate, dg, param)
+            else
+                display("Warning: illegal flux type! Valid euler fluxes: Ra or Ch, possibly with suffix with_dissipation")
+            end
+            if occursin("with_dissipation",  param.numerical_flux_type)
+                f_numerical += n_face[direction] * calculate_entropy_stable_spatial_dissipation(uM_face, uP_face, istate, dg, param)
+            end
         else
             display("Warning: No numerical flux is defined for this PDE type!!")
         end
@@ -448,7 +439,7 @@ function calculate_entropy_stable_spatial_dissipation(uM, uP, istate, dg::DG, pa
         # Efficiency note: would be way cheaper to only calculate the state we need...
         entropy_jump = jump.(get_entropy_variables(uP_node,param), get_entropy_variables(uM_node,param))
                                                                                                        
-        dissipation_vector = - 0.5 * R_hat * abs.(Lambda_hat) * T_hat * R_hat' * entropy_jump
+        dissipation_vector = -0.5 * R_hat * abs.(Lambda_hat) * T_hat * R_hat' * entropy_jump
         f_diss[inode]=dissipation_vector[istate]
     end
 
