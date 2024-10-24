@@ -1,9 +1,11 @@
 name,value
-n_times_to_solve,5
-P,2
+n_times_to_solve,1
+P,3
 numerical_flux_type,split
 use_skew_symmetric_stiffness_operator,true
+include_source,false
 volumenodes,GL
-basisnodes,GLL
+basisnodes,GL
 fr_c_name,cDG
-debugmode,false
+debugmode,true
+finaltime,0.2

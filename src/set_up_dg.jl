@@ -422,6 +422,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
 
     dg.QtildemQtildeT = zeros(Np+dg.Nfaces*dg.Nfp, Np+dg.Nfaces*dg.Nfp,dim) # Np points in volume, Nfp on each face. Store ndim matrices.
     # volume
+    display(dg.d_chi_v_d_xi)
     dg.QtildemQtildeT[1:Np, 1:Np,1] .= dg.W * dg.d_chi_v_d_xi- dg.d_chi_v_d_xi' * dg.W
     if dim==2
         dg.QtildemQtildeT[1:Np, 1:Np,2] .= dg.W * dg.d_chi_v_d_eta- dg.d_chi_v_d_eta' * dg.W

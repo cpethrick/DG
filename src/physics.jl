@@ -701,7 +701,7 @@ function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::Abstr
             time = t* ones(size(x))
         end
         # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
-        Q = zeros(dg.Np)
+        Q = zeros(size(x))
         gamm1=0.4
         for ielem in 1:dg.N_elem
             # Source per 4.5 Friedrichs

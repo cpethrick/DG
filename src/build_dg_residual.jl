@@ -48,6 +48,12 @@ function calculate_face_term(iface,istate, f_hat, u_hat, uM, uP, direction, dg::
 
     face_term = dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface, direction] * (f_numerical .- face_flux)
 
+    display(iface)
+    display("Face numerical flux")
+    display(dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface, direction] * (f_numerical))
+    display("Face flux")
+    display(-dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface, direction] * (face_flux))
+
     return face_term
 end
 
@@ -146,10 +152,14 @@ function calculate_dim_cellwise_residual(ielem, istate, u_hat,u_hat_local,u_loca
     volume_terms_dim = calculate_volume_terms(f_hat_local_state,direction, dg)
     use_split::Bool = param.alpha_split < 1 && (direction== 1 || (direction== 2 && !param.usespacetime))
     if use_split
+        display(volume_terms_dim*param.alpha_split)
         volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local, u_hat_local,direction, dg, param)
+        display(volume_terms_nonconservative)
         volume_terms_dim = param.alpha_split * volume_terms_dim + (1-param.alpha_split) * volume_terms_nonconservative
     end
     rhs_local_state += volume_terms_dim
+    display("Volume terms")
+    display(rhs_local_state)
     for iface in 1:dg.Nfaces
 
         #How to get exterior values if those are all modal?? Would be doing double work...
@@ -182,6 +192,7 @@ function calculate_volume_terms_skew_symm(istate,u_local, u_hat_local, direction
             u_vf[(1:dg.Nfp) .+ dg.Np .+ (iface-1)*dg.Nfp, istate] = u_tilde_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
         end
     end
+    display(u_vf)
 
     
     # Problem: how to select u_face? Alex's paper seems contradictory of whether we eant to select Nf * Nfp or Nfp. Can't possibly select Nfp to calculate the two point flux?
@@ -199,6 +210,8 @@ function calculate_volume_terms_skew_symm(istate,u_local, u_hat_local, direction
 
     volume_term = dg.chi_vf * hadamard_product(dg.QtildemQtildeT[:,:,direction], reference_two_point_flux, size(u_vf)[1], size(u_vf)[1]) * ones(size(u_vf)[1])
 
+    display(dg.chi_v' * hadamard_product(dg.QtildemQtildeT[:,:,direction], reference_two_point_flux, size(u_vf)[1], size(u_vf)[1])[1:dg.Np,1:dg.Np] * ones(dg.Np))
+
 
     return volume_term
 end
@@ -208,12 +221,17 @@ function calculate_dim_cellwise_residual_skew_symm(ielem,istate,u_hat,u_hat_loca
 
 
     rhs_local .+= calculate_volume_terms_skew_symm(istate, u_local, u_hat_local,direction, dg, param)
+    display("Stiffness volume and face terms:")
+    display(rhs_local)
     
     for iface in 1:dg.Nfaces
         uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
         uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg, param)
 
         rhs_local .+= calculate_face_numerical_flux_term(ielem,istate, iface, u_hat_local, uM, uP, direction, dg, param)
+        display(iface)
+        display("Face numerical flux:")
+        display(calculate_face_numerical_flux_term(ielem,istate, iface, u_hat_local, uM, uP, direction, dg, param))
 
     end
     
@@ -242,16 +260,23 @@ function assemble_local_state_residual(ielem,istate, u_hat, t, dg::DG, param::Ph
         end
     end
 
-    rhs_local_state = -1* dg.M_inv * (rhs_local_state)
+    display("RHS (not multiplied by IMM")
+    display(rhs_local_state)
 
+    rhs_local_state = -1* dg.M_inv * (rhs_local_state)
+  
     if param.include_source
-        x_local = zeros(Float64, dg.N_vol)
-        y_local = zeros(Float64, dg.N_vol)
-        for inode = 1:dg.N_vol
-            x_local[inode] = dg.x[dg.EIDLIDtoGID_vol[ielem,inode]]
-            y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
+        Np_overint_per_dim = dg.Np+10
+        r_overint, w_overint = FastGaussQuadrature.gausslobatto(Np_overint_per_dim)
+        x_local_overint = dg.VX[ielem] .+ 0.5* (r_overint .+1) * dg.delta_x
+        chi_v_overint = vandermonde1D(r_overint, dg.r_basis)
+        W_overint = LinearAlgebra.diagm(w_overint)
+        
+        Pi_overint = inv(chi_v_overint' * W_overint * chi_v_overint)*chi_v_overint'*W_overint
+        rhs_local_state+=Pi_overint*calculate_source_terms(istate,x_local_overint,x_local_overint,t, dg, param)
+        if dg.dim == 2
+            display("Warning! Assumption of x = y is not valid for 2D!!")
         end
-        rhs_local_state+=dg.Pi*calculate_source_terms(istate,x_local,y_local,t, dg, param)
     end
 
     return rhs_local_state
