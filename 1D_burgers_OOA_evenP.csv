@@ -4,8 +4,8 @@ P,3
 numerical_flux_type,split
 use_skew_symmetric_stiffness_operator,true
 include_source,false
-volumenodes,GL
-basisnodes,GL
+volumenodes,GLL
+basisnodes,GLL
 fr_c_name,cDG
 debugmode,true
 finaltime,0.2

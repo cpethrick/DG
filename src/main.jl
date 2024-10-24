@@ -185,6 +185,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     Np_overint_per_dim = dg.Np_per_dim+10
     Np_overint = (Np_overint_per_dim)^dim
     r_overint, w_overint = FastGaussQuadrature.gausslobatto(Np_overint_per_dim)
+    r_overint = r_overint * 0.5 .+ 0.5 # for changing ref element to match PHiLiP for debugging purposes
+    w_overint /= 2.0
     (x_overint, y_overint) = build_coords_vectors(r_overint, dg)
     if dim==1
         chi_overint = vandermonde1D(r_overint,dg.r_basis)

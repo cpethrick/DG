@@ -239,6 +239,8 @@ function calculate_dim_cellwise_residual_skew_symm(ielem,istate,u_hat,u_hat_loca
 end
 
 function assemble_local_state_residual(ielem,istate, u_hat, t, dg::DG, param::PhysicsAndFluxParams)
+    display("u_hat")
+    display(u_hat)
     rhs_local_state = zeros(Float64, dg.Np)
     u_hat_local = zeros(Float64, dg.N_dof)
     u_local = zeros(Float64, dg.N_dof)
@@ -264,6 +266,9 @@ function assemble_local_state_residual(ielem,istate, u_hat, t, dg::DG, param::Ph
     display(rhs_local_state)
 
     rhs_local_state = -1* dg.M_inv * (rhs_local_state)
+
+    display("Final RHS")
+    display(rhs_local_state)
   
     if param.include_source
         Np_overint_per_dim = dg.Np+10

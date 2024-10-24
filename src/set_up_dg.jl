@@ -130,6 +130,7 @@ function build_coords_vectors(ref_vec_1D, dg::DG)
     if dg.dim == 1
         for ielem = 1:dg.N_elem
             x_local = dg.VX[ielem] .+ 0.5* (ref_vec_1D .+1) * dg.delta_x
+            x_local = dg.VX[ielem] .+ (ref_vec_1D ) * dg.delta_x
             x[(ielem - 1) * Np+1:ielem*Np] .= x_local
         end
     elseif dg.dim == 2
@@ -305,8 +306,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     else
         display("Illegal volume node choice!")
     end
-    # dg.r_volume= dg.r_volume * 0.5 .+ 0.5 # for changing ref element to match PHiLiP for debugging purposes
-    # dg.w_volume /= 2.0
+    dg.r_volume= dg.r_volume * 0.5 .+ 0.5 # for changing ref element to match PHiLiP for debugging purposes
+    dg.w_volume /= 2.0
 
     # Basis function nodes (shape functions, interpolation nodes)
     if cmp(basisnodes, "GLL") == 0 
@@ -318,16 +319,16 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     else
         display("Illegal basis node choice!")
     end
-    # dg.r_basis = dg.r_basis * 0.5 .+ 0.5
-    # dg.w_basis /= 2.0
+    dg.r_basis = dg.r_basis * 0.5 .+ 0.5
+    dg.w_basis /= 2.0
 
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], N_elem_per_dim+1) |> collect
     display("Elements per dim:")
     display(N_elem_per_dim)
     dg.delta_x = dg.VX[2]-dg.VX[1]
     # constant jacobian on all elements as they are evenly spaced
-    jacobian = (dg.delta_x/2.0)^dim #reference element is 2 units long
-    # jacobian = (dg.delta_x/1.0)^dim
+    #jacobian = (dg.delta_x/2.0)^dim #reference element is 2 units long
+    jacobian = (dg.delta_x/1.0)^dim
     dg.J = LinearAlgebra.diagm(ones(length(dg.r_volume)^dim)*jacobian)
 
     (dg.x, dg.y) = build_coords_vectors(dg.r_volume, dg) 
@@ -336,7 +337,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         dg.chi_v = vandermonde1D(dg.r_volume,dg.r_basis)
         dg.d_chi_v_d_xi = gradvandermonde1D(dg.r_volume,dg.r_basis)
         #reference coordinates of L and R faces
-        r_f_L::Float64 = -1
+        #r_f_L::Float64 = -1
+        r_f_L::Float64 = 0 # compare with PHiLiP
         r_f_R::Float64 = 1
         dg.chi_f = assembleFaceVandermonde1D(r_f_L,r_f_R,dg.r_basis)
 
@@ -424,6 +426,12 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     # volume
     display(dg.d_chi_v_d_xi)
     dg.QtildemQtildeT[1:Np, 1:Np,1] .= dg.W * dg.d_chi_v_d_xi- dg.d_chi_v_d_xi' * dg.W
+
+
+    display(dg.QtildemQtildeT[1:Np, 1:Np,1])
+    display(2*dg.W * dg.d_chi_v_d_xi)
+    display(dg.QtildemQtildeT[1:Np, 1:Np,1]-2*dg.W * dg.d_chi_v_d_xi)
+
     if dim==2
         dg.QtildemQtildeT[1:Np, 1:Np,2] .= dg.W * dg.d_chi_v_d_eta- dg.d_chi_v_d_eta' * dg.W
     end
