@@ -55,6 +55,8 @@ mutable struct DG
     w_volume::Vector{Float64}
     r_basis::Vector{Float64}
     w_basis::Vector{Float64}
+    r_flux::Vector{Float64}
+    w_flux::Vector{Float64}
     chi_v::AbstractMatrix{Float64}
     d_chi_v_d_xi::AbstractMatrix{Float64}
     d_chi_v_d_eta::AbstractMatrix{Float64}
@@ -158,7 +160,7 @@ end
 
 # Outer constructor for DG object. Might be good to move to inner constructor at some point.
 function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_limits::Vector{Float64},
-        volumenodes::String, basisnodes::String, fluxreconstructionC::Float64,
+        volumenodes::String, basisnodes::String, fluxnodes::String, fluxnodes_overintegration::Int, fluxreconstructionC::Float64,
         usespacetime::Bool)
     
     #initialize incomplete DG struct
@@ -315,6 +317,20 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     elseif cmp(basisnodes, "GL") == 0
         display("GL basis nodes.")
         dg.r_basis,dg.w_basis=FastGaussQuadrature.gaussjacobi(Np_per_dim,0.0,0.0)
+    else
+        display("Illegal basis node choice!")
+    end
+    # dg.r_basis = dg.r_basis * 0.5 .+ 0.5
+    # dg.w_basis /= 2.0
+    
+    # Flux nodes (shape functions, interpolation nodes)
+    # Assume collocated flux basis nodes.
+    if cmp(fluxnodes, "GLL") == 0 
+        display("GLL basis nodes.")
+        dg.r_flux,dg.w_flux=FastGaussQuadrature.gausslobatto(dg.Np_per_dim+fluxnodes_overintegration)
+    elseif cmp(fluxnodes, "GL") == 0
+        display("GL basis nodes.")
+        dg.r_flux,dg.w_flux=FastGaussQuadrature.gaussjacobi(Np_per_dim+fluxnodes_overintegration,0.0,0.0)
     else
         display("Illegal basis node choice!")
     end

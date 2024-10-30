@@ -24,6 +24,8 @@ mutable struct PhysicsAndFluxParams
     finaltime::Float64
     volumenodes::String #"GLL" or "GL"
     basisnodes::String #"GLL" or "GL"
+    fluxnodes::String # "GLL" or "GL"
+    fluxnodes_overintegration::Int64
     fr_c_name::String # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
     fr_c_userdefined::Float64
     debugmode::Bool
@@ -51,6 +53,8 @@ mutable struct PhysicsAndFluxParams
                          finaltime::Float64,
                          volumenodes::AbstractString, #"GLL" or "GL"
                          basisnodes::AbstractString, #"GLL" or "GL"
+                         fluxnodes::AbstractString, #"GLL" or "GL"
+                         fluxnodes_overintegration::Int64,
                          fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
                          fr_c_userdefined::Float64,
                          debugmode::Bool
@@ -71,6 +75,8 @@ mutable struct PhysicsAndFluxParams
                                 finaltime::Float64,
                                 volumenodes::AbstractString, #"GLL" or "GL"
                                 basisnodes::AbstractString, #"GLL" or "GL"
+                                fluxnodes::AbstractString, #"GLL" or "GL"
+                                fluxnodes_overintegration::Int64,
                                 fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
                                 fr_c_userdefined::Float64,
                                 debugmode::Bool
@@ -153,6 +159,8 @@ function parse_default_parameters()
     finaltime = parse_param_Float64("finaltime", paramDF)
     volumenodes = parse_param_String("volumenodes", paramDF)
     basisnodes = parse_param_String("basisnodes", paramDF)
+    fluxnodes = parse_param_String("fluxnodes", paramDF)
+    fluxnodes_overintegration = parse_param_Int64("fluxnodes_overintegration", paramDF)
     fr_c_name = parse_param_String("fr_c_name",paramDF)
     fr_c_userdefined = parse_param_Float64("fr_c_userdefined",paramDF)
     debugmode = parse_param_Bool("debugmode", paramDF)
@@ -174,6 +182,8 @@ function parse_default_parameters()
                                  finaltime, 
                                  volumenodes, 
                                  basisnodes, 
+                                 fluxnodes,
+                                 fluxnodes_overintegration,
                                  fr_c_name, 
                                  fr_c_userdefined,
                                  debugmode
@@ -239,6 +249,12 @@ function parse_parameters(fname::String)
         end
         if "basisnodes" in newparamDF.name
             default_params.basisnodes = parse_param_String("basisnodes", newparamDF)
+        end
+        if "fluxnodes" in newparamDF.name
+            default_params.fluxnodes = parse_param_String("fluxnodes", newparamDF)
+        end
+        if "fluxnodes_overintegration" in newparamDF.name
+            default_params.fluxnodes_overintegration = parse_param_Int64("fluxnodes_overintegration", newparamDF)
         end
         if "fr_c_userdefined" in newparamDF.name
             #need to define fr_c_userdefined BEFORE fr_c_name
