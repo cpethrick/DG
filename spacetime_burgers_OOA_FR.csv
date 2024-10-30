@@ -1,0 +1,11 @@
+name,value
+dim,2
+P,2
+n_times_to_solve,3
+usespacetime,true
+debugmode,false
+spacetime_decouple_slabs,true
+volumenodes,GLL
+use_skew_symmetric_stiffness_operator,true
+spacetime_solver_type,JFNK
+fr_c_name,cHU
