@@ -95,7 +95,7 @@ function set_FR_value(param::PhysicsAndFluxParams)
         # table 1, cicchino 2021
         param.fluxreconstructionC = P / (  (P+1)* ((2*P+1) * (factorial(P) * cp) ^2)   ) 
     elseif cmp(fr_c_name, "1000") == 0
-        param.fluxreconstructionC = 1000.0
+        param.fluxreconstructionC =1.0E3
     elseif cmp(fr_c_name, "c-") == 0
         cp = factorial(2*P)/2^P / factorial(P)^2 # eq. 24 of cicchino 2021 tensor product
         # table 1, cicchino 2021
