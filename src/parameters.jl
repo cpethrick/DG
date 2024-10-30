@@ -24,7 +24,8 @@ mutable struct PhysicsAndFluxParams
     finaltime::Float64
     volumenodes::String #"GLL" or "GL"
     basisnodes::String #"GLL" or "GL"
-    fr_c_name::String # cDG, cPlus, cHU, cSD, c-, 1000
+    fr_c_name::String # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
+    fr_c_userdefined::Float64
     debugmode::Bool
 
     # dependant params: set based on above required params.
@@ -50,7 +51,8 @@ mutable struct PhysicsAndFluxParams
                          finaltime::Float64,
                          volumenodes::AbstractString, #"GLL" or "GL"
                          basisnodes::AbstractString, #"GLL" or "GL"
-                         fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000
+                         fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
+                         fr_c_userdefined::Float64,
                          debugmode::Bool
                         ) = new(
                                 dim::Int64,
@@ -69,7 +71,8 @@ mutable struct PhysicsAndFluxParams
                                 finaltime::Float64,
                                 volumenodes::AbstractString, #"GLL" or "GL"
                                 basisnodes::AbstractString, #"GLL" or "GL"
-                                fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000
+                                fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
+                                fr_c_userdefined::Float64,
                                 debugmode::Bool
                                )
 
@@ -100,6 +103,8 @@ function set_FR_value(param::PhysicsAndFluxParams)
         cp = factorial(2*P)/2^P / factorial(P)^2 # eq. 24 of cicchino 2021 tensor product
         # table 1, cicchino 2021
         param.fluxreconstructionC = -1 / (  ((2*P+1) * (factorial(P) * cp) ^2)   ) 
+    elseif cmp(fr_c_name, "user-defined") == 0
+        param.fluxreconstructionC = param.fr_c_userdefined
     else
         param.fluxreconstructionC = 0.0
         display("Warning! Illegal FR c name!")
@@ -149,6 +154,7 @@ function parse_default_parameters()
     volumenodes = parse_param_String("volumenodes", paramDF)
     basisnodes = parse_param_String("basisnodes", paramDF)
     fr_c_name = parse_param_String("fr_c_name",paramDF)
+    fr_c_userdefined = parse_param_Float64("fr_c_userdefined",paramDF)
     debugmode = parse_param_Bool("debugmode", paramDF)
 
     param = PhysicsAndFluxParams(
@@ -169,6 +175,7 @@ function parse_default_parameters()
                                  volumenodes, 
                                  basisnodes, 
                                  fr_c_name, 
+                                 fr_c_userdefined,
                                  debugmode
                                 )
     set_FR_value(param)
@@ -232,6 +239,10 @@ function parse_parameters(fname::String)
         end
         if "basisnodes" in newparamDF.name
             default_params.basisnodes = parse_param_String("basisnodes", newparamDF)
+        end
+        if "fr_c_userdefined" in newparamDF.name
+            #need to define fr_c_userdefined BEFORE fr_c_name
+            default_params.fr_c_userdefined= parse_param_Float64("fr_c_userdefined", newparamDF)
         end
         if "fr_c_name" in newparamDF.name
             default_params.fr_c_name= parse_param_String("fr_c_name", newparamDF)

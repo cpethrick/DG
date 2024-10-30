@@ -1,0 +1,1 @@
+Note: CFL number manually changed to 0.05 for faster computation. Still small enough that the result shouldn't be impacted.

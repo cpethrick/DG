@@ -1,0 +1,12 @@
+name,value
+P,3
+numerical_flux_type,split_with_LxF
+use_skew_symmetric_stiffness_operator,true
+dim,2
+usespacetime,true
+spacetime_solver_type,JFNK
+volumenodes,GL
+basisnodes,GL
+fr_c_name,user-defined
+debugmode,false
+finaltime,2.0

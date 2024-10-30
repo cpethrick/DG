@@ -44,6 +44,7 @@ include("build_dg_residual.jl")
 include("set_up_dg.jl")
 include("ode_solver.jl")
 include("parameters.jl")
+include("test_scripts.jl")
 
 
 function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::PhysicsAndFluxParams)
@@ -160,7 +161,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     if !param.usespacetime
         #Physical time
         #timestep size according to CFL
-        CFL = 0.005
+        CFL = 0.05
         #xmin = minimum(abs.(x[1,:] .- x[2,:]))
         #dt = abs(CFL / a * xmin /2)
         dt = CFL * (dg.delta_x / dg.Np_per_dim)

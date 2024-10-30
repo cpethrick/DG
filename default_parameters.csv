@@ -16,4 +16,5 @@ finaltime,1.0
 volumenodes,GL
 basisnodes,GLL
 fr_c_name,cDG
+fr_c_userdefined,0.0
 debugmode,false

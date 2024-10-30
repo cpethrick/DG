@@ -1,0 +1,9 @@
+name,value
+P,4
+numerical_flux_type,split_with_LxF
+use_skew_symmetric_stiffness_operator,true
+volumenodes,GL
+basisnodes,GL
+fr_c_name,user-defined
+debugmode,false
+finaltime,2.0

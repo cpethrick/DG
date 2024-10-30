@@ -1,0 +1,16 @@
+name,value
+n_times_to_solve,5
+P,4
+domain_size,1.0
+debugmode,false
+pde_type,euler1D
+numerical_flux_type,Ra_with_dissipation
+use_skew_symmetric_stiffness_operator,true
+include_source,true
+alpha_split,1.0
+volumenodes,GL
+basisnodes,GL
+dim,2
+usespacetime,true
+spacetime_solver_type,JFNK
+finaltime,1.0

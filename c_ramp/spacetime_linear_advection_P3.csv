@@ -1,0 +1,14 @@
+name,value
+dim,2
+usespacetime,true
+spacetime_solver_type,JFNK
+P,3
+pde_type,linear_adv_1D
+include_source,false
+alpha_split,1.0
+debugmode,false
+fluxreconstructionC,user-defined
+finaltime,1.0
+volumenodes,GL
+basisnodes,GL
+advection_speed,0.3

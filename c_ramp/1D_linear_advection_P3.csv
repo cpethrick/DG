@@ -1,0 +1,12 @@
+name,value
+dim,1
+P,3
+pde_type,linear_adv_1D
+include_source,false
+alpha_split,1.0
+debugmode,false
+fluxreconstructionC,user-defined
+finaltime,2.0
+volumenodes,GL
+basisnodes,GL
+advection_speed,0.3
