@@ -178,6 +178,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         dg.Nfp = dg.Np_per_dim
         dg.N_elem = N_elem_per_dim^dim
     end
+
     Np_per_dim=P+1 # for convenience
     N_elem = dg.N_elem
     Np = dg.Np
@@ -350,21 +351,27 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     # Define Vandermonde matrices
     if dim == 1
         dg.chi_v = vandermonde1D(dg.r_volume,dg.r_basis)
+        dg.phi_v = vandermonde1D(dg.r_flux,dg.r_flux)
         dg.d_chi_v_d_xi = gradvandermonde1D(dg.r_volume,dg.r_basis)
         #reference coordinates of L and R faces
         r_f_L::Float64 = -1
         r_f_R::Float64 = 1
         dg.chi_f = assembleFaceVandermonde1D(r_f_L,r_f_R,dg.r_basis)
+        dg.phi_f = assembleFaceVandermonde1D(r_f_L,r_f_R,dg.r_flux)
 
         dg.W = LinearAlgebra.diagm(dg.w_volume) # diagonal matrix holding quadrature weights
         dg.W_f = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
         dg.C_m = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
     elseif dim == 2
         dg.chi_v = vandermonde2D(dg.r_volume,dg.r_basis, dg)
+        dg.phi_v = vandermonde2D(dg.r_flux,dg.r_flux,dg)
         dg.d_chi_v_d_xi = gradvandermonde2D(1, dg.r_volume,dg.r_basis, dg)
         dg.d_chi_v_d_eta = gradvandermonde2D(2, dg.r_volume,dg.r_basis, dg)
+        dg.d_phi_v_d_xi = gradvandermonde2D(1, dg.r_flux,dg.r_flux, dg)
+        dg.d_phi_v_d_eta = gradvandermonde2D(2, dg.r_flux,dg.r_flux, dg)
         dg.W = LinearAlgebra.diagm(vec(dg.w_volume*dg.w_volume'))
         dg.chi_f = assembleFaceVandermonde2D(dg.r_basis,dg.r_volume,dg)
+        dg.phi_f = assembleFaceVandermonde2D(dg.r_flux,dg.r_flux,dg)
         dg.W_f = LinearAlgebra.diagm(dg.w_volume)
         dg.J_f = LinearAlgebra.diagm(ones(length(dg.r_volume)) * jacobian ^ (1/dim)) # 1D jacobian on the face of the element.
         dg.C_m = dg.delta_x/2.0 * [1 0; 0 1]  # Assuming a cartesian element and a reference element (-1,1)
