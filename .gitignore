@@ -3,3 +3,5 @@
 *.swo
 results/*
 result.csv
+c_ramp/*result.csv
+c_ramp/*.py
