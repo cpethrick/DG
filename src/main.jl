@@ -303,7 +303,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                 entropy_initial += S_face' * dg.W_f * dg.J_f * ones(size(S_face))
             elseif ielem > N_elem_per_dim^dim - N_elem_per_dim
                 # face on top
-                u_face = project(dg.chi_f[:,:,4], u_hat[(ielem-1)*dg.N_dof+1:(ielem)*dg.N_dof], false, dg, param)
+                u_face = project(dg.chi_f[:,:,4], u_hat[(ielem-1)*dg.N_dof+1:(ielem)*dg.N_dof], true, dg, param)
                 S_face = get_numerical_entropy_function(u_face, param)
                 entropy_final_calc += S_face' * dg.W_f * dg.J_f * ones(size(S_face))
             end
@@ -346,7 +346,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                 # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
             end
             u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
-            u_face_interior = project(dg.chi_f[:,:,3],  u_hat_local,false,dg,param)
+            u_face_interior = project(dg.chi_f[:,:,3],  u_hat_local,true,dg,param)
 
             v_face_BC = get_entropy_variables(u_face, param)
             v_face_interior = get_entropy_variables(u_face_interior,param)

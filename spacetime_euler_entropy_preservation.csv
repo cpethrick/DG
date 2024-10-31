@@ -1,5 +1,5 @@
 name,value
-n_times_to_solve,2
+n_times_to_solve,1
 P,3
 domain_size,1.0
 debugmode,false
@@ -10,7 +10,7 @@ spacetime_decouple_slabs,false
 spacetime_solver_type,JFNK
 include_source,false
 alpha_split,1.0
-volumenodes,GLL
-basisnodes,GLL
+volumenodes,GL
+basisnodes,GL
 dim,2
 usespacetime,true
