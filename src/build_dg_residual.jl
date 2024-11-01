@@ -38,7 +38,7 @@ end
 function calculate_face_term(iface,istate, f_hat, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
     f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction,1,dg, param) #pass s.t. numerical flux chosen by problem physics.
 
-    face_flux::AbstractVector{Float64} = dg.chi_face[:,:,iface] * f_hat
+    face_flux::AbstractVector{Float64} = dg.phi_face[:,:,iface] * f_hat
     use_split::Bool = param.alpha_split < 1 && (direction == 1 || (direction == 2 && !param.usespacetime))
     if use_split
         face_flux*=param.alpha_split

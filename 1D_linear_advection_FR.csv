@@ -8,3 +8,4 @@ alpha_split,1.0
 debugmode,false
 fluxreconstructionC,cDG
 finaltime,2.324
+fluxnodes_overintegration,1

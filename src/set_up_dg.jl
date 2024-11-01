@@ -344,6 +344,10 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     else
         display("Illegal flux node choice!")
     end
+    if fluxnodes_overintegration>0
+        display("Overintegrating the flux by")
+        display(fluxnodes_overintegration)
+    end
     # dg.r_basis = dg.r_basis * 0.5 .+ 0.5
     # dg.w_basis /= 2.0
 
@@ -463,8 +467,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     display(dg.MpK)
     dg.MpK_inv = inv(dg.MpK)
 
-    M_nojac_flux = dg.chi_flux' * dg.W_flux * dg.chi_flux
-    dg.Pi_flux = inv(M_nojac_flux)*dg.chi_flux'*dg.W_flux
+    M_nojac_flux = dg.phi_flux' * dg.W_flux * dg.phi_flux
+    dg.Pi_flux = inv(M_nojac_flux)*dg.phi_flux'*dg.W_flux
 
     Q_dimension = dg.N_flux+dg.N_faces*dg.N_face # N_flux points in soln, Nfp on each face. Store ndim matrices.
     dg.QtildemQtildeT = zeros(Q_dimension,Q_dimension,dim) 

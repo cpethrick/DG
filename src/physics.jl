@@ -532,7 +532,7 @@ end
 
 
 function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
-    f = zeros(dg.N_vol)
+    f = zeros(dg.N_flux)
 
     if direction == 2 && param.usespacetime
         f .+= u
