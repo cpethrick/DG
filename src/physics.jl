@@ -255,11 +255,11 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
                 if n_face[direction] == -1
                     # face is bottom. Use the information from the external element
                     # which corresponds to the past
-                    f_numerical = uP_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
+                    f_numerical = uP_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
                 elseif n_face[direction] == 1
                     # face is bottom. Use internal solution
                     # which corresonds to the past
-                    f_numerical = uM_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
+                    f_numerical = uM_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
                 end # if face normal ==0,  leave f_numercal as zeros.
             end
         elseif cmp(param.pde_type, "linear_adv_1D")==0
@@ -294,10 +294,10 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
 
     elseif bc_type == 0
         # Dirichlet: uP_face has been set to be the analtical value in get_solution_at_face()
-        f_numerical = uP_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
+        f_numerical = uP_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
     elseif bc_type == -1
         # Outflow: return interior soln
-        f_numerical = uM_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
+        f_numerical = uM_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
     else
         display("Warning: Numerical flux boundary type not recognized!")
     end
@@ -614,12 +614,12 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
         if cmp(param.pde_type,  "euler1D")==0
             if param.include_source
 
-                u0 = calculate_euler_exact_solution(-1, x, y, dg.Np, dg) .+ 0.1
+                u0 = calculate_euler_exact_solution(-1, x, y, dg.N_soln, dg) .+ 0.1
             else
                 u0 = initial_condition_Friedrichs_4_6(x, dg.Np)
             end
         else
-            u0 = ones(dg.N_dof_global)
+            u0 = ones(dg.N_soln_dof_global)
         end
         #u0 = 0*x
     elseif param.include_source && cmp(param.pde_type, "burgers2D")==0
@@ -629,7 +629,7 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
     elseif cmp(param.pde_type, "burgers2D") == 0
         u0 = exp.(-10*((x .-1).^2 .+(y .-1).^2))
     elseif cmp(param.pde_type, "euler1D") == 0
-        u0 = calculate_euler_exact_solution(0, x, y, dg.Np, dg)
+        u0 = calculate_euler_exact_solution(0, x, y, dg.N_soln, dg)
     else
         #u0 = 0.2* sin.(π * x) .+ 0.01
         u0 = sin.(π * (x)) .+ 0.01
@@ -702,7 +702,7 @@ function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::Abstr
             time = t* ones(size(x))
         end
         # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
-        Q = zeros(dg.Np)
+        Q = zeros(dg.N_soln)
         gamm1=0.4
         for ielem in 1:dg.N_elem
             # Source per 4.5 Friedrichs
@@ -739,9 +739,9 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
         return out
     elseif cmp(param.pde_type, "euler1D") == 0
         if param.include_source
-            return calculate_euler_exact_solution(0, x, y, dg.Nfp, dg)
+            return calculate_euler_exact_solution(0, x, y, dg.N_face, dg)
         else
-            return initial_condition_Friedrichs_4_6(x, dg.Nfp)
+            return initial_condition_Friedrichs_4_6(x, dg.N_face)
         end
 
     else

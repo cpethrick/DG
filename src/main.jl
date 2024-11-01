@@ -68,10 +68,10 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
                 # y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
             end
             u_face_Dirichlet = calculate_solution_on_Dirichlet_boundary(x_local, y_local, dg,param)
-            u_face_interior = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
+            u_face_interior = dg.chi_face[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
 
             s_vec = get_numerical_entropy_function(u_face_Dirichlet,param)
-            entropy_initial += s_vec' * dg.W_f * dg.J_f * ones(size(s_vec))
+            entropy_initial += s_vec' * dg.W_face * dg.J_face * ones(size(s_vec))
 
 
             # get entropy potential and entropy variables at the face (interior soln)
@@ -83,12 +83,12 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
             phi_jump = phi_face_interior - phi_face_Dirichlet
             v_jump = v_face_interior - v_face_Dirichlet
 
-            projection_error += (phi_jump - v_jump .* u_face_Dirichlet)' * dg.W_f * dg.J_f * ones(size(u_face_Dirichlet))
+            projection_error += (phi_jump - v_jump .* u_face_Dirichlet)' * dg.W_face * dg.J_face * ones(size(u_face_Dirichlet))
         elseif ielem > dg.N_elem_per_dim^dg.dim - dg.N_elem_per_dim
             # face on top (t=tf)
-            u_face = dg.chi_f[:,:,4] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
+            u_face = dg.chi_face[:,:,4] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
             s_vec = get_numerical_entropy_function(u_face,param)
-            entropy_final += s_vec' * dg.W_f * dg.J_f * ones(size(s_vec))
+            entropy_final += s_vec' * dg.W_face * dg.J_face * ones(size(s_vec))
         end
     end
 
@@ -109,9 +109,9 @@ end
 function calculate_integrated_numerical_entropy(u_hat, dg::DG, param::PhysicsAndFluxParams)
     
     if cmp(param.pde_type, "euler1D")==0
-        u = project(dg.chi_v,u_hat,false,dg, param)
+        u = project(dg.chi_soln,u_hat,false,dg, param)
         s = get_numerical_entropy_function(u, param)
-        return s' * dg.W * dg.J * ones(size(s))
+        return s' * dg.W_soln * dg.J_soln * ones(size(s))
     else
         return u_hat' * dg.M * u_hat
     end
@@ -300,12 +300,12 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                 u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
                 S_face = get_numerical_entropy_function(u_face, param)
 
-                entropy_initial += S_face' * dg.W_f * dg.J_f * ones(size(S_face))
+                entropy_initial += S_face' * dg.W_face * dg.J_face * ones(size(S_face))
             elseif ielem > N_elem_per_dim^dim - N_elem_per_dim
                 # face on top
-                u_face = project(dg.chi_f[:,:,4], u_hat[(ielem-1)*dg.N_dof+1:(ielem)*dg.N_dof], false, dg, param)
+                u_face = project(dg.chi_face[:,:,4], u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], false, dg, param)
                 S_face = get_numerical_entropy_function(u_face, param)
-                entropy_final_calc += S_face' * dg.W_f * dg.J_f * ones(size(S_face))
+                entropy_final_calc += S_face' * dg.W_face * dg.J_face * ones(size(S_face))
             end
             if param.fluxreconstructionC > 0
                 display("WARNING: Energy calculation is probably unreliable for c != 0.")
@@ -570,4 +570,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-main("1D_euler_GLL_OOA_FR.csv")
+main("spacetime_euler_OOA.csv")
