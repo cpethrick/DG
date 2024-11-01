@@ -1,11 +1,10 @@
 name,value
-dim,2
+dim,1
 P,2
 n_times_to_solve,4
 pde_type,linear_adv_1D
 include_source,false
 alpha_split,1.0
 debugmode,false
-fluxreconstructionC,cDG
+fr_c_name,cSD
 finaltime,2.324
-fluxnodes_overintegration,1
