@@ -222,24 +222,24 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     if dim == 1
         dg.EIDLFIDtoEIDofexterior = [circshift(1:dg.N_elem_per_dim,1)';circshift(1:dg.N_elem_per_dim,-1)']'
     elseif dim == 2
-        dg.EIDLFIDtoEIDofexterior = zeros(Int, (dg.N_elem, dg.Nfaces))
-        for ielem = 1:N_elem
+        dg.EIDLFIDtoEIDofexterior = zeros(Int, (dg.N_elem, dg.N_faces))
+        for ielem = 1:dg.N_elem
             # face 1: left
             # regular joining (assume not on boundary)
             dg.EIDLFIDtoEIDofexterior[ielem,1] = ielem - 1
-            if mod(ielem,N_elem_per_dim) == 1
+            if mod(ielem,dg.N_elem_per_dim) == 1
                 #if on a periodic boundary
-                dg.EIDLFIDtoEIDofexterior[ielem,1]+=N_elem_per_dim
+                dg.EIDLFIDtoEIDofexterior[ielem,1]+=dg.N_elem_per_dim
             end
             # face 2: right
             dg.EIDLFIDtoEIDofexterior[ielem,2] = ielem + 1
-            if mod(ielem,N_elem_per_dim) == 0
-                dg.EIDLFIDtoEIDofexterior[ielem,2]-=N_elem_per_dim
+            if mod(ielem,dg.N_elem_per_dim) == 0
+                dg.EIDLFIDtoEIDofexterior[ielem,2]-=dg.N_elem_per_dim
             end
             # face 3: bottom
-            dg.EIDLFIDtoEIDofexterior[ielem,3] = ielem - N_elem_per_dim
-            if ielem/N_elem_per_dim <= 1
-                dg.EIDLFIDtoEIDofexterior[ielem,3] += N_elem
+            dg.EIDLFIDtoEIDofexterior[ielem,3] = ielem - dg.N_elem_per_dim
+            if ielem/dg.N_elem_per_dim <= 1
+                dg.EIDLFIDtoEIDofexterior[ielem,3] += dg.N_elem
                 if usespacetime
                     # when using space-time, bottom is assigned dirichlet
                     # boundary
@@ -248,9 +248,9 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
                 end
             end
             # face 4: top
-            dg.EIDLFIDtoEIDofexterior[ielem,4] = ielem + N_elem_per_dim
-            if ielem/N_elem_per_dim > N_elem_per_dim - 1
-                dg.EIDLFIDtoEIDofexterior[ielem,4] -= N_elem
+            dg.EIDLFIDtoEIDofexterior[ielem,4] = ielem + dg.N_elem_per_dim
+            if ielem/dg.N_elem_per_dim > dg.N_elem_per_dim - 1
+                dg.EIDLFIDtoEIDofexterior[ielem,4] -= dg.N_elem
                 if usespacetime
                     # when using space-time, top is outflow (transmissive)
                     # boundary
@@ -277,12 +277,12 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     ===#
     if dim==2 #Only used for space-time, but the DG object has no knowledge of what is space-time
               # so we assemble for any 2D domain
-        dg.EIDtoTSID = zeros(N_elem)
-        dg.TSIDtoEID = zeros(N_elem_per_dim, N_elem_per_dim)
-        for ielem = 1:N_elem
-            iTS = convert(Int, floor((ielem-1)/N_elem_per_dim+1))
+        dg.EIDtoTSID = zeros(dg.N_elem)
+        dg.TSIDtoEID = zeros(dg.N_elem_per_dim, dg.N_elem_per_dim)
+        for ielem = 1:dg.N_elem
+            iTS = convert(Int, floor((ielem-1)/dg.N_elem_per_dim+1))
             dg.EIDtoTSID[ielem] = iTS
-            dg.TSIDtoEID[iTS, mod(ielem-1,N_elem_per_dim)+1] = ielem
+            dg.TSIDtoEID[iTS, mod(ielem-1,dg.N_elem_per_dim)+1] = ielem
         end
     end
 
@@ -379,15 +379,16 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         dg.C_m = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
     elseif dim == 2
         dg.chi_soln = vandermonde2D(dg.r_soln,dg.r_basis, dg)
+        dg.chi_flux = vandermonde2D(dg.r_flux,dg.r_basis, dg)
         dg.phi_flux = vandermonde2D(dg.r_flux,dg.r_flux,dg)
-        dg.d_phi_flux_xi = gradvandermonde2D(1, dg.r_flux,dg.r_flux, dg)
+        dg.d_phi_flux_d_xi = gradvandermonde2D(1, dg.r_flux,dg.r_flux, dg)
         dg.d_phi_flux_d_eta = gradvandermonde2D(2, dg.r_flux,dg.r_flux, dg)
         dg.chi_face = assembleFaceVandermonde2D(dg.r_basis,dg.r_flux,dg) #face nodes are 1D flux nodes
         dg.phi_face = assembleFaceVandermonde2D(dg.r_flux,dg.r_flux,dg)
         dg.W_soln = LinearAlgebra.diagm(vec(dg.w_soln*dg.w_soln'))
         dg.W_flux = LinearAlgebra.diagm(vec(dg.w_flux*dg.w_flux'))
-        dg.W_face = LinearAlgebra.diagm(vec(dg.w_face*dg.w_face'))
-        dg.J_face = LinearAlgebra.diagm(ones(length(dg.r_face)) * jacobian ^ (1/dim)) # 1D jacobian on the face of the element.
+        dg.W_face = LinearAlgebra.diagm(dg.w_flux)
+        dg.J_face = LinearAlgebra.diagm(ones(length(dg.r_flux)) * jacobian ^ (1/dim)) # 1D jacobian on the face of the element.
         dg.C_m = dg.delta_x/2.0 * [1 0; 0 1]  # Assuming a cartesian element and a reference element (-1,1)
     end
 
@@ -484,7 +485,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     end
     if dim==2
         for iface = 1:dg.N_faces
-            dg.QtildemQtildeT[1:dg.N_flux,(dg.N_flux+1+dg.Nfp*(iface-1)):(dg.N_flux+dg.Nfp*iface),2] .+= dg.phi_face[:,:,iface]' * dg.W_face * dg.LFIDtoNormal[iface,2] # 2nd direction of normal
+            dg.QtildemQtildeT[1:dg.N_flux,(dg.N_flux+1+dg.N_face*(iface-1)):(dg.N_flux+dg.N_face*iface),2] .+= dg.phi_face[:,:,iface]' * dg.W_face * dg.LFIDtoNormal[iface,2] # 2nd direction of normal
         end
     end
     # then assign skew-symmetric matrix

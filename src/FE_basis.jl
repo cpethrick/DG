@@ -115,15 +115,15 @@ end
 
 function assembleFaceVandermonde2D(r_basis::AbstractVector, r_volume::AbstractVector, dg::DG)
     
-    V_f = zeros(Float64, (length(dg.r_volume),length(r_basis)^dg.dim, 4)) #third dimension is face ID
+    V_f = zeros(Float64, (length(r_volume),length(r_basis)^dg.dim, 4)) #third dimension is face ID
     # stores vandermonde matrices evaluated at -1 and 1
-    V_f_1D = assembleFaceVandermonde1D(-1.0, 1.0, dg.r_basis)
+    V_f_1D = assembleFaceVandermonde1D(-1.0, 1.0, r_basis)
     # stores a 1D vandermonde matrix at volume integration points
     V_v_1D = vandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
     
     #This implementation assumes that face points are a subset of volume points.
     
-    for iface = 1:dg.Nfaces
+    for iface = 1:dg.N_faces
         if iface == 1
             r_face_y = r_volume
             r_face_x = [-1.0]
