@@ -233,7 +233,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
     #             the problem physics
     # bc_type = 0 indicates a Dirichlet boundary for time dimension, returning the exterior value
     # bc_type = -1 indicates an outflow (transmissive) boundary for time dimension, returning the interior value 
-    f_numerical=zeros(dg.Nfp)
+    f_numerical=zeros(dg.N_face)
 
     if bc_type > 0
         # assign boundary according to problem physics.
@@ -586,7 +586,7 @@ function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFl
         # in 1D, C_m = 1 so we don't need this step
         f = transform_physical_to_reference(f, direction, dg)
     end
-    f_hat = dg.Pi * f
+    f_hat = dg.Pi_flux * f
 
     return f_hat#,f_f
 end

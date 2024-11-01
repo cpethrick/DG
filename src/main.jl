@@ -143,14 +143,14 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     finaltime = param.finaltime
 
     u0 = calculate_initial_solution(dg, param)
-    u_hat0 = zeros(dg.N_dof_global)
-    u_local_state = zeros(dg.Np)
+    u_hat0 = zeros(dg.N_soln_dof_global)
+    u_local_state = zeros(dg.N_soln)
     for ielem = 1:dg.N_elem
         for istate = 1:dg.N_state
             for inode = 1:dg.N_vol
                 u_local_state[inode] = u0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_vol[ielem,inode]]]
             end
-            u_hat_local_state = dg.Pi*u_local_state
+            u_hat_local_state = dg.Pi_soln*u_local_state
             u_hat0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_basis[ielem,:]]] = u_hat_local_state
         end
     end
@@ -164,7 +164,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         CFL = 0.05
         #xmin = minimum(abs.(x[1,:] .- x[2,:]))
         #dt = abs(CFL / a * xmin /2)
-        dt = CFL * (dg.delta_x / dg.Np_per_dim)
+        dt = CFL * (dg.delta_x / dg.N_soln_per_dim)
         Nsteps::Int64 = ceil(finaltime/dt)
         dt = finaltime/Nsteps
         if param.debugmode == true
@@ -183,18 +183,18 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     Analysis
     ==============================================================================#
 
-    Np_overint_per_dim = dg.Np_per_dim+10
+    Np_overint_per_dim = dg.N_soln_per_dim+10
     Np_overint = (Np_overint_per_dim)^dim
     r_overint, w_overint = FastGaussQuadrature.gausslobatto(Np_overint_per_dim)
     (x_overint, y_overint) = build_coords_vectors(r_overint, dg)
     if dim==1
         chi_overint = vandermonde1D(r_overint,dg.r_basis)
         W_overint = LinearAlgebra.diagm(w_overint) # diagonal matrix holding quadrature weights
-        J_overint = LinearAlgebra.diagm(ones(size(r_overint))*dg.J[1]) #assume constant jacobian
+        J_overint = LinearAlgebra.diagm(ones(size(r_overint))*dg.J_soln[1]) #assume constant jacobian
     elseif dim==2
         chi_overint = vandermonde2D(r_overint, dg.r_basis, dg)
         W_overint = LinearAlgebra.diagm(vec(w_overint*w_overint'))
-        J_overint = LinearAlgebra.diagm(ones(length(r_overint)^dim)*dg.J[1]) #assume constant jacobian
+        J_overint = LinearAlgebra.diagm(ones(length(r_overint)^dim)*dg.J_soln[1]) #assume constant jacobian
     end
 
     if cmp(param.pde_type, "burgers1D")==0 && param.usespacetime
@@ -230,7 +230,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         #Extract only first state here
         u_hat_local = zeros(length(dg.r_basis)^dim) 
         u0_hat_local = zeros(size(u_hat_local)) 
-        for inode = 1:dg.Np
+        for inode = 1:dg.N_soln
             # only istate = 1, which is velocity for lin adv or burgers
             # and density for euler
             u_hat_local[inode] = u_hat[dg.StIDGIDtoGSID[1,dg.EIDLIDtoGID_basis[ielem,inode]]]
@@ -238,7 +238,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         end
         u_calc_final_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u_hat_local
         u0_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u0_hat_local
-        u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol] .= dg.chi_v * u_hat_local
+        u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol] .= dg.chi_soln* u_hat_local
     end
     u_diff = u_calc_final_overint .- u_exact_overint
 
@@ -311,8 +311,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                 display("WARNING: Energy calculation is probably unreliable for c != 0.")
             end
         else
-            entropy_final_calc += calculate_integrated_numerical_entropy(u_hat[(ielem-1)*dg.N_dof+1:(ielem)*dg.N_dof], dg, param)
-            entropy_initial += calculate_integrated_numerical_entropy(u_hat0[(ielem-1)*dg.N_dof+1:(ielem)*dg.N_dof], dg, param)
+            entropy_final_calc += calculate_integrated_numerical_entropy(u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], dg, param)
+            entropy_initial += calculate_integrated_numerical_entropy(u_hat0[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], dg, param)
         end
     end
 
