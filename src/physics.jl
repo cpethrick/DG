@@ -202,15 +202,16 @@ function entropy_project(chi_project, u_hat, dg::DG, param::PhysicsAndFluxParams
     # (i.e., volume or face pts)
     # Per eq 42 in Alex Euler preprint
 
-    u_volume_nodes = zeros(dg.N_dof)
+    u_volume_nodes = zeros(dg.N_soln_dof)
+    # at SOLUTION nodes.
     for istate = 1:dg.N_state
-        u_volume_nodes[dg.StIDLIDtoLSID[istate, :]] = dg.chi_v * u_hat[dg.StIDLIDtoLSID[istate, :]]
+        u_volume_nodes[dg.StIDLIDtoLSID[istate, :]] = dg.chi_soln * u_hat[dg.StIDLIDtoLSID[istate, :]]
     end
 
     v_volume = get_entropy_variables(u_volume_nodes, param)
-    v_hat = zeros(dg.N_dof)
+    v_hat = zeros(dg.N_soln_dof)
     for istate = 1:dg.N_state
-        v_hat[dg.StIDLIDtoLSID[istate, :]] = dg.Pi * v_volume[dg.StIDLIDtoLSID[istate, :]]
+        v_hat[dg.StIDLIDtoLSID[istate, :]] = dg.Pi_soln * v_volume[dg.StIDLIDtoLSID[istate, :]]
     end
 
     N_nodes_proj = size(chi_project)[1]
@@ -218,7 +219,6 @@ function entropy_project(chi_project, u_hat, dg::DG, param::PhysicsAndFluxParams
     for istate = 1:dg.N_state
         v_projected_nodes[(1:N_nodes_proj) .+ (istate-1)*N_nodes_proj] = chi_project * v_hat[dg.StIDLIDtoLSID[istate, :]]
     end
-
 
     projected_soln = get_solution_variables(v_projected_nodes, param)
     return projected_soln
@@ -288,6 +288,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
                 f_numerical += n_face[direction] * calculate_entropy_stable_spatial_dissipation(uM_face, uP_face, istate, dg, param)
             end
         else
+            # note to self, this prints incessantly if using 1DBurgers with 2 dimensions...
             display("Warning: No numerical flux is defined for this PDE type!!")
         end
 

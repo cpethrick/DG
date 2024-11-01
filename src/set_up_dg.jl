@@ -366,6 +366,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         dg.chi_soln = vandermonde1D(dg.r_soln,dg.r_basis)
         dg.phi_flux = vandermonde1D(dg.r_flux,dg.r_flux)
         dg.d_phi_flux_d_xi = gradvandermonde1D(dg.r_flux,dg.r_flux)
+        d_chi_flux_d_xi = gradvandermonde1D(dg.r_flux,dg.r_basis)
         #reference coordinates of L and R faces
         r_f_L::Float64 = -1
         r_f_R::Float64 = 1
@@ -383,6 +384,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         dg.phi_flux = vandermonde2D(dg.r_flux,dg.r_flux,dg)
         dg.d_phi_flux_d_xi = gradvandermonde2D(1, dg.r_flux,dg.r_flux, dg)
         dg.d_phi_flux_d_eta = gradvandermonde2D(2, dg.r_flux,dg.r_flux, dg)
+        d_chi_flux_d_xi = gradvandermonde2D(1, dg.r_flux,dg.r_basis, dg)
+        d_chi_flux_d_eta = gradvandermonde2D(2, dg.r_flux,dg.r_basis, dg)
         dg.chi_face = assembleFaceVandermonde2D(dg.r_basis,dg.r_flux,dg) #face nodes are 1D flux nodes
         dg.phi_face = assembleFaceVandermonde2D(dg.r_flux,dg.r_flux,dg)
         dg.W_soln = LinearAlgebra.diagm(vec(dg.w_soln*dg.w_soln'))
@@ -402,10 +405,10 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     # All defined on a single element.
     dg.M = dg.chi_soln' * dg.W_soln * dg.J_soln * dg.chi_soln ## Have verified this against PHiLiP. Here, unmodified mass matrix.
     dg.S_xi = dg.chi_flux' * dg.W_flux * dg.d_phi_flux_d_xi
-    dg.S_noncons_xi = dg.W_flux * dg.d_phi_flux_d_xi
+    dg.S_noncons_xi = dg.W_flux * d_chi_flux_d_xi
     if dim==2
         dg.S_eta = dg.chi_flux' * dg.W_flux * dg.d_phi_flux_d_eta
-        dg.S_noncons_eta = dg.W_flux * dg.d_phi_flux_d_eta
+        dg.S_noncons_eta = dg.W_flux * d_chi_flux_d_eta
     end
     M_nojac_soln = dg.chi_soln' * dg.W_soln * dg.chi_soln
     dg.Pi_soln = inv(M_nojac_soln)*dg.chi_soln'*dg.W_soln

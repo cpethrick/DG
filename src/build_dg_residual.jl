@@ -57,7 +57,7 @@ function calculate_face_numerical_flux_term(ielem, istate, iface, u_hat, uM, uP,
     # EIDofexterior is used to detect the type of numerical flux to apply.
     EID_of_exterior = dg.EIDLFIDtoEIDofexterior[ielem,iface]
     f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction, EID_of_exterior, dg, param)
-    face_term = dg.chi_f[:,:,iface]' * dg.W_f * dg.LFIDtoNormal[iface, direction] * (f_numerical)
+    face_term = dg.chi_face[:,:,iface]' * dg.W_face * dg.LFIDtoNormal[iface, direction] * (f_numerical)
 
     return face_term
 end
@@ -169,28 +169,26 @@ function calculate_dim_cellwise_residual(ielem, istate, u_hat,u_hat_local,direct
     return rhs_local_state
 end
 
-function calculate_volume_terms_skew_symm(istate,u_local, u_hat_local, direction, dg::DG, param::PhysicsAndFluxParams)
-
-    volume_term = zeros(Float64, dg.Np)
+function calculate_volume_terms_skew_symm(istate,u_hat_local, direction, dg::DG, param::PhysicsAndFluxParams)
 
     #u_local is only on volume nodes. Need to append u on face nodes.
     
-    u_vf = zeros(dg.Np+dg.Nfaces*dg.Nfp, dg.N_state) # columns are states.
+    u_vf = zeros(dg.N_flux+dg.N_faces*dg.N_face, dg.N_state) # columns are states.
 
-    u_tilde_volume = entropy_project(dg.chi_v, u_hat_local, dg, param)
+    u_tilde_volume = entropy_project(dg.chi_flux, u_hat_local, dg, param)
     for istate = 1:dg.N_state
-        u_vf[1:dg.Np, istate] = u_tilde_volume[(1:dg.Np) .+ (istate-1) * dg.Np]
+        u_vf[1:dg.N_flux, istate] = u_tilde_volume[(1:dg.N_flux) .+ (istate-1) * dg.N_flux]
     end
-    for iface = 1:dg.Nfaces
-        u_tilde_face =  entropy_project(dg.chi_f[:,:,iface], u_hat_local, dg, param)
+    for iface = 1:dg.N_faces
+        u_tilde_face =  entropy_project(dg.chi_face[:,:,iface], u_hat_local, dg, param)
         for istate = 1:dg.N_state
-            u_vf[(1:dg.Nfp) .+ dg.Np .+ (iface-1)*dg.Nfp, istate] = u_tilde_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
+            u_vf[(1:dg.N_face) .+ dg.N_flux .+ (iface-1)*dg.N_face, istate] = u_tilde_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
         end
     end
 
     
     # Problem: how to select u_face? Alex's paper seems contradictory of whether we eant to select Nf * Nfp or Nfp. Can't possibly select Nfp to calculate the two point flux?
-    reference_two_point_flux = zeros(dg.Np+dg.Nfaces*dg.Nfp,dg.Np+dg.Nfaces*dg.Nfp)
+    reference_two_point_flux = zeros(dg.N_flux+dg.N_faces*dg.N_face,dg.N_flux+dg.N_faces*dg.N_face)
     # Efficiency note: Some terms of QtildemQtildeT are zero, so those shouldn' be computed.
     # Can also take advantage of symmetry.
     for i =1:size(u_vf)[1]
@@ -204,17 +202,15 @@ function calculate_volume_terms_skew_symm(istate,u_local, u_hat_local, direction
 
     volume_term = dg.chi_vf * hadamard_product(dg.QtildemQtildeT[:,:,direction], reference_two_point_flux, size(u_vf)[1], size(u_vf)[1]) * ones(size(u_vf)[1])
 
-
     return volume_term
 end
 
 function calculate_dim_cellwise_residual_skew_symm(ielem,istate,u_hat,u_hat_local,direction, dg::DG, param::PhysicsAndFluxParams)
-    rhs_local = zeros(Float64, dg.Np)
+    rhs_local = zeros(Float64, dg.N_soln)
 
-
-    rhs_local .+= calculate_volume_terms_skew_symm(istate, u_local, u_hat_local,direction, dg, param)
+    rhs_local .+= calculate_volume_terms_skew_symm(istate, u_hat_local,direction, dg, param)
     
-    for iface in 1:dg.Nfaces
+    for iface in 1:dg.N_faces
         uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
         uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg, param)
 

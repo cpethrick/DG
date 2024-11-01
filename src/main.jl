@@ -570,4 +570,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-main("1D_linear_advection_FR.csv")
+main("1D_euler_GLL_OOA_FR.csv")
