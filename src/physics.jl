@@ -616,7 +616,7 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
 
                 u0 = calculate_euler_exact_solution(-1, x, y, dg.N_soln, dg) .+ 0.1
             else
-                u0 = initial_condition_Friedrichs_4_6(x, dg.Np)
+                u0 = initial_condition_Friedrichs_4_6(x, dg.N_soln)
             end
         else
             u0 = ones(dg.N_soln_dof_global)

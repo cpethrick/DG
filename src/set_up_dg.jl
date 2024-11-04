@@ -441,10 +441,10 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
 
         Following code calculates per Cicchino 2022 curvilinear eq. 28-29. Does the same thing as above code.
         ==# 
-        d_chi_soln_d_xi = gradvandermonde2D(1, dg.r_soln, dg,r_basis, dg)
-        d_chi_soln_d_eta = gradvandermonde2D(2, dg.r_soln, dg,r_basis, dg)
-        D_xi = inv(dg.M_nojac)*dg.chi_soln' * dg.W_soln * d_chi_soln_d_xi
-        D_eta = inv(dg.M_nojac)*dg.chi_soln' * dg.W_soln * d_chi_soln_d_eta
+        d_chi_soln_d_xi = gradvandermonde2D(1, dg.r_soln, dg.r_basis, dg)
+        d_chi_soln_d_eta = gradvandermonde2D(2, dg.r_soln, dg.r_basis, dg)
+        D_xi = inv(M_nojac_soln)*dg.chi_soln' * dg.W_soln * d_chi_soln_d_xi
+        D_eta = inv(M_nojac_soln)*dg.chi_soln' * dg.W_soln * d_chi_soln_d_eta
         dg.K = 0*dg.M #initialize with size of M
         if usespacetime
             # K only in space
