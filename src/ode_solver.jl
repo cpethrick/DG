@@ -18,7 +18,7 @@ function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
             param.spacetime_decouple_slabs = false
             return JFNKsolve(init_from_decoupled, false, 1.0, dg, param)
         else
-            return JFNKsolve(u_hat0, param.spacetime_decouple_slabs, 1.0*10^5,dg, param)
+            return JFNKsolve(u_hat0, param.spacetime_decouple_slabs, 1.0,dg, param)
         end
     else
         display("Error: Space-time solver type is illegal!")

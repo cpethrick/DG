@@ -177,6 +177,46 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         u_hat = spacetimeimplicitsolve(u_hat0 ,dg, param)
         #u_hat = u0
     end
+    display("u_hat from solve is ")
+    display(u_hat)
+    display(dg.EIDLFIDtoEIDofexterior)
+
+    a = param.advection_speed
+    #if upwind
+    lin_adv_discretization_expression = (a *  (dg.M * dg.MpK_inv) *  (- dg.S_xi 
+                                                - dg.chi_f[:,:,1]' * dg.W_f * dg.chi_f[:,:,1]
+                                                + dg.chi_f[:,:,1]' * dg.W_f * dg.chi_f[:,:,2] )
+                                                - dg.S_eta
+                                                - dg.chi_f[:,:,3]'*dg.W_f*dg.chi_f[:,:,3])
+    
+    #== if central
+    lin_adv_discretization_expression = (- a * dg.S_xi 
+                                                - 0.5* a * dg.chi_f[:,:,1]' * dg.W_f * dg.chi_f[:,:,1]
+                                                + 0.5* a * dg.chi_f[:,:,1]' * dg.W_f * dg.chi_f[:,:,2]
+                                                + 0.5* a * dg.chi_f[:,:,2]' * dg.W_f * dg.chi_f[:,:,2]
+                                                - 0.5* a * dg.chi_f[:,:,2]' * dg.W_f * dg.chi_f[:,:,1]
+                                                - dg.S_eta
+                                                - dg.chi_f[:,:,3]'*dg.W_f*dg.chi_f[:,:,3])
+                                                ==#
+    u0_Dirichlet = calculate_solution_on_Dirichlet_boundary(dg.x[1:dg.Np_per_dim], dg.y[1:dg.Np_per_dim], dg, param)
+    u_hat_analytical= -inv(lin_adv_discretization_expression) *  dg.chi_f[:,:,3]'*dg.W_f* u0_Dirichlet
+    display("u_hat from discretization is ")
+    display(u_hat_analytical)
+
+    display("Difference is")
+    display(u_hat - u_hat_analytical)
+    #u_hat = u_hat_analytical
+
+    display("Integrate soln over top face:")
+    display(ones(dg.Np_per_dim)' * dg.W_f * dg.J_f * dg.chi_f[:,:,4] * u_hat)
+    display("Integrate soln over bottom face:")
+    display(ones(dg.Np_per_dim)' * dg.W_f * dg.J_f * dg.chi_f[:,:,3] * u_hat)
+    display("Integrate DIrichlet IC:") 
+    display(ones(dg.Np_per_dim)' * dg.W_f * dg.J_f * u0_Dirichlet)
+
+    display("Diff btw top and Dirichlet:")
+    display(ones(dg.Np_per_dim)' * dg.W_f * dg.J_f * dg.chi_f[:,:,4] * u_hat -ones(dg.Np_per_dim)' * dg.W_f * dg.J_f * u0_Dirichlet)
+
     display("Reminder, c is ")
     display(param.fluxreconstructionC)
     #==============================================================================
@@ -424,7 +464,7 @@ function run(param::PhysicsAndFluxParams)
 
 
     P = param.P
-    N_elem_range = 2 .^(1:param.n_times_to_solve)
+    N_elem_range = 2 .^(0:param.n_times_to_solve)
     L2_err_store = zeros(length(N_elem_range))
     Linf_err_store = zeros(length(N_elem_range))
     entropy_change_store = zeros(length(N_elem_range))
@@ -570,4 +610,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-main()
+main("spacetime_linear_advection_OOA.csv")

@@ -43,10 +43,10 @@ filenames = ["1D_linear_advection_P3_result.csv",
              "1D_linear_advection_P4_result.csv",
              "spacetime_linear_advection_P3_result.csv",
              "spacetime_linear_advection_P4_result.csv",
-             "1D_burgers_P3_result.csv",
-             "1D_burgers_P4_result.csv",
-             "spacetime_burgers_P3_result.csv",
-             "spacetime_burgers_P4_result.csv",
+#             "1D_burgers_P3_result.csv",
+#             "1D_burgers_P4_result.csv",
+#             "spacetime_burgers_P3_result.csv",
+#             "spacetime_burgers_P4_result.csv",
              ]
 
 labelnames = [fname.replace("_result.csv", "").replace("_"," ") for fname in filenames]
