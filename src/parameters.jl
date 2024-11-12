@@ -29,6 +29,7 @@ mutable struct PhysicsAndFluxParams
     fr_c_name::String # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
     fr_c_userdefined::Float64
     debugmode::Bool
+    convergence_table_name::AbstractString
 
     # dependant params: set based on above required params.
     #set based on value of fr_c_name
@@ -57,7 +58,8 @@ mutable struct PhysicsAndFluxParams
                          fluxnodes_overintegration::Int64,
                          fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
                          fr_c_userdefined::Float64,
-                         debugmode::Bool
+                         debugmode::Bool,
+                         convergence_table_name::AbstractString
                         ) = new(
                                 dim::Int64,
                                 n_times_to_solve::Int64,
@@ -79,7 +81,8 @@ mutable struct PhysicsAndFluxParams
                                 fluxnodes_overintegration::Int64,
                                 fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
                                 fr_c_userdefined::Float64,
-                                debugmode::Bool
+                                debugmode::Bool,
+                                convergence_table_name::AbstractString
                                )
 
 
@@ -164,6 +167,7 @@ function parse_default_parameters()
     fr_c_name = parse_param_String("fr_c_name",paramDF)
     fr_c_userdefined = parse_param_Float64("fr_c_userdefined",paramDF)
     debugmode = parse_param_Bool("debugmode", paramDF)
+    convergence_table_name = parse_param_String("convergence_table_name",paramDF)
 
     param = PhysicsAndFluxParams(
                                  dim,
@@ -186,7 +190,8 @@ function parse_default_parameters()
                                  fluxnodes_overintegration,
                                  fr_c_name, 
                                  fr_c_userdefined,
-                                 debugmode
+                                 debugmode,
+                                 convergence_table_name
                                 )
     set_FR_value(param)
 
@@ -266,6 +271,9 @@ function parse_parameters(fname::String)
         end
         if "debugmode" in newparamDF.name
             default_params.debugmode = parse_param_Bool("debugmode", newparamDF)
+        end
+        if "convergence_table_name" in newparamDF.name
+            default_params.convergence_table_name = parse_param_String("convergence_table_name", newparamDF)
         end
     end
 

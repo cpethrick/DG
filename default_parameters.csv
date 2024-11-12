@@ -20,3 +20,4 @@ fluxnodes_overintegration,0
 fr_c_name,cDG
 fr_c_userdefined,0.0
 debugmode,false
+convergence_table_name,none

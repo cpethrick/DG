@@ -409,25 +409,27 @@ function run(param::PhysicsAndFluxParams)
         Printf.@printf("P =  %d \n", P)
         dx = 2.0./N_elem_range
         Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Entropy change         Time   Time scaling\n")
-        fname = "result.csv" #Note: this should be changed to something useful in the future...
-        f = open(fname, "w")
-        DelimitedFiles.writedlm(f, ["n cells_per_dim" "dx" "L2 Error" "L2  Error rate" "Linf Error" "Linf rate" "Entropy change" "Time" "Time scaling"], ",")
-        for j = 1:i
-            conv_rate_L2 = 0.0
-            conv_rate_Linf = 0.0
-            conv_rate_time = 0.0
-            conv_rate_energy = 0.0
-            if j>1
-                conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
-                conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
-                conv_rate_time = log(time_store[j]/time_store[j-1]) / log(dx[j]/dx[j-1])
-                conv_rate_energy = log(abs(entropy_change_store[j]/entropy_change_store[j-1])) / log(dx[j]/dx[j-1])
+        if cmp(param.convergence_table_name, "none") != 0
+            fname = param.convergence_table_name*".csv" #Note: this should be changed to something useful in the future...
+            f = open(fname, "w")
+            DelimitedFiles.writedlm(f, ["n cells_per_dim" "dx" "L2 Error" "L2  Error rate" "Linf Error" "Linf rate" "Entropy change" "Time" "Time scaling"], ",")
+            for j = 1:i
+                conv_rate_L2 = 0.0
+                conv_rate_Linf = 0.0
+                conv_rate_time = 0.0
+                conv_rate_energy = 0.0
+                if j>1
+                    conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
+                    conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
+                    conv_rate_time = log(time_store[j]/time_store[j-1]) / log(dx[j]/dx[j-1])
+                    conv_rate_energy = log(abs(entropy_change_store[j]/entropy_change_store[j-1])) / log(dx[j]/dx[j-1])
+                end
+                Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.4e \t%.2f \t%.5e \t%.2f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, entropy_change_store[j], conv_rate_energy, time_store[j], conv_rate_time)
+                DelimitedFiles.writedlm(f, [N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, entropy_change_store[j    ], time_store[j], conv_rate_time]', ",")
             end
-            Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.4e \t%.2f \t%.5e \t%.2f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, entropy_change_store[j], conv_rate_energy, time_store[j], conv_rate_time)
-            DelimitedFiles.writedlm(f, [N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, entropy_change_store[j    ], time_store[j], conv_rate_time]', ",")
-        end
 
-        close(f)
+            close(f)
+        end
 
     end
 end
