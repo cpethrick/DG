@@ -26,10 +26,10 @@ mutable struct PhysicsAndFluxParams
     basisnodes::String #"GLL" or "GL"
     fluxnodes::String # "GLL" or "GL"
     fluxnodes_overintegration::Int64
-    fr_c_name::String # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
+    fr_c_name::String # cDG, cPlus, cHU, cSD, c-, 1000, user-defined, case-insensitive
     fr_c_userdefined::Float64
     debugmode::Bool
-    convergence_table_name::AbstractString
+    convergence_table_name::AbstractString # none or descriptive name
 
     # dependant params: set based on above required params.
     #set based on value of fr_c_name
@@ -90,19 +90,19 @@ end
 
 function set_FR_value(param::PhysicsAndFluxParams)
     P = param.P
-    fr_c_name = param.fr_c_name
+    fr_c_name = lowercase(param.fr_c_name)
 
-    if cmp(fr_c_name, "cDG") == 0
+    if cmp(fr_c_name, "cdg") == 0
         param.fluxreconstructionC = 0.0
-    elseif cmp(fr_c_name, "cPlus") == 0
+    elseif cmp(fr_c_name, "cplus") == 0
         display("WARNING: cPlus not yet set. Returning 0.")
         param.fluxreconstructionC = 0.0
         # set values here
-    elseif cmp(fr_c_name, "cHU") == 0
+    elseif cmp(fr_c_name, "chu") == 0
         cp = factorial(2*P)/2^P / factorial(P)^2 # eq. 24 of cicchino 2021 tensor product
         # table 1, cicchino 2021
         param.fluxreconstructionC = (P+1) / (  P* ((2*P+1) * (factorial(P) * cp) ^2)   ) 
-    elseif cmp(fr_c_name, "cSD") == 0
+    elseif cmp(fr_c_name, "csd") == 0
         cp = factorial(2*P)/2^P / factorial(P)^2 # eq. 24 of cicchino 2021 tensor product
         # table 1, cicchino 2021
         param.fluxreconstructionC = P / (  (P+1)* ((2*P+1) * (factorial(P) * cp) ^2)   ) 
