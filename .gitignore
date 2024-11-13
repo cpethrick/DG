@@ -2,4 +2,4 @@
 *.swp
 *.swo
 results/*
-result.csv
+*result.csv
