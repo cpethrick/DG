@@ -410,7 +410,7 @@ function run(param::PhysicsAndFluxParams)
         dx = 2.0./N_elem_range
         Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Entropy change         Time   Time scaling\n")
         if cmp(param.convergence_table_name, "none") != 0
-            fname = param.convergence_table_name*".csv" #Note: this should be changed to something useful in the future...
+            fname = "result/"*param.convergence_table_name*".csv" #Note: this should be changed to something useful in the future...
             f = open(fname, "w")
             DelimitedFiles.writedlm(f, ["n cells_per_dim" "dx" "L2 Error" "L2  Error rate" "Linf Error" "Linf rate" "Entropy change" "Time" "Time scaling"], ",")
             for j = 1:i

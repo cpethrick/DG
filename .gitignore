@@ -2,6 +2,7 @@
 *.swp
 *.swo
 results/*
+result/*
 result.csv
 c_ramp/*result.csv
 c_ramp/*.py
