@@ -10,11 +10,7 @@ function c_ramp_test(paramfile::String="default_parameters.csv")
 
     fname = paramfile[1:end-4]*"_result.csv"
 
-<<<<<<< HEAD
-    fr_c_ramp_values = exp10.(range(-7.0, 4.0, length=21))
-=======
     fr_c_ramp_values = exp10.(range(-7.0, 4.0, length=31))
->>>>>>> master
     #can append special values here (cHU, cSD)
 
     N_small = 16
