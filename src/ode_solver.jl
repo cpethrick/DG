@@ -5,6 +5,7 @@ include("parameters.jl")
 import LinearMaps
 import IterativeSolvers
 import PyPlot
+import DelimitedFiles
 
 function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
 
@@ -39,6 +40,8 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
         N_time_slabs = 1
     end
 
+    logdata=false #in principle, this should be a param, but it won't be used enough to warrant being added
+    residuallog = []
     u_hat = u_hat0
     for iTS = 1:N_time_slabs
         if do_decouple
@@ -59,6 +62,7 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
         u_hat_NLiter = u_hat
         NL_iterctr = 0
         max_iterations = 2000
+        residuallog = []
         if param.debugmode == true
             # max_iterations= 1
             NL_iterlim = 1
@@ -94,6 +98,9 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
                                                      maxiter=max_iterations
                                                     ) #Note: gmres() initializes with zeros, while gmres!(x, FMap, b) initializes with x.)
             display(log)
+            if logdata
+                residuallog = vcat(residuallog,log.data[:resnorm])
+            end
             u_hat_NLiter += u_hat_delta
             residual_NL = sqrt(sum(u_hat_delta .^ 2))
             NL_iterctr+=1
@@ -107,6 +114,14 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
 
         u_hat0 = u_hat # Store u_hat in u_hat0 because the restarts use u_hat0. Unsure if this would be needed for JFNK
 
+    end
+
+    # This will write only the LAST time-slab to a file.
+    if logdata
+        f = open("JFNKsolve.log", "w")
+
+        DelimitedFiles.writedlm(f, residuallog, ",")
+        close(f)
     end
 
     return u_hat
@@ -131,7 +146,7 @@ function pseudotimesolve(u_hat0, do_decouple::Bool, dg::DG, param::PhysicsAndFlu
             subset_EIDs = nothing
         end
 
-        dt = 0.01* (dg.delta_x / dg.Np_per_dim) 
+        dt = 0.01* (dg.delta_x / dg.N_soln_per_dim) 
         residual = 1
         u_hat = u_hat0
         residual_scaling = sqrt(sum(u_hat.^2))
@@ -238,26 +253,26 @@ function physicaltimesolve(u_hat0, dt, Nsteps, dg, param, subset_EIDs=nothing)
     ==============================================================================#
 
     if param.debugmode == false
-        rk4a = [ 0.0,
+        RKa = [ 0.0,
                 -567301805773.0/1357537059087.0,
                 -2404267990393.0/2016746695238.0,
                 -3550918686646.0/2091501179385.0,
                 -1275806237668.0/842570457699.0];
-        rk4b = [ 1432997174477.0/9575080441755.0,
+        RKb = [ 1432997174477.0/9575080441755.0,
                 5161836677717.0/13612068292357.0,
                 1720146321549.0/2090206949498.0,
                 3134564353537.0/4481467310338.0,
                 2277821191437.0/14882151754819.0];
-        rk4c = [ 0.0,
+        RKc = [ 0.0,
                 1432997174477.0/9575080441755.0,
                 2526269341429.0/6820363962896.0,
                 2006345519317.0/3224310063776.0,
                 2802321613138.0/2924317926251.0];
         nRKStage=5
     else 
-        rk4a=[0]
-        rk4b=[1]
-        rk4c=[0]
+        RKa=[0]
+        RKb=[1]
+        RKc=[0]
         nRKStage=1
     end
 
@@ -269,13 +284,13 @@ function physicaltimesolve(u_hat0, dt, Nsteps, dg, param, subset_EIDs=nothing)
         #for tstep = 1:1
         for iRKstage = 1:nRKStage
 
-            rktime = current_time + rk4c[iRKstage] * dt
+            rktime = current_time + RKc[iRKstage] * dt
 
             #####assemble residual
             rhs = assemble_residual(u_hat, rktime, dg, param, subset_EIDs)
 
-            residual = rk4a[iRKstage] * residual .+ dt * rhs
-            u_hat += rk4b[iRKstage] * residual
+            residual = RKa[iRKstage] * residual .+ dt * rhs
+            u_hat += RKb[iRKstage] * residual
         end
         current_time += dt   
     end

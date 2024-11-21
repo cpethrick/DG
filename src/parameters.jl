@@ -24,9 +24,12 @@ mutable struct PhysicsAndFluxParams
     finaltime::Float64
     volumenodes::String #"GLL" or "GL"
     basisnodes::String #"GLL" or "GL"
-    fr_c_name::String # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
+    fluxnodes::String # "GLL" or "GL"
+    fluxnodes_overintegration::Int64
+    fr_c_name::String # cDG, cPlus, cHU, cSD, c-, 1000, user-defined, case-insensitive
     fr_c_userdefined::Float64
     debugmode::Bool
+    convergence_table_name::AbstractString # none or descriptive name
 
     # dependant params: set based on above required params.
     #set based on value of fr_c_name
@@ -51,9 +54,12 @@ mutable struct PhysicsAndFluxParams
                          finaltime::Float64,
                          volumenodes::AbstractString, #"GLL" or "GL"
                          basisnodes::AbstractString, #"GLL" or "GL"
+                         fluxnodes::AbstractString, #"GLL" or "GL"
+                         fluxnodes_overintegration::Int64,
                          fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
                          fr_c_userdefined::Float64,
-                         debugmode::Bool
+                         debugmode::Bool,
+                         convergence_table_name::AbstractString
                         ) = new(
                                 dim::Int64,
                                 n_times_to_solve::Int64,
@@ -71,9 +77,12 @@ mutable struct PhysicsAndFluxParams
                                 finaltime::Float64,
                                 volumenodes::AbstractString, #"GLL" or "GL"
                                 basisnodes::AbstractString, #"GLL" or "GL"
+                                fluxnodes::AbstractString, #"GLL" or "GL"
+                                fluxnodes_overintegration::Int64,
                                 fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
                                 fr_c_userdefined::Float64,
-                                debugmode::Bool
+                                debugmode::Bool,
+                                convergence_table_name::AbstractString
                                )
 
 
@@ -81,19 +90,19 @@ end
 
 function set_FR_value(param::PhysicsAndFluxParams)
     P = param.P
-    fr_c_name = param.fr_c_name
+    fr_c_name = lowercase(param.fr_c_name)
 
-    if cmp(fr_c_name, "cDG") == 0
+    if cmp(fr_c_name, "cdg") == 0
         param.fluxreconstructionC = 0.0
-    elseif cmp(fr_c_name, "cPlus") == 0
+    elseif cmp(fr_c_name, "cplus") == 0
         display("WARNING: cPlus not yet set. Returning 0.")
         param.fluxreconstructionC = 0.0
         # set values here
-    elseif cmp(fr_c_name, "cHU") == 0
+    elseif cmp(fr_c_name, "chu") == 0
         cp = factorial(2*P)/2^P / factorial(P)^2 # eq. 24 of cicchino 2021 tensor product
         # table 1, cicchino 2021
         param.fluxreconstructionC = (P+1) / (  P* ((2*P+1) * (factorial(P) * cp) ^2)   ) 
-    elseif cmp(fr_c_name, "cSD") == 0
+    elseif cmp(fr_c_name, "csd") == 0
         cp = factorial(2*P)/2^P / factorial(P)^2 # eq. 24 of cicchino 2021 tensor product
         # table 1, cicchino 2021
         param.fluxreconstructionC = P / (  (P+1)* ((2*P+1) * (factorial(P) * cp) ^2)   ) 
@@ -153,9 +162,12 @@ function parse_default_parameters()
     finaltime = parse_param_Float64("finaltime", paramDF)
     volumenodes = parse_param_String("volumenodes", paramDF)
     basisnodes = parse_param_String("basisnodes", paramDF)
+    fluxnodes = parse_param_String("fluxnodes", paramDF)
+    fluxnodes_overintegration = parse_param_Int64("fluxnodes_overintegration", paramDF)
     fr_c_name = parse_param_String("fr_c_name",paramDF)
     fr_c_userdefined = parse_param_Float64("fr_c_userdefined",paramDF)
     debugmode = parse_param_Bool("debugmode", paramDF)
+    convergence_table_name = parse_param_String("convergence_table_name",paramDF)
 
     param = PhysicsAndFluxParams(
                                  dim,
@@ -174,9 +186,12 @@ function parse_default_parameters()
                                  finaltime, 
                                  volumenodes, 
                                  basisnodes, 
+                                 fluxnodes,
+                                 fluxnodes_overintegration,
                                  fr_c_name, 
                                  fr_c_userdefined,
-                                 debugmode
+                                 debugmode,
+                                 convergence_table_name
                                 )
     set_FR_value(param)
 
@@ -240,6 +255,12 @@ function parse_parameters(fname::String)
         if "basisnodes" in newparamDF.name
             default_params.basisnodes = parse_param_String("basisnodes", newparamDF)
         end
+        if "fluxnodes" in newparamDF.name
+            default_params.fluxnodes = parse_param_String("fluxnodes", newparamDF)
+        end
+        if "fluxnodes_overintegration" in newparamDF.name
+            default_params.fluxnodes_overintegration = parse_param_Int64("fluxnodes_overintegration", newparamDF)
+        end
         if "fr_c_userdefined" in newparamDF.name
             #need to define fr_c_userdefined BEFORE fr_c_name
             default_params.fr_c_userdefined= parse_param_Float64("fr_c_userdefined", newparamDF)
@@ -251,8 +272,36 @@ function parse_parameters(fname::String)
         if "debugmode" in newparamDF.name
             default_params.debugmode = parse_param_Bool("debugmode", newparamDF)
         end
+        if "convergence_table_name" in newparamDF.name
+            default_params.convergence_table_name = parse_param_String("convergence_table_name", newparamDF)
+        end
     end
+
+    display_param_warnings(default_params)
 
     return default_params
 end
 
+function display_param_warnings(param::PhysicsAndFluxParams)
+    # Function to catch known issues and warn the user.
+    #
+
+    if cmp(param.volumenodes, param.basisnodes) !=0
+        display("****WARNING: order known to drop to 1 if volume and basis nodes not matching!****")
+    end
+
+    if param.fluxnodes_overintegration != 0
+        display("****WARNING: conservation not holding for overintegrated nodes.****")
+        # Likely a simple bug, but haven't yet looked into it. Recommend just using mis-
+        # matched soln and flux nodes for now.
+    end
+
+    if param.debugmode
+        display("****WARNING: Solving in debug mode. This will NOT result in a converged solution.****")
+    end
+
+
+
+
+
+end

@@ -10,7 +10,10 @@ spacetime_decouple_slabs,false
 spacetime_solver_type,JFNK
 include_source,false
 alpha_split,1.0
-volumenodes,GL
-basisnodes,GL
+volumenodes,GLL
+basisnodes,GLL
+fluxnodes,GL
+fluxnodes_overintegration,0
 dim,2
 usespacetime,true
+fr_c_name,cDG

@@ -202,15 +202,16 @@ function entropy_project(chi_project, u_hat, dg::DG, param::PhysicsAndFluxParams
     # (i.e., volume or face pts)
     # Per eq 42 in Alex Euler preprint
 
-    u_volume_nodes = zeros(dg.N_dof)
+    u_volume_nodes = zeros(dg.N_soln_dof)
+    # at SOLUTION nodes.
     for istate = 1:dg.N_state
-        u_volume_nodes[dg.StIDLIDtoLSID[istate, :]] = dg.chi_v * u_hat[dg.StIDLIDtoLSID[istate, :]]
+        u_volume_nodes[dg.StIDLIDtoLSID[istate, :]] = dg.chi_soln * u_hat[dg.StIDLIDtoLSID[istate, :]]
     end
 
     v_volume = get_entropy_variables(u_volume_nodes, param)
-    v_hat = zeros(dg.N_dof)
+    v_hat = zeros(dg.N_soln_dof)
     for istate = 1:dg.N_state
-        v_hat[dg.StIDLIDtoLSID[istate, :]] = dg.Pi * v_volume[dg.StIDLIDtoLSID[istate, :]]
+        v_hat[dg.StIDLIDtoLSID[istate, :]] = dg.Pi_soln * v_volume[dg.StIDLIDtoLSID[istate, :]]
     end
 
     N_nodes_proj = size(chi_project)[1]
@@ -218,7 +219,6 @@ function entropy_project(chi_project, u_hat, dg::DG, param::PhysicsAndFluxParams
     for istate = 1:dg.N_state
         v_projected_nodes[(1:N_nodes_proj) .+ (istate-1)*N_nodes_proj] = chi_project * v_hat[dg.StIDLIDtoLSID[istate, :]]
     end
-
 
     projected_soln = get_solution_variables(v_projected_nodes, param)
     return projected_soln
@@ -233,7 +233,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
     #             the problem physics
     # bc_type = 0 indicates a Dirichlet boundary for time dimension, returning the exterior value
     # bc_type = -1 indicates an outflow (transmissive) boundary for time dimension, returning the interior value 
-    f_numerical=zeros(dg.Nfp)
+    f_numerical=zeros(dg.N_face)
 
     if bc_type > 0
         # assign boundary according to problem physics.
@@ -255,11 +255,11 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
                 if n_face[direction] == -1
                     # face is bottom. Use the information from the external element
                     # which corresponds to the past
-                    f_numerical = uP_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
+                    f_numerical = uP_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
                 elseif n_face[direction] == 1
                     # face is bottom. Use internal solution
                     # which corresonds to the past
-                    f_numerical = uM_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
+                    f_numerical = uM_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
                 end # if face normal ==0,  leave f_numercal as zeros.
             end
         elseif cmp(param.pde_type, "linear_adv_1D")==0
@@ -288,15 +288,16 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
                 f_numerical += n_face[direction] * calculate_entropy_stable_spatial_dissipation(uM_face, uP_face, istate, dg, param)
             end
         else
+            # note to self, this prints incessantly if using 1DBurgers with 2 dimensions...
             display("Warning: No numerical flux is defined for this PDE type!!")
         end
 
     elseif bc_type == 0
         # Dirichlet: uP_face has been set to be the analtical value in get_solution_at_face()
-        f_numerical = uP_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
+        f_numerical = uP_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
     elseif bc_type == -1
         # Outflow: return interior soln
-        f_numerical = uM_face[(1:dg.Nfp) .+ (istate-1) * dg.Nfp]
+        f_numerical = uM_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
     else
         display("Warning: Numerical flux boundary type not recognized!")
     end
@@ -532,7 +533,7 @@ end
 
 
 function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
-    f = zeros(dg.N_vol)
+    f = zeros(dg.N_flux)
 
     if direction == 2 && param.usespacetime
         f .+= u
@@ -586,7 +587,7 @@ function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFl
         # in 1D, C_m = 1 so we don't need this step
         f = transform_physical_to_reference(f, direction, dg)
     end
-    f_hat = dg.Pi * f
+    f_hat = dg.Pi_flux * f
 
     return f_hat#,f_f
 end
@@ -613,12 +614,12 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
         if cmp(param.pde_type,  "euler1D")==0
             if param.include_source
 
-                u0 = calculate_euler_exact_solution(-1, x, y, dg.Np, dg) .+ 0.1
+                u0 = calculate_euler_exact_solution(-1, x, y, dg.N_soln, dg) .+ 0.1
             else
-                u0 = initial_condition_Friedrichs_4_6(x, dg.Np)
+                u0 = initial_condition_Friedrichs_4_6(x, dg.N_soln)
             end
         else
-            u0 = ones(dg.N_dof_global)
+            u0 = ones(dg.N_soln_dof_global)
         end
         #u0 = 0*x
     elseif param.include_source && cmp(param.pde_type, "burgers2D")==0
@@ -628,7 +629,7 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
     elseif cmp(param.pde_type, "burgers2D") == 0
         u0 = exp.(-10*((x .-1).^2 .+(y .-1).^2))
     elseif cmp(param.pde_type, "euler1D") == 0
-        u0 = calculate_euler_exact_solution(0, x, y, dg.Np, dg)
+        u0 = calculate_euler_exact_solution(0, x, y, dg.N_soln, dg)
     else
         #u0 = 0.2* sin.(π * x) .+ 0.01
         u0 = sin.(π * (x)) .+ 0.01
@@ -701,7 +702,7 @@ function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::Abstr
             time = t* ones(size(x))
         end
         # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
-        Q = zeros(dg.Np)
+        Q = zeros(dg.N_soln)
         gamm1=0.4
         for ielem in 1:dg.N_elem
             # Source per 4.5 Friedrichs
@@ -738,9 +739,9 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
         return out
     elseif cmp(param.pde_type, "euler1D") == 0
         if param.include_source
-            return calculate_euler_exact_solution(0, x, y, dg.Nfp, dg)
+            return calculate_euler_exact_solution(0, x, y, dg.N_face, dg)
         else
-            return initial_condition_Friedrichs_4_6(x, dg.Nfp)
+            return initial_condition_Friedrichs_4_6(x, dg.N_face)
         end
 
     else

@@ -1,0 +1,15 @@
+name,value
+dim,2
+usespacetime,true
+n_times_to_solve,7
+P,4
+pde_type,linear_adv_1D
+spacetime_decouple_slabs,true
+spacetime_solver_type,JFNK
+include_source,false
+alpha_split,1.0
+volumenodes,GLL
+basisnodes,GLL
+fluxnodes,GLL
+fr_c_name,cDG
+convergence_table_name,OOA_lin_adv_p4_cDG

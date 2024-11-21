@@ -6,5 +6,5 @@ pde_type,linear_adv_1D
 include_source,false
 alpha_split,1.0
 debugmode,false
-fluxreconstructionC,cDG
+fr_c_name,cSD
 finaltime,2.324

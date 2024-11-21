@@ -14,7 +14,10 @@ use_skew_symmetric_stiffness_operator,false
 advection_speed,1.0
 finaltime,1.0
 volumenodes,GL
-basisnodes,GLL
+basisnodes,GL
+fluxnodes,GL
+fluxnodes_overintegration,0
 fr_c_name,cDG
 fr_c_userdefined,0.0
 debugmode,false
+convergence_table_name,none
