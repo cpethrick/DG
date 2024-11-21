@@ -7,3 +7,5 @@ result/*
 result.csv
 c_ramp/*result.csv
 c_ramp/*.py
+*result.csv
+c_ramp/c_ramp_plot.py
