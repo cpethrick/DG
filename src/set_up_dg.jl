@@ -496,8 +496,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         dg.QtildemQtildeT[dg.N_flux+1:end, 1:dg.N_flux, idim] .=  -1.0 * dg.QtildemQtildeT[1:dg.N_flux,dg.N_flux+1:end,idim]'
     end
 
-    display("Skew-symmetric stiffness operator:")
-    display(dg.QtildemQtildeT)
+    #display("Skew-symmetric stiffness operator:")
+    #display(dg.QtildemQtildeT)
 
     return dg
 

@@ -5,6 +5,7 @@ include("parameters.jl")
 import LinearMaps
 import IterativeSolvers
 import PyPlot
+import DelimitedFiles
 
 function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
 
@@ -39,6 +40,8 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
         N_time_slabs = 1
     end
 
+    logdata=false #in principle, this should be a param, but it won't be used enough to warrant being added
+    residuallog = []
     u_hat = u_hat0
     for iTS = 1:N_time_slabs
         if do_decouple
@@ -59,6 +62,7 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
         u_hat_NLiter = u_hat
         NL_iterctr = 0
         max_iterations = 2000
+        residuallog = []
         if param.debugmode == true
             # max_iterations= 1
             NL_iterlim = 1
@@ -94,6 +98,9 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
                                                      maxiter=max_iterations
                                                     ) #Note: gmres() initializes with zeros, while gmres!(x, FMap, b) initializes with x.)
             display(log)
+            if logdata
+                residuallog = vcat(residuallog,log.data[:resnorm])
+            end
             u_hat_NLiter += u_hat_delta
             residual_NL = sqrt(sum(u_hat_delta .^ 2))
             NL_iterctr+=1
@@ -107,6 +114,14 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
 
         u_hat0 = u_hat # Store u_hat in u_hat0 because the restarts use u_hat0. Unsure if this would be needed for JFNK
 
+    end
+
+    # This will write only the LAST time-slab to a file.
+    if logdata
+        f = open("JFNKsolve.log", "w")
+
+        DelimitedFiles.writedlm(f, residuallog, ",")
+        close(f)
     end
 
     return u_hat

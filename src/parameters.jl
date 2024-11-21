@@ -277,6 +277,31 @@ function parse_parameters(fname::String)
         end
     end
 
+    display_param_warnings(default_params)
+
     return default_params
 end
 
+function display_param_warnings(param::PhysicsAndFluxParams)
+    # Function to catch known issues and warn the user.
+    #
+
+    if cmp(param.volumenodes, param.basisnodes) !=0
+        display("****WARNING: order known to drop to 1 if volume and basis nodes not matching!****")
+    end
+
+    if param.fluxnodes_overintegration != 0
+        display("****WARNING: conservation not holding for overintegrated nodes.****")
+        # Likely a simple bug, but haven't yet looked into it. Recommend just using mis-
+        # matched soln and flux nodes for now.
+    end
+
+    if param.debugmode
+        display("****WARNING: Solving in debug mode. This will NOT result in a converged solution.****")
+    end
+
+
+
+
+
+end
