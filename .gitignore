@@ -1,6 +1,7 @@
 *.pdf
 *.swp
 *.swo
+*.log
 results/*
 result/*
 result.csv

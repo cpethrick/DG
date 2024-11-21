@@ -1,0 +1,17 @@
+name,value
+dim,2
+usespacetime,true
+n_times_to_solve,7
+P,3
+domain_size,2.0
+numerical_flux_type,split_with_LxF
+pde_type,burgers1D
+spacetime_decouple_slabs,true
+spacetime_solver_type,JFNK
+use_skew_symmetric_stiffness_operator,true
+volumenodes,GLL
+basisnodes,GLL
+fluxnodes,GL
+fr_c_name,cDG
+save_convergence_table,true
+convergence_table_name,OOA_burgers_p3_cDG
