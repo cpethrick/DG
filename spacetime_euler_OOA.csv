@@ -12,7 +12,6 @@ include_source,true
 alpha_split,1.0
 volumenodes,GLL
 basisnodes,GLL
-fluxnodes_overintegration,1
 dim,2
 usespacetime,true
 fr_c_name,cDG

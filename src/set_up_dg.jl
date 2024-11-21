@@ -348,8 +348,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         display("Overintegrating the flux by")
         display(fluxnodes_overintegration)
     end
-    # dg.r_basis = dg.r_basis * 0.5 .+ 0.5
-    # dg.w_basis /= 2.0
+    # dg.r_flux = dg.r_flux * 0.5 .+ 0.5
+    # dg.w_flux /= 2.0
 
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], dg.N_elem_per_dim+1) |> collect
     display("Elements per dim:")

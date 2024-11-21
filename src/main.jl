@@ -531,4 +531,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-main("spacetime_euler_entropy_preservation.csv")
+main()
