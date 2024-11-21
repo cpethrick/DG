@@ -300,7 +300,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                 entropy_initial += S_face' * dg.W_face * dg.J_face * ones(size(S_face))
             elseif ielem > N_elem_per_dim^dim - N_elem_per_dim
                 # face on top
-                u_face = project(dg.chi_face[:,:,4], u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], false, dg, param)
+                u_face = project(dg.chi_face[:,:,4], u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], true, dg, param)
                 S_face = get_numerical_entropy_function(u_face, param)
                 entropy_final_calc += S_face' * dg.W_face * dg.J_face * ones(size(S_face))
             end
@@ -323,7 +323,6 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         proj_corrected_error = calculate_projection_corrected_entropy_change(u_hat, dg, param)
         entropy_change = proj_corrected_error
     end
-    
     PyPlot.figure("Solution", figsize=(6,4))
     PyPlot.clf()
     ax = PyPlot.gca()

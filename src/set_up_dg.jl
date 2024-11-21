@@ -231,6 +231,10 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
                 #if on a periodic boundary
                 dg.EIDLFIDtoEIDofexterior[ielem,1]+=dg.N_elem_per_dim
             end
+            # hard-code the case where N_elem_per_dim=1
+            if N_elem_per_dim == 1
+                dg.EIDLFIDtoEIDofexterior[ielem,1] = 1
+            end
             # face 2: right
             dg.EIDLFIDtoEIDofexterior[ielem,2] = ielem + 1
             if mod(ielem,dg.N_elem_per_dim) == 0
