@@ -200,12 +200,51 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                                                 ==#
     u0_Dirichlet = calculate_solution_on_Dirichlet_boundary(dg.x[1:dg.Np_per_dim], dg.y[1:dg.Np_per_dim], dg, param)
     u_hat_analytical= -inv(lin_adv_discretization_expression) *  dg.chi_f[:,:,3]'*dg.W_f* u0_Dirichlet
-    display("u_hat from discretization is ")
-    display(u_hat_analytical)
+    alpha = 0
+    uM_face = dg.chi_f[:,:,1] * u_hat_analytical
+    uP_face = dg.chi_f[:,:,2] * u_hat_analytical
+    n_face = -1
+    f_num_1 = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face) * (uM_face.-uP_face) # lin. adv, upwind/central
+    uM_face = dg.chi_f[:,:,2] * u_hat_analytical
+    uP_face = dg.chi_f[:,:,1] * u_hat_analytical
+    n_face = 1
+    f_num_2 = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face) * (uM_face.-uP_face) # lin. adv, upwind/central
+    display(f_num_1)
+    display(f_num_2)
+    # Have verified that numerical fluxes are identical.
+    #display("u_hat from discretization is ")
+    #display(u_hat_analytical)
 
-    display("Difference is")
+    #display("Difference is")
     display(u_hat - u_hat_analytical)
     #u_hat = u_hat_analytical
+    
+    ones_hat = dg.Pi * ones(dg.Np)
+
+    #display("Next line should be zero")
+    #display(ones_hat' * dg.M * dg.MpK_inv * dg.S_xi' * u_hat_analytical) # indeed zero for cDG but not cHU
+    #display(ones_hat' * dg.S_xi' * u_hat_analytical) # zero for cDG AND cHU
+
+    display("Individual terms")
+    display(ones_hat' * dg.chi_f[:,:,3]' * dg.W_f * u0_Dirichlet
+            - ones_hat' * dg.chi_f[:,:,4]' * dg.W_f * dg.chi_f[:,:,4]* u_hat)
+    display(ones_hat' * dg.M * dg.MpK_inv * (dg.chi_f[:,:,1]' * dg.W_f * f_num_1) )
+    display(ones_hat' * dg.M * dg.MpK_inv * (- dg.chi_f[:,:,2]'*dg.W_f * f_num_2) )
+    display(a * ones_hat' * dg.M * dg.MpK_inv * dg.S_xi' * u_hat_analytical)
+
+    display("Full expression")
+    display(ones_hat' * dg.chi_f[:,:,3]' * dg.W_f * u0_Dirichlet 
+            - ones_hat' * dg.chi_f[:,:,4]' * dg.W_f * dg.chi_f[:,:,4]* u_hat
+            + ones_hat' * dg.M * dg.MpK_inv * (dg.chi_f[:,:,1]' * dg.W_f * f_num_1 - dg.chi_f[:,:,2]'*dg.W_f * f_num_2)
+           + a * ones_hat' * dg.M * dg.MpK_inv * dg.S_xi' * u_hat_analytical)
+
+
+    #cp = factorial(2*P)/2^P / factorial(P)^2
+    #ShM_coeff = 1/(1+param.fluxreconstructionC* (dg.P*2+1)*(factorial(dg.P) * cp)^2)
+    #display("Testing Lemma 3.1:")
+    #display(dg.MpK_inv)
+    #display(dg.M_inv - ShM_coeff * dg.M_inv * dg.K * dg.M_inv)
+    #display(-dg.MpK_inv+dg.M_inv - ShM_coeff * dg.M_inv * dg.K * dg.M_inv)
 
     display("Integrate soln over top face:")
     display(ones(dg.Np_per_dim)' * dg.W_f * dg.J_f * dg.chi_f[:,:,4] * u_hat)
