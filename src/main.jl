@@ -209,15 +209,13 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     uP_face = dg.chi_f[:,:,1] * u_hat_analytical
     n_face = 1
     f_num_2 = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face) * (uM_face.-uP_face) # lin. adv, upwind/central
-    display(f_num_1)
-    display(f_num_2)
-    # Have verified that numerical fluxes are identical.
-    #display("u_hat from discretization is ")
-    #display(u_hat_analytical)
+    #display(f_num_1)
+    #display(f_num_2)
+    # Have verified that numerical fluxes are identical to numerical soln
 
-    #display("Difference is")
+    display("Difference is")
     display(u_hat - u_hat_analytical)
-    #u_hat = u_hat_analytical
+    # Line above verifies that the u_hat_analytical is found correctly.
     
     ones_hat = dg.Pi * ones(dg.Np)
 
@@ -225,19 +223,32 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     #display(ones_hat' * dg.M * dg.MpK_inv * dg.S_xi' * u_hat_analytical) # indeed zero for cDG but not cHU
     #display(ones_hat' * dg.S_xi' * u_hat_analytical) # zero for cDG AND cHU
 
-    display("Individual terms")
-    display(ones_hat' * dg.chi_f[:,:,3]' * dg.W_f * u0_Dirichlet
-            - ones_hat' * dg.chi_f[:,:,4]' * dg.W_f * dg.chi_f[:,:,4]* u_hat)
+    display("Individual terms Form A")
+    display(-ones_hat' * dg.MpK * dg.M_inv * dg.chi_f[:,:,4]' * dg.W_f * dg.chi_f[:,:,4]* u_hat_analytical)
+    display(ones_hat' * dg.MpK * dg.M_inv * dg.chi_f[:,:,3]' * dg.W_f * u0_Dirichlet)
+    display(ones_hat' * (dg.chi_f[:,:,1]' * dg.W_f * f_num_1) )
+    display(-ones_hat' * (dg.chi_f[:,:,2]'*dg.W_f * f_num_2) )
+    display(+ones_hat' * dg.MpK * dg.M_inv* dg.S_eta' * u_hat_analytical)
+    display("Full expression")
+    display(-ones_hat' * dg.MpK * dg.M_inv * dg.chi_f[:,:,4]' * dg.W_f * dg.chi_f[:,:,4]* u_hat_analytical
+        +ones_hat' * dg.MpK * dg.M_inv * dg.chi_f[:,:,3]' * dg.W_f * u0_Dirichlet
+        +ones_hat' * (dg.chi_f[:,:,1]' * dg.W_f * f_num_1) 
+        -ones_hat' * (dg.chi_f[:,:,2]'*dg.W_f * f_num_2) 
+        +ones_hat' * dg.MpK * dg.M_inv* dg.S_eta' * u_hat_analytical)
+    display("Individual terms Form B")
+    display(-ones_hat' * dg.chi_f[:,:,4]' * dg.W_f * dg.chi_f[:,:,4]* u_hat_analytical)
+    display(ones_hat' * dg.chi_f[:,:,3]' * dg.W_f * u0_Dirichlet)
     display(ones_hat' * dg.M * dg.MpK_inv * (dg.chi_f[:,:,1]' * dg.W_f * f_num_1) )
-    display(ones_hat' * dg.M * dg.MpK_inv * (- dg.chi_f[:,:,2]'*dg.W_f * f_num_2) )
+    display(-ones_hat' * dg.M * dg.MpK_inv * (dg.chi_f[:,:,2]'*dg.W_f * f_num_2) )
     display(a * ones_hat' * dg.M * dg.MpK_inv * dg.S_xi' * u_hat_analytical)
 
     display("Full expression")
-    display(ones_hat' * dg.chi_f[:,:,3]' * dg.W_f * u0_Dirichlet 
-            - ones_hat' * dg.chi_f[:,:,4]' * dg.W_f * dg.chi_f[:,:,4]* u_hat
-            + ones_hat' * dg.M * dg.MpK_inv * (dg.chi_f[:,:,1]' * dg.W_f * f_num_1 - dg.chi_f[:,:,2]'*dg.W_f * f_num_2)
+    display(
+            - ones_hat' * dg.chi_f[:,:,4]' * dg.W_f * dg.chi_f[:,:,4]* u_hat_analytical
+            +ones_hat' * dg.chi_f[:,:,3]' * dg.W_f * u0_Dirichlet 
+            + ones_hat' * dg.M * dg.MpK_inv * (dg.chi_f[:,:,1]' * dg.W_f * f_num_1 )
+            -  ones_hat' * dg.M * dg.MpK_inv * (dg.chi_f[:,:,2]'*dg.W_f * f_num_2)
            + a * ones_hat' * dg.M * dg.MpK_inv * dg.S_xi' * u_hat_analytical)
-
 
     #cp = factorial(2*P)/2^P / factorial(P)^2
     #ShM_coeff = 1/(1+param.fluxreconstructionC* (dg.P*2+1)*(factorial(dg.P) * cp)^2)
