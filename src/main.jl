@@ -177,6 +177,12 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         u_hat = spacetimeimplicitsolve(u_hat0 ,dg, param)
         #u_hat = u0
     end
+
+    display(dg.M)
+    display(dg.MpK)
+
+    display(dg.M * dg.MpK * dg.M_inv)
+
     display("u_hat from solve is ")
     display(u_hat)
     display(dg.EIDLFIDtoEIDofexterior)
@@ -266,9 +272,17 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     display("Diff btw top and Dirichlet:")
     display(ones(dg.Np_per_dim)' * dg.W_f * dg.J_f * dg.chi_f[:,:,4] * u_hat -ones(dg.Np_per_dim)' * dg.W_f * dg.J_f * u0_Dirichlet)
-
     display("Reminder, c is ")
     display(param.fluxreconstructionC)
+
+
+
+    display("++++++TESTING++++++")
+
+    display(ones_hat' * (dg.MpK) * dg.M_inv * dg.S_eta' * u_hat_analytical)
+    display(ones_hat' * dg.S_eta' * u_hat_analytical)
+    display(ones_hat' * tensor_product_2D(dg.K_1D * inv(dg.M_1D),LinearAlgebra.diagm(ones(dg.Np_per_dim))) * dg.S_eta' * u_hat_analytical)
+    display("++++++TESTING OVER++++++")
     #==============================================================================
     Analysis
     ==============================================================================#
@@ -507,11 +521,12 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         PyPlot.tricontourf(x_overint, y_overint, u_exact_overint, 20)
         PyPlot.colorbar()
     end
-    return L2_error, Linf_error, entropy_change#, solution
+    return L2_error, Linf_error, entropy_change, dg#, solution
 end
 
 function run(param::PhysicsAndFluxParams)
 
+    dg = 0
 
     P = param.P
     N_elem_range = 2 .^(0:param.n_times_to_solve)
@@ -528,7 +543,7 @@ function run(param::PhysicsAndFluxParams)
         # Start timer (NOTE: should change to BenchmarkTools.jl in the future)
         t = time()
         # Solve
-        (L2_err_store[i],Linf_err_store[i], entropy_change_store[i]) = setup_and_solve(N_elem,P,param)
+        (L2_err_store[i],Linf_err_store[i], entropy_change_store[i],dg) = setup_and_solve(N_elem,P,param)
         # End timer
         time_store[i] = time() - t
 
@@ -561,6 +576,7 @@ function run(param::PhysicsAndFluxParams)
         close(f)
 
     end
+    return dg
 end
 #==============================================================================
 Global setup
@@ -657,7 +673,10 @@ function main(paramfile::AbstractString="default_parameters.csv")
     ==#
     param = parse_parameters(paramfile)
 
-    run(param)
+    dg =  run(param)
+
+
+    return dg
 end
 
 main("spacetime_linear_advection_OOA.csv")

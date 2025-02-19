@@ -79,6 +79,9 @@ mutable struct DG
     K::AbstractMatrix{Float64}
     QtildemQtildeT::AbstractArray{Float64}
 
+    M_1D::AbstractMatrix{Float64}
+    K_1D::AbstractMatrix{Float64}
+
     #Incomplete initializer - only assign Category 1 variables.
     DG(P::Int, 
        dim::Int, 
@@ -404,6 +407,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         D_xi = inv(dg.M_nojac)*dg.S_xi
         D_eta = inv(dg.M_nojac)*dg.S_eta
         dg.K = 0*dg.M #initialize with size of M
+        #== For filter in both dimensions
         for s = [0,P]
             for v = [0,P]
                 if s+v >= P
@@ -411,7 +415,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
                     dg.K += c_sv * (D_xi^s * D_eta^v)' * dg.M * (D_xi^s * D_eta^v)
                 end
             end
-        end
+        end ==#
         dg.K = fluxreconstructionC * (D_xi^P)' * dg.M * D_xi^P
     end
     display("FR K")
@@ -452,6 +456,35 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
 
     display("Next line is dg.chi_v*dg.Pi, which should be identity.")
     display(dg.chi_v*dg.Pi) #should be identity
+
+
+
+
+    display("=============TESTING===========")
+
+    # 1D mass matrix
+    chi_v_1D = vandermonde1D(dg.r_volume,dg.r_basis)
+    d_chi_v_d_xi_1D = gradvandermonde1D(dg.r_volume,dg.r_basis)
+    dg.M_1D = (dg.delta_x/2.0) * chi_v_1D' *LinearAlgebra.diagm(dg.w_volume) * chi_v_1D ## one dimension
+    M_1D_nojac = chi_v_1D' *LinearAlgebra.diagm(dg.w_volume) * chi_v_1D ## one dimension
+    S_xi_1D = chi_v_1D' * LinearAlgebra.diagm(dg.w_volume) * d_chi_v_d_xi_1D
+    dg.K_1D = fluxreconstructionC * ( (inv(M_1D_nojac)*S_xi_1D)^P )' * dg.M_1D * ( (inv(M_1D_nojac)*S_xi_1D)^P ) ## Verified for 1D.
+    #display(tensor_product_2D((M_1D .+ K_1D), M_1D)) ## Confirmed to be the same as dg.MpK.
+    #display(tensor_product_2D((M_1D), M_1D).+tensor_product_2D((K_1D), M_1D))
+    
+    #display(dg.M_inv)
+    #display(tensor_product_2D((K_1D), M_1D) * inv(dg.M))
+
+
+    I_2D = LinearAlgebra.diagm(ones(Np))
+    # display(dg.MpK * dg.M_inv)
+    # display(LinearAlgebra.I + tensor_product_2D(dg.K_1D *inv(dg.M_1D),I_2D)) # this line and previous are equivalent
+
+
+    #display(dg.S_xi)
+    #display(dg.S_eta)
+
+    display("=============TESTING DONE===========")
 
 
     return dg
