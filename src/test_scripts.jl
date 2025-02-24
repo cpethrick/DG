@@ -71,15 +71,15 @@ function reference_element_figure()
     ax.spines["right"].set_visible(false)
     ax.spines["bottom"].set_visible(false)
     ax.spines["left"].set_visible(false)
-    PyPlot.ylabel(L"$\tau$")
-    PyPlot.xlabel(L"$\xi$")
-    PyPlot.plot(dg.x, dg.y, "o", color="#ED1B2F", label=L"$\bar{\xi}_{soln}$, solution nodes", markersize=5)
+    PyPlot.ylabel(L"$\tau$, temporal coordinate")
+    PyPlot.xlabel(L"$\xi$, spatial coordinate")
+    PyPlot.plot(dg.x, dg.y, "o", color="#ED1B2F", label=L"$\bar{\xi}_{\mathrm{soln}}$, solution nodes", markersize=5)
     x_flux,y_flux = build_coords_vectors(dg.r_flux, dg)  
-    PyPlot.plot(x_flux, y_flux, "o", color="#b9b4b3", label=L"$\bar{\xi}_{flux}$, flux nodes", markersize=4)
+    PyPlot.plot(x_flux, y_flux, "o", color="#b9b4b3", label=L"$\bar{\xi}_{\mathrm{flux}}$, flux nodes", markersize=4)
 
     x_face = vcat(-1*ones(size(dg.r_flux)), ones(size(dg.r_flux)), dg.r_flux, dg.r_flux)
     y_face = vcat(dg.r_flux, dg.r_flux,-1*ones(size(dg.r_flux)), ones(size(dg.r_flux)))
-    PyPlot.plot(x_face, y_face, "o", color="#1896cb", label=L"$\bar{\xi}_{face}$, face nodes", markersize=3)
+    PyPlot.plot(x_face, y_face, "o", color="#1896cb", label=L"$\bar{\xi}_{\mathrm{face}}$, face nodes", markersize=3)
 
     box = ax.get_position()
     #shrink plot
@@ -91,10 +91,10 @@ function reference_element_figure()
     PyPlot.plot([-1,1,1,-1,-1], [-1, -1, 1, 1, -1], "k", zorder = 1)
 
 
-    ax.text(0.2,-0.9,"face 3", horizontalalignment="center")
-    ax.text(-0.9,0.1,"face 1", horizontalalignment="center", rotation="vertical")
-    ax.text(0.2,0.85,"face 4", horizontalalignment="center")
-    ax.text(0.9,0.1,"face 2", horizontalalignment="center", rotation="vertical")
+    ax.text(0.2,-1.2,L"\textbf{Face 3}", horizontalalignment="center")
+    ax.text(-1.1,0.1,L"\textbf{Face 1}", horizontalalignment="center", rotation="vertical")
+    ax.text(0.2,1.1,L"\textbf{Face 4}", horizontalalignment="center")
+    ax.text(1.15,0.1,L"\textbf{Face 2}", horizontalalignment="center", rotation="vertical")
 
     PyPlot.savefig("reference_element.pdf", bbox_inches="tight")
 
