@@ -152,7 +152,7 @@ function run(param::PhysicsAndFluxParams)
         time_store[i] = time() - t
 
         if cmp(param.pde_type, "euler1D")==0
-            display("Convergence is for density. Energy is probably not valid.")
+            display("Convergence is for density.")
         end
 
         #Evalate convergence, print, and save to file

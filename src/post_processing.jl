@@ -74,6 +74,61 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
 end
 
 
+function display_plots(x_overint_1D,x_overint,y_overint,u0_overint_1D, u_calc_final_overint_1D, u_exact_overint_1D, u0_overint,u_calc_final_overint, dg, param)
+    dim = dg.dim
+    PyPlot.figure("Solution", figsize=(6,4))
+    PyPlot.clf()
+    ax = PyPlot.gca()
+    ax.set_xticks(dg.VX, minor=false)
+    ax.xaxis.grid(true, which="major")
+    PyPlot.plot(vec(x_overint_1D), vec(u0_overint_1D), label="initial")
+    if param.include_source || cmp(param.pde_type, "linear_adv_1D")==0
+        PyPlot.plot(vec(x_overint_1D), vec(u_exact_overint_1D), label="exact")
+    end
+    PyPlot.plot(vec(x_overint_1D), vec(u_calc_final_overint_1D), label="calculated")
+    #Plots.plot!(vec(x_overint_1D), [vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["calculated" "initial"])
+    PyPlot.legend()
+    pltname = string("plt", dg.N_elem_per_dim, ".pdf")
+    PyPlot.savefig(pltname)
+
+    PyPlot.figure("Grid", figsize=(6,6))
+    PyPlot.clf()
+    ax = PyPlot.gca()
+    ax.set_xticks(dg.VX, minor=false)
+    ax.xaxis.grid(true, which="major", color="k")
+    ax.set_axisbelow(false)
+    if dim == 1
+        PyPlot.axhline(0)
+    elseif dim == 2
+        ax.set_yticks(dg.VX, minor=false)
+        ax.yaxis.grid(true, which="major", color="k")
+    end
+    PyPlot.plot(x_overint, y_overint,"o", color="yellowgreen", label="overintegration", markersize=0.25)
+    PyPlot.plot(dg.x, dg.y, "o", color="darkolivegreen", label="volume nodes")
+    pltname = string("grid", dg.N_elem_per_dim, ".pdf")
+    PyPlot.savefig(pltname)
+
+    for i in 1:length(u_calc_final_overint)
+        if isnan(u_calc_final_overint[i])
+            u_calc_final_overint[i]=0
+        end
+    end
+
+    if dim == 2# && N_elem_per_dim == 4
+        PyPlot.figure("Initial cond, overintegrated")
+        PyPlot.clf()
+        PyPlot.tricontourf(x_overint, y_overint, u0_overint, 20)
+        PyPlot.colorbar()
+        PyPlot.figure("Final soln, overintegrated")
+        PyPlot.clf()
+        PyPlot.tricontourf(x_overint, y_overint, u_calc_final_overint, 20)
+        PyPlot.colorbar()
+        PyPlot.figure("Final exact soln, overintegrated")
+        PyPlot.clf()
+        PyPlot.tricontourf(x_overint, y_overint, u_exact_overint, 20)
+        PyPlot.colorbar()
+    end
+end
 
 function post_process(u_hat, u_hat0, dg::DG, param::PhysicsAndFluxParams) 
     return post_process(u_hat, 0.0, u_hat0, dg::DG, param::PhysicsAndFluxParams)
@@ -190,58 +245,8 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
         proj_corrected_error = calculate_projection_corrected_entropy_change(u_hat, dg, param)
         entropy_change = proj_corrected_error
     end
-    PyPlot.figure("Solution", figsize=(6,4))
-    PyPlot.clf()
-    ax = PyPlot.gca()
-    ax.set_xticks(dg.VX, minor=false)
-    ax.xaxis.grid(true, which="major")
-    PyPlot.plot(vec(x_overint_1D), vec(u0_overint_1D), label="initial")
-    if param.include_source || cmp(param.pde_type, "linear_adv_1D")==0
-        PyPlot.plot(vec(x_overint_1D), vec(u_exact_overint_1D), label="exact")
-    end
-    PyPlot.plot(vec(x_overint_1D), vec(u_calc_final_overint_1D), label="calculated")
-    #Plots.plot!(vec(x_overint_1D), [vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["calculated" "initial"])
-    PyPlot.legend()
-    pltname = string("plt", dg.N_elem_per_dim, ".pdf")
-    PyPlot.savefig(pltname)
 
-    PyPlot.figure("Grid", figsize=(6,6))
-    PyPlot.clf()
-    ax = PyPlot.gca()
-    ax.set_xticks(dg.VX, minor=false)
-    ax.xaxis.grid(true, which="major", color="k")
-    ax.set_axisbelow(false)
-    if dim == 1
-        PyPlot.axhline(0)
-    elseif dim == 2
-        ax.set_yticks(dg.VX, minor=false)
-        ax.yaxis.grid(true, which="major", color="k")
-    end
-    PyPlot.plot(x_overint, y_overint,"o", color="yellowgreen", label="overintegration", markersize=0.25)
-    PyPlot.plot(dg.x, dg.y, "o", color="darkolivegreen", label="volume nodes")
-    pltname = string("grid", dg.N_elem_per_dim, ".pdf")
-    PyPlot.savefig(pltname)
-
-    for i in 1:length(u_calc_final_overint)
-        if isnan(u_calc_final_overint[i])
-            u_calc_final_overint[i]=0
-        end
-    end
-
-    if dim == 2# && N_elem_per_dim == 4
-        PyPlot.figure("Initial cond, overintegrated")
-        PyPlot.clf()
-        PyPlot.tricontourf(x_overint, y_overint, u0_overint, 20)
-        PyPlot.colorbar()
-        PyPlot.figure("Final soln, overintegrated")
-        PyPlot.clf()
-        PyPlot.tricontourf(x_overint, y_overint, u_calc_final_overint, 20)
-        PyPlot.colorbar()
-        PyPlot.figure("Final exact soln, overintegrated")
-        PyPlot.clf()
-        PyPlot.tricontourf(x_overint, y_overint, u_exact_overint, 20)
-        PyPlot.colorbar()
-    end
+    display_plots(x_overint_1D,x_overint, y_overint,u0_overint_1D, u_calc_final_overint_1D, u_exact_overint_1D, u0_overint,u_calc_final_overint, dg, param)
 
     return L2_error, Linf_error, entropy_change#, solution
 end
