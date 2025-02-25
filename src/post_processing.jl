@@ -250,32 +250,6 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
     for ielem = 1:dg.N_elem
         L2_error += (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])
 
-#==
-        if param.usespacetime
-            # for spacetime, we want to consider initial as t=0 (bottom surface of the computational domain) and final as t=t_f (top surface)
-            if ielem < dg.N_elem_per_dim+1
-                # face on bottom
-                #u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
-                
-
-                # Find initial energy from the Dirichlet BC on lower face
-                x_local = dg.VX[ielem] .+ 0.5* (dg.r_flux.+1) * dg.delta_x
-                y_local = zeros(size(x_local)) # leave zero as this is the lower face
-                u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
-
-                S_face = get_numerical_entropy_function(u_face, param)
-
-                entropy_initial += S_face' * dg.W_face * dg.J_face * ones(size(S_face))
-            elseif ielem > dg.N_elem_per_dim^dim - dg.N_elem_per_dim
-                # face on top
-                u_face = project(dg.chi_face[:,:,4], u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], true, dg, param)
-                S_face = get_numerical_entropy_function(u_face, param)
-                entropy_final_calc += S_face' * dg.W_face * dg.J_face * ones(size(S_face))
-            end
-            if param.fluxreconstructionC > 0
-                display("WARNING: Energy calculation is probably unreliable for c != 0.")
-            end
-==#
         if !param.usespacetime
             entropy_final_calc += calculate_integrated_numerical_entropy(u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], dg, param)
             entropy_initial += calculate_integrated_numerical_entropy(u_hat0[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], dg, param)
@@ -297,6 +271,8 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
         if dg.N_state == 1
             conservation=calculate_conservation_spacetime(u_hat, dg, param)
         end
+    else
+        display("Warning: conservation check is not implemented for MoL!")
     end
 
    display_plots(x_overint_1D,x_overint, y_overint,u0_overint_1D, u_calc_final_overint_1D, u_exact_overint_1D, u0_overint,u_calc_final_overint,u_exact_overint, dg, param)
