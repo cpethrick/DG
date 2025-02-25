@@ -47,7 +47,7 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
     display("Final integrated state:")
     display(integrated_state_final)
 
-    conservation = integrated_state_initial - integrated_state_final
+    conservation = integrated_state_final - integrated_state_initial
     return conservation
 end
 
