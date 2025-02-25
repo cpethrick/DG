@@ -7,6 +7,7 @@ import FastGaussQuadrature
 
 include("set_up_dg.jl")
 include("parameters.jl")
+include("physics.jl")
 
 function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::PhysicsAndFluxParams)
     entropy_initial = 0
@@ -93,32 +94,7 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
         J_overint = LinearAlgebra.diagm(ones(length(r_overint)^dim)*dg.J_soln[1]) #assume constant jacobian
     end
 
-    if cmp(param.pde_type, "burgers1D")==0 && param.usespacetime
-        # y is time
-        u_exact_overint = cos.(π*(x_overint-y_overint))
-    elseif cmp(param.pde_type, "burgers1D")==0
-        u_exact_overint = cos.(π*(x_overint.-current_time))
-    elseif cmp(param.pde_type, "burgers2D")==0
-        u_exact_overint = cos.(π*(x_overint.+y_overint.-sqrt(2)*current_time))
-    elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == false
-        u_exact_overint = sin.(π * (x_overint.- param.advection_speed * current_time)) .+ 0.01
-    elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == true 
-        u_exact_overint = sin.(π * (x_overint - param.advection_speed * y_overint)) .+ 0.01
-    elseif cmp(param.pde_type, "euler1D")==0
-        if param.usespacetime
-            display("Warning: exact soln not correct for space time!")
-            u_exact_overint_allstates = calculate_euler_exact_solution(-1.0, x_overint, y_overint, Np_overint, dg)
-        else
-            u_exact_overint_allstates = calculate_euler_exact_solution(current_time, x_overint, y_overint, Np_overint, dg)
-        end
-        # extract only density
-        u_exact_overint = zeros(size(x_overint))
-        for ielem = 1:dg.N_elem
-            u_exact_overint[(1:Np_overint) .+ (ielem-1)*Np_overint]=u_exact_overint_allstates[ (1:Np_overint) .+ Np_overint*3*(ielem-1) .+ (1-1)*Np_overint]
-        end
-    else
-        display("Warning - no exact solution defined!")
-    end
+    u_exact_overint = calculate_exact_solution(x_overint, y_overint,Np_overint, current_time, dg, param) 
     u_calc_final_overint = zeros(size(x_overint))
     u0_overint = zeros(size(x_overint))
     u_calc_final = zeros(dg.N_vol*dg.N_elem)
