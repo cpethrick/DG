@@ -28,6 +28,7 @@ mutable struct PhysicsAndFluxParams
     fluxnodes_overintegration::Int64
     fr_c_name::String # cDG, cPlus, cHU, cSD, c-, 1000, user-defined, case-insensitive
     fr_c_userdefined::Float64
+    do_conservation_check::Bool # Controls how well-converged the solution is
     debugmode::Bool
     convergence_table_name::AbstractString # none or descriptive name
 
@@ -58,6 +59,7 @@ mutable struct PhysicsAndFluxParams
                          fluxnodes_overintegration::Int64,
                          fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
                          fr_c_userdefined::Float64,
+                         do_conservation_check::Bool,
                          debugmode::Bool,
                          convergence_table_name::AbstractString
                         ) = new(
@@ -81,6 +83,7 @@ mutable struct PhysicsAndFluxParams
                                 fluxnodes_overintegration::Int64,
                                 fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
                                 fr_c_userdefined::Float64,
+                                do_conservation_check::Bool,
                                 debugmode::Bool,
                                 convergence_table_name::AbstractString
                                )
@@ -166,6 +169,7 @@ function parse_default_parameters()
     fluxnodes_overintegration = parse_param_Int64("fluxnodes_overintegration", paramDF)
     fr_c_name = parse_param_String("fr_c_name",paramDF)
     fr_c_userdefined = parse_param_Float64("fr_c_userdefined",paramDF)
+    do_conservation_check = parse_param_Bool("do_conservation_check",paramDF)
     debugmode = parse_param_Bool("debugmode", paramDF)
     convergence_table_name = parse_param_String("convergence_table_name",paramDF)
 
@@ -190,6 +194,7 @@ function parse_default_parameters()
                                  fluxnodes_overintegration,
                                  fr_c_name, 
                                  fr_c_userdefined,
+                                 do_conservation_check,
                                  debugmode,
                                  convergence_table_name
                                 )
@@ -268,6 +273,9 @@ function parse_parameters(fname::String)
         if "fr_c_name" in newparamDF.name
             default_params.fr_c_name= parse_param_String("fr_c_name", newparamDF)
             set_FR_value(default_params)
+        end
+        if "do_conservation_check" in newparamDF.name
+            default_params.do_conservation_check = parse_param_Bool("do_conservation_check", newparamDF)
         end
         if "debugmode" in newparamDF.name
             default_params.debugmode = parse_param_Bool("debugmode", newparamDF)

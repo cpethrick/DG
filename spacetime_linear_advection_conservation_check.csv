@@ -1,0 +1,11 @@
+name,value
+dim,2
+P,4
+n_times_to_solve,3
+pde_type,linear_adv_1D
+usespacetime,true
+spacetime_solver_type,JFNK
+alpha_split,1.0
+include_source,false
+advection_speed,0.3
+do_conservation_check,true

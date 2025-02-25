@@ -58,7 +58,7 @@ end
 
 function get_entropy_variables(solution, param::PhysicsAndFluxParams)
 
-    if  occursin("burgers",param.pde_type)
+    if  occursin("burgers",param.pde_type) || occursin("linear_adv_1D", param.pde_type)
         return solution
     elseif cmp(param.pde_type, "euler1D") == 0
         # Have verified that u(v(u)) = u, i.e. mapping is invertible
@@ -166,7 +166,7 @@ function get_numerical_entropy_function(solution, param::PhysicsAndFluxParams)
 
         return  -1.0 * rho .* entropy ./ gamm1
     else
-        display("Warning: entropy potential not defined for this PDE!")
+        display("Warning: entropy function not defined for this PDE!")
         return solution
     end
 end
@@ -777,7 +777,7 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
         end
 
     else
-        return sin.(π * (x)) .+ 0.01
+        return sin.(π * (x)) .+ 1.01
     end
 end
 

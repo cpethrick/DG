@@ -12,14 +12,19 @@ function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
     if cmp(param.spacetime_solver_type, "pseudotime")==0
         return pseudotimesolve(u_hat0, param.spacetime_decouple_slabs, dg, param)
     elseif cmp(param.spacetime_solver_type, "JFNK")==0
+        if param.do_conservation_check == true
+            convergence_scaling = 1.0
+        else
+            convergence_scaling = 10^5
+        end
         if !param.spacetime_decouple_slabs
             # To accelerate convergence, first solve as a decoupled system, then use that to initialize.
             param.spacetime_decouple_slabs = true
-            init_from_decoupled = JFNKsolve(u_hat0, true, 1.0*10^7, dg, param)
+            init_from_decoupled = JFNKsolve(u_hat0, true, convergence_scaling*10^7, dg, param)
             param.spacetime_decouple_slabs = false
-            return JFNKsolve(init_from_decoupled, false, 1.0, dg, param)
+            return JFNKsolve(init_from_decoupled, false, convergence_scaling, dg, param)
         else
-            return JFNKsolve(u_hat0, param.spacetime_decouple_slabs, 1.0*10^5,dg, param)
+            return JFNKsolve(u_hat0, param.spacetime_decouple_slabs, convergence_scaling,dg, param)
         end
     else
         display("Error: Space-time solver type is illegal!")

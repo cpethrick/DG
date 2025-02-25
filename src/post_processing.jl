@@ -9,6 +9,47 @@ include("set_up_dg.jl")
 include("parameters.jl")
 include("physics.jl")
 
+function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxParams)
+
+    dim = dg.dim
+    if dg.N_state > 1
+        display("Warning: nstate>1 may break the conservation check!")
+    end
+
+    integrated_state_initial = 0.0
+    integrated_state_final = 0.0
+    ones_hat = dg.Pi_soln  * ones(dg.N_soln)
+    for ielem = 1:dg.N_elem
+        if param.usespacetime
+            # for spacetime, we want to consider initial as t=0 (bottom surface of the computational domain) and final as t=t_f (top surface)
+            if ielem < dg.N_elem_per_dim+1
+                # face on bottom
+                #u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
+
+                # Find initial energy from the Dirichlet BC on lower face
+                x_local = dg.VX[ielem] .+ 0.5* (dg.r_flux.+1) * dg.delta_x
+                y_local = zeros(size(x_local)) # leave zero as this is the lower face
+                u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
+
+                integrated_state_initial += ones_hat' * dg.MpK * dg.M_inv * dg.chi_face[:,:,3]' *dg.J_face* dg.W_face * u_face
+
+            elseif ielem > dg.N_elem_per_dim^dim - dg.N_elem_per_dim
+                # face on top
+                u_face = project(dg.chi_face[:,:,4], u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], true, dg, param)
+                integrated_state_final += ones_hat' * dg.MpK * dg.M_inv * dg.chi_face[:,:,4]' * dg.J_face * dg.W_face * u_face
+            end
+        end
+    end
+
+    display("Initial integrated state:")
+    display(integrated_state_initial)
+    display("Final integrated state:")
+    display(integrated_state_final)
+
+    conservation = integrated_state_initial - integrated_state_final
+    return conservation
+end
+
 function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::PhysicsAndFluxParams)
     entropy_initial = 0
     entropy_final = 0
@@ -74,7 +115,7 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
 end
 
 
-function display_plots(x_overint_1D,x_overint,y_overint,u0_overint_1D, u_calc_final_overint_1D, u_exact_overint_1D, u0_overint,u_calc_final_overint, dg, param)
+function display_plots(x_overint_1D,x_overint,y_overint,u0_overint_1D, u_calc_final_overint_1D, u_exact_overint_1D, u0_overint,u_calc_final_overint, u_exact_overint, dg, param)
     dim = dg.dim
     PyPlot.figure("Solution", figsize=(6,4))
     PyPlot.clf()
@@ -133,6 +174,7 @@ end
 function post_process(u_hat, u_hat0, dg::DG, param::PhysicsAndFluxParams) 
     return post_process(u_hat, 0.0, u_hat0, dg::DG, param::PhysicsAndFluxParams)
 end
+
 function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::PhysicsAndFluxParams)
     dim = dg.dim
     Np_overint_per_dim = dg.N_soln_per_dim+10
@@ -205,9 +247,9 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
     for ielem = 1:dg.N_elem
         L2_error += (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])
 
+#==
         if param.usespacetime
             # for spacetime, we want to consider initial as t=0 (bottom surface of the computational domain) and final as t=t_f (top surface)
-
             if ielem < dg.N_elem_per_dim+1
                 # face on bottom
                 #u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
@@ -217,6 +259,7 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
                 x_local = dg.VX[ielem] .+ 0.5* (dg.r_flux.+1) * dg.delta_x
                 y_local = zeros(size(x_local)) # leave zero as this is the lower face
                 u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
+
                 S_face = get_numerical_entropy_function(u_face, param)
 
                 entropy_initial += S_face' * dg.W_face * dg.J_face * ones(size(S_face))
@@ -229,24 +272,29 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
             if param.fluxreconstructionC > 0
                 display("WARNING: Energy calculation is probably unreliable for c != 0.")
             end
-        else
+==#
+        if !param.usespacetime
             entropy_final_calc += calculate_integrated_numerical_entropy(u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], dg, param)
             entropy_initial += calculate_integrated_numerical_entropy(u_hat0[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], dg, param)
         end
+        
     end
 
     L2_error = sqrt(L2_error)
 
     Linf_error = maximum(abs.(u_diff))
-
+    
     entropy_change = entropy_final_calc - entropy_initial
 
+    conservation = 0.0
     if param.usespacetime
         proj_corrected_error = calculate_projection_corrected_entropy_change(u_hat, dg, param)
         entropy_change = proj_corrected_error
+
+        conservation=calculate_conservation_spacetime(u_hat, dg, param)
     end
 
-    display_plots(x_overint_1D,x_overint, y_overint,u0_overint_1D, u_calc_final_overint_1D, u_exact_overint_1D, u0_overint,u_calc_final_overint, dg, param)
+   display_plots(x_overint_1D,x_overint, y_overint,u0_overint_1D, u_calc_final_overint_1D, u_exact_overint_1D, u0_overint,u_calc_final_overint,u_exact_overint, dg, param)
 
     return L2_error, Linf_error, entropy_change#, solution
 end

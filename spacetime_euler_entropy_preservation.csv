@@ -17,3 +17,4 @@ fluxnodes_overintegration,0
 dim,2
 usespacetime,true
 fr_c_name,cDG
+do_conservation_check,true

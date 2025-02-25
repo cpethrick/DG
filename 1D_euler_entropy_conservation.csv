@@ -12,3 +12,4 @@ volumenodes,GLL
 basisnodes,GL
 dim,1
 finaltime,0.05
+do_conservation_check,true
