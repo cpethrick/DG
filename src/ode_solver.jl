@@ -13,7 +13,7 @@ function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
         return pseudotimesolve(u_hat0, param.spacetime_decouple_slabs, dg, param)
     elseif cmp(param.spacetime_solver_type, "JFNK")==0
         if param.do_conservation_check == true
-            convergence_scaling = 1.0
+            convergence_scaling::Float64 = 1.0
         else
             convergence_scaling = 10^5
         end

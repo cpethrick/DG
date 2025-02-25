@@ -48,6 +48,8 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
     display(integrated_state_final)
 
     conservation = integrated_state_final - integrated_state_initial
+    display("Conservation:")
+    display(conservation)
     return conservation
 end
 
@@ -292,7 +294,9 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
         proj_corrected_error = calculate_projection_corrected_entropy_change(u_hat, dg, param)
         entropy_change = proj_corrected_error
 
-        conservation=calculate_conservation_spacetime(u_hat, dg, param)
+        if dg.N_state == 1
+            conservation=calculate_conservation_spacetime(u_hat, dg, param)
+        end
     end
 
    display_plots(x_overint_1D,x_overint, y_overint,u0_overint_1D, u_calc_final_overint_1D, u_exact_overint_1D, u0_overint,u_calc_final_overint,u_exact_overint, dg, param)
