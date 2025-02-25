@@ -35,6 +35,7 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
 
             elseif ielem > dg.N_elem_per_dim^dim - dg.N_elem_per_dim
                 # face on top
+                # The next line does u_face =  chi_face[4] * u_hat but in a separate function for generality with N_state>1.
                 u_face = project(dg.chi_face[:,:,4], u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], true, dg, param)
                 integrated_state_final += ones_hat' * dg.MpK * dg.M_inv * dg.chi_face[:,:,4]' * dg.J_face * dg.W_face * u_face
             end
