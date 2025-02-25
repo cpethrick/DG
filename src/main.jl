@@ -11,12 +11,11 @@ Import packages
 # E.g., xi,wi = FastGaussQuadrature.gaussjacobi(N,0.0,0.0) is Gauss-Legendre nodes
 #  Returns ([xi],[wi])
 # E.g., FastGaussQuadrature.gausslobatto(N) is Gauss-Legendre-Lobatto nodes
-import FastGaussQuadrature
+#import FastGaussQuadrature
 
 import SparseArrays
 import LinearAlgebra
 import Printf
-import PyPlot
 import DelimitedFiles
 
 #==============================================================================
@@ -115,9 +114,11 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         display("Beginning time loop")
         (u_hat,current_time) = physicaltimesolve(u_hat0, dt, Nsteps, dg, param)
         display("Done time loop")
+        L2_error, Linf_error, entropy_change = post_process(u_hat, current_time, u_hat0, dg, param) 
     else
-        u_hat = spacetimeimplicitsolve(u_hat0 ,dg, param)
+        u_hat = spacetimeimplicitsolve(u_hat0, dg, param)
         #u_hat = u0
+        L2_error, Linf_error, entropy_change = post_process(u_hat, u_hat0, dg, param) 
     end
     display("Reminder, c is ")
     display(param.fluxreconstructionC)
@@ -125,193 +126,6 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     Analysis
     ==============================================================================#
 
-    Np_overint_per_dim = dg.N_soln_per_dim+10
-    Np_overint = (Np_overint_per_dim)^dim
-    r_overint, w_overint = FastGaussQuadrature.gausslobatto(Np_overint_per_dim)
-    (x_overint, y_overint) = build_coords_vectors(r_overint, dg)
-    if dim==1
-        chi_overint = vandermonde1D(r_overint,dg.r_basis)
-        W_overint = LinearAlgebra.diagm(w_overint) # diagonal matrix holding quadrature weights
-        J_overint = LinearAlgebra.diagm(ones(size(r_overint))*dg.J_soln[1]) #assume constant jacobian
-    elseif dim==2
-        chi_overint = vandermonde2D(r_overint, dg.r_basis, dg)
-        W_overint = LinearAlgebra.diagm(vec(w_overint*w_overint'))
-        J_overint = LinearAlgebra.diagm(ones(length(r_overint)^dim)*dg.J_soln[1]) #assume constant jacobian
-    end
-
-    if cmp(param.pde_type, "burgers1D")==0 && param.usespacetime
-        # y is time
-        u_exact_overint = cos.(π*(x_overint-y_overint))
-    elseif cmp(param.pde_type, "burgers1D")==0
-        u_exact_overint = cos.(π*(x_overint.-current_time))
-    elseif cmp(param.pde_type, "burgers2D")==0
-        u_exact_overint = cos.(π*(x_overint.+y_overint.-sqrt(2)*current_time))
-    elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == false
-        u_exact_overint = sin.(π * (x_overint.- param.advection_speed * current_time)) .+ 0.01
-    elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == true 
-        u_exact_overint = sin.(π * (x_overint - param.advection_speed * y_overint)) .+ 0.01
-    elseif cmp(param.pde_type, "euler1D")==0
-        if param.usespacetime
-            display("Warning: exact soln not correct for space time!")
-            u_exact_overint_allstates = calculate_euler_exact_solution(-1.0, x_overint, y_overint, Np_overint, dg)
-        else
-            u_exact_overint_allstates = calculate_euler_exact_solution(current_time, x_overint, y_overint, Np_overint, dg)
-        end
-        # extract only density
-        u_exact_overint = zeros(size(x_overint))
-        for ielem = 1:dg.N_elem
-            u_exact_overint[(1:Np_overint) .+ (ielem-1)*Np_overint]=u_exact_overint_allstates[ (1:Np_overint) .+ Np_overint*3*(ielem-1) .+ (1-1)*Np_overint]
-        end
-    else
-        display("Warning - no exact solution defined!")
-    end
-    u_calc_final_overint = zeros(size(x_overint))
-    u0_overint = zeros(size(x_overint))
-    u_calc_final = zeros(dg.N_vol*dg.N_elem)
-    for ielem = 1:dg.N_elem
-        #Extract only first state here
-        u_hat_local = zeros(length(dg.r_basis)^dim) 
-        u0_hat_local = zeros(size(u_hat_local)) 
-        for inode = 1:dg.N_soln
-            # only istate = 1, which is velocity for lin adv or burgers
-            # and density for euler
-            u_hat_local[inode] = u_hat[dg.StIDGIDtoGSID[1,dg.EIDLIDtoGID_basis[ielem,inode]]]
-            u0_hat_local[inode] = u_hat0[dg.StIDGIDtoGSID[1,dg.EIDLIDtoGID_basis[ielem,inode]]]
-        end
-        u_calc_final_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u_hat_local
-        u0_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u0_hat_local
-        u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol] .= dg.chi_soln* u_hat_local
-    end
-    u_diff = u_calc_final_overint .- u_exact_overint
-
-    x_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
-    u_calc_final_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
-    u0_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
-    u_exact_overint_1D = zeros(Np_overint_per_dim*dg.N_elem_per_dim)
-    ctr = 1
-    for iglobalID = 1:length(y_overint)
-        if  y_overint[iglobalID] == 0.0
-            x_overint_1D[ctr] = x_overint[iglobalID]
-            u_calc_final_overint_1D[ctr] = u_calc_final_overint[iglobalID]
-            u0_overint_1D[ctr] = u0_overint[iglobalID]
-            u_exact_overint_1D[ctr] = u_exact_overint[iglobalID]
-            ctr+=1
-        end
-    end
-    if param.usespacetime
-        # initial is 0.0, final is 2.0
-        ctr0 = 1
-        ctr2 = 1
-        for iglobalID = 1:length(y_overint)
-            if  y_overint[iglobalID] == 2.0
-                u_calc_final_overint_1D[ctr2] = u_calc_final_overint[iglobalID]
-                u_exact_overint_1D[ctr2] = u_exact_overint[iglobalID]
-                ctr2+=1
-            elseif y_overint[iglobalID] == 0.0
-                u0_overint_1D[ctr0] = u_calc_final_overint[iglobalID]
-                ctr0+=1
-            end
-        end
-    end
-
-    L2_error::Float64 = 0
-    entropy_final_calc = 0
-    entropy_initial = 0
-    for ielem = 1:dg.N_elem
-        L2_error += (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])
-
-        if param.usespacetime
-            # for spacetime, we want to consider initial as t=0 (bottom surface of the computational domain) and final as t=t_f (top surface)
-
-            if ielem < N_elem_per_dim+1
-                # face on bottom
-                #u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
-                
-
-                # Find initial energy from the Dirichlet BC on lower face
-                x_local = dg.VX[ielem] .+ 0.5* (dg.r_flux.+1) * dg.delta_x
-                y_local = zeros(size(x_local)) # leave zero as this is the lower face
-                u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
-                S_face = get_numerical_entropy_function(u_face, param)
-
-                entropy_initial += S_face' * dg.W_face * dg.J_face * ones(size(S_face))
-            elseif ielem > N_elem_per_dim^dim - N_elem_per_dim
-                # face on top
-                u_face = project(dg.chi_face[:,:,4], u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], true, dg, param)
-                S_face = get_numerical_entropy_function(u_face, param)
-                entropy_final_calc += S_face' * dg.W_face * dg.J_face * ones(size(S_face))
-            end
-            if param.fluxreconstructionC > 0
-                display("WARNING: Energy calculation is probably unreliable for c != 0.")
-            end
-        else
-            entropy_final_calc += calculate_integrated_numerical_entropy(u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], dg, param)
-            entropy_initial += calculate_integrated_numerical_entropy(u_hat0[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], dg, param)
-        end
-    end
-
-    L2_error = sqrt(L2_error)
-
-    Linf_error = maximum(abs.(u_diff))
-
-    entropy_change = entropy_final_calc - entropy_initial
-
-    if param.usespacetime
-        proj_corrected_error = calculate_projection_corrected_entropy_change(u_hat, dg, param)
-        entropy_change = proj_corrected_error
-    end
-    PyPlot.figure("Solution", figsize=(6,4))
-    PyPlot.clf()
-    ax = PyPlot.gca()
-    ax.set_xticks(dg.VX, minor=false)
-    ax.xaxis.grid(true, which="major")
-    PyPlot.plot(vec(x_overint_1D), vec(u0_overint_1D), label="initial")
-    if param.include_source || cmp(param.pde_type, "linear_adv_1D")==0
-        PyPlot.plot(vec(x_overint_1D), vec(u_exact_overint_1D), label="exact")
-    end
-    PyPlot.plot(vec(x_overint_1D), vec(u_calc_final_overint_1D), label="calculated")
-    #Plots.plot!(vec(x_overint_1D), [vec(u_calc_final_overint_1D), vec(u0_overint_1D)], label=["calculated" "initial"])
-    PyPlot.legend()
-    pltname = string("plt", N_elem_per_dim, ".pdf")
-    PyPlot.savefig(pltname)
-
-    PyPlot.figure("Grid", figsize=(6,6))
-    PyPlot.clf()
-    ax = PyPlot.gca()
-    ax.set_xticks(dg.VX, minor=false)
-    ax.xaxis.grid(true, which="major", color="k")
-    ax.set_axisbelow(false)
-    if dim == 1
-        PyPlot.axhline(0)
-    elseif dim == 2
-        ax.set_yticks(dg.VX, minor=false)
-        ax.yaxis.grid(true, which="major", color="k")
-    end
-    PyPlot.plot(x_overint, y_overint,"o", color="yellowgreen", label="overintegration", markersize=0.25)
-    PyPlot.plot(dg.x, dg.y, "o", color="darkolivegreen", label="volume nodes")
-    pltname = string("grid", N_elem_per_dim, ".pdf")
-    PyPlot.savefig(pltname)
-
-    for i in 1:length(u_calc_final_overint)
-        if isnan(u_calc_final_overint[i])
-            u_calc_final_overint[i]=0
-        end
-    end
-
-    if dim == 2# && N_elem_per_dim == 4
-        PyPlot.figure("Initial cond, overintegrated")
-        PyPlot.clf()
-        PyPlot.tricontourf(x_overint, y_overint, u0_overint, 20)
-        PyPlot.colorbar()
-        PyPlot.figure("Final soln, overintegrated")
-        PyPlot.clf()
-        PyPlot.tricontourf(x_overint, y_overint, u_calc_final_overint, 20)
-        PyPlot.colorbar()
-        PyPlot.figure("Final exact soln, overintegrated")
-        PyPlot.clf()
-        PyPlot.tricontourf(x_overint, y_overint, u_exact_overint, 20)
-        PyPlot.colorbar()
-    end
     return L2_error, Linf_error, entropy_change#, solution
 end
 
@@ -338,7 +152,7 @@ function run(param::PhysicsAndFluxParams)
         time_store[i] = time() - t
 
         if cmp(param.pde_type, "euler1D")==0
-            display("Convergence is for density. Energy is probably not valid.")
+            display("Convergence is for density.")
         end
 
         #Evalate convergence, print, and save to file
@@ -349,21 +163,26 @@ function run(param::PhysicsAndFluxParams)
             fname = "result/"*param.convergence_table_name*".csv" #Note: this should be changed to something useful in the future...
             f = open(fname, "w")
             DelimitedFiles.writedlm(f, ["n cells_per_dim" "dx" "L2 Error" "L2  Error rate" "Linf Error" "Linf rate" "Entropy change" "Time" "Time scaling"], ",")
-            for j = 1:i
-                conv_rate_L2 = 0.0
-                conv_rate_Linf = 0.0
-                conv_rate_time = 0.0
-                conv_rate_energy = 0.0
-                if j>1
-                    conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
-                    conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
-                    conv_rate_time = log(time_store[j]/time_store[j-1]) / log(dx[j]/dx[j-1])
-                    conv_rate_energy = log(abs(entropy_change_store[j]/entropy_change_store[j-1])) / log(dx[j]/dx[j-1])
-                end
-                Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.4e \t%.2f \t%.5e \t%.2f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, entropy_change_store[j], conv_rate_energy, time_store[j], conv_rate_time)
+        end
+        for j = 1:i
+            conv_rate_L2 = 0.0
+            conv_rate_Linf = 0.0
+            conv_rate_time = 0.0
+            conv_rate_energy = 0.0
+            if j>1
+                conv_rate_L2 = log(L2_err_store[j]/L2_err_store[j-1]) / log(dx[j]/dx[j-1])
+                conv_rate_Linf = log(Linf_err_store[j]/Linf_err_store[j-1]) / log(dx[j]/dx[j-1])
+                conv_rate_time = log(time_store[j]/time_store[j-1]) / log(dx[j]/dx[j-1])
+                conv_rate_energy = log(abs(entropy_change_store[j]/entropy_change_store[j-1])) / log(dx[j]/dx[j-1])
+            end
+            Printf.@printf("%d \t\t%.5f \t%.16f \t%.2f \t%.16f \t%.2f \t%.4e \t%.2f \t%.5e \t%.2f\n", N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, entropy_change_store[j], conv_rate_energy, time_store[j], conv_rate_time)
+            if cmp(param.convergence_table_name, "none") != 0
                 DelimitedFiles.writedlm(f, [N_elem_range[j], dx[j], L2_err_store[j], conv_rate_L2, Linf_err_store[j], conv_rate_Linf, entropy_change_store[j    ], time_store[j], conv_rate_time]', ",")
             end
 
+        end
+
+        if cmp(param.convergence_table_name, "none") != 0
             close(f)
         end
 

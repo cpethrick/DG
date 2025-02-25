@@ -58,7 +58,7 @@ end
 
 function get_entropy_variables(solution, param::PhysicsAndFluxParams)
 
-    if  occursin("burgers",param.pde_type)
+    if  occursin("burgers",param.pde_type) || occursin("linear_adv_1D", param.pde_type)
         return solution
     elseif cmp(param.pde_type, "euler1D") == 0
         # Have verified that u(v(u)) = u, i.e. mapping is invertible
@@ -166,7 +166,7 @@ function get_numerical_entropy_function(solution, param::PhysicsAndFluxParams)
 
         return  -1.0 * rho .* entropy ./ gamm1
     else
-        display("Warning: entropy potential not defined for this PDE!")
+        display("Warning: entropy function not defined for this PDE!")
         return solution
     end
 end
@@ -637,6 +637,38 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
     return u0
 end
 
+function calculate_exact_solution(x, y, Np, current_time, dg::DG, param::PhysicsAndFluxParams) 
+    #pass Np explicitly to allow for overintegration
+
+    if cmp(param.pde_type, "burgers1D")==0 && param.usespacetime
+        # y is time
+        u_exact = cos.(π*(x-y))
+    elseif cmp(param.pde_type, "burgers1D")==0
+        u_exact = cos.(π*(x.-current_time))
+    elseif cmp(param.pde_type, "burgers2D")==0
+        u_exact = cos.(π*(x.+y.-sqrt(2)*current_time))
+    elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == false
+        u_exact = sin.(π * (x.- param.advection_speed * current_time)) .+ 0.01
+    elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == true 
+        u_exact = sin.(π * (x - param.advection_speed * y)) .+ 0.01
+    elseif cmp(param.pde_type, "euler1D")==0
+        if param.usespacetime
+            display("Warning: exact soln not correct for space time!")
+            u_exact_allstates = calculate_euler_exact_solution(-1.0, x, y, Np, dg)
+        else
+            u_exact_allstates = calculate_euler_exact_solution(current_time, x, y, Np, dg)
+        end
+        # extract only density
+        u_exact = zeros(size(x))
+        for ielem = 1:dg.N_elem
+            u_exact[(1:Np) .+ (ielem-1)*Np]=u_exact_allstates[ (1:Np) .+ Np*3*(ielem-1) .+ (1-1)*Np]
+        end
+    else
+        display("Warning - no exact solution defined!")
+    end
+    return u_exact
+end
+
 function calculate_euler_exact_solution(t, x, y, Np, dg)
     # take Np as an input because we may be using an overintegrated or surface mesh.
     # time is passed as scalar current_time for MoL
@@ -745,7 +777,7 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
         end
 
     else
-        return sin.(π * (x)) .+ 0.01
+        return sin.(π * (x)) .+ 1.01
     end
 end
 
