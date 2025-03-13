@@ -21,6 +21,7 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
     ones_hat = dg.Pi_soln  * ones(dg.N_soln)
     for ielem = 1:dg.N_elem
         if param.usespacetime
+            u_hat_local = u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof]
             # for spacetime, we want to consider initial as t=0 (bottom surface of the computational domain) and final as t=t_f (top surface)
             if ielem < dg.N_elem_per_dim+1
                 # face on bottom
@@ -31,13 +32,13 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
                 y_local = zeros(size(x_local)) # leave zero as this is the lower face
                 u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
 
-                integrated_state_initial += ones_hat' * dg.MpK * dg.M_inv * dg.chi_face[:,:,3]' *dg.J_face* dg.W_face * u_face
+                integrated_state_initial += u_hat_local' * dg.MpK * dg.M_inv * dg.chi_face[:,:,3]' *dg.J_face* dg.W_face * u_face
 
             elseif ielem > dg.N_elem_per_dim^dim - dg.N_elem_per_dim
                 # face on top
                 # The next line does u_face =  chi_face[4] * u_hat but in a separate function for generality with N_state>1.
-                u_face = project(dg.chi_face[:,:,4], u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], true, dg, param)
-                integrated_state_final += ones_hat' * dg.MpK * dg.M_inv * dg.chi_face[:,:,4]' * dg.J_face * dg.W_face * u_face
+                u_face = project(dg.chi_face[:,:,4], u_hat_local, true, dg, param)
+                integrated_state_final += u_hat_local' * dg.MpK * dg.M_inv * dg.chi_face[:,:,4]' * dg.J_face * dg.W_face * u_face
             end
         end
     end
