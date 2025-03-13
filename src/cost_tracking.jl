@@ -18,6 +18,10 @@ function update_CostTracking(key::AbstractString, ct::CostTracking)
 
     if cmp(key, "assemble_residual") == 0
         ct.n_assemble_residual+=1
+        # Note: I count one unit of cost as the cost to assemble the entire active domain.
+        # This is appropriate if (a) the entire domain is active (coupled JFNK setting)
+        #                        (b) the same number of elements are active in each time-slab.
+        # This is not a good way of tracking computational cost if comparing different grids.
     end
 end
 
@@ -27,7 +31,7 @@ function summary(ct::CostTracking)
     # Check that the tracking has actually been used
     if ct.is_active
         
-        Printf.@printf("Number of residual evaluations:    %d \n", ct.n_assemble_residual)
+        Printf.@printf("Number of RHS evaluations:    %d \n", ct.n_assemble_residual)
     end
 
 end

@@ -10,6 +10,14 @@ import DelimitedFiles
 
 function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams, ct::CostTracking)
 
+
+    if param.spacetime_JFNK_solver_log
+        f = open("JFNKsolve.log", "w")
+
+        DelimitedFiles.writedlm(f, ["Residual"], ",")
+        close(f)
+    end
+
     if cmp(param.spacetime_solver_type, "pseudotime")==0
         return pseudotimesolve(u_hat0, param.spacetime_decouple_slabs, dg, param)
     elseif cmp(param.spacetime_solver_type, "JFNK")==0
@@ -46,7 +54,7 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
         N_time_slabs = 1
     end
 
-    logdata=false #in principle, this should be a param, but it won't be used enough to warrant being added
+    logdata = param.spacetime_JFNK_solver_log
     residuallog = []
     u_hat = u_hat0
     for iTS = 1:N_time_slabs
@@ -106,6 +114,10 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
             display(log)
             if logdata
                 residuallog = vcat(residuallog,log.data[:resnorm])
+                f = open("JFNKsolve.log", "a")
+
+                DelimitedFiles.writedlm(f, residuallog, ",")
+                close(f)
             end
             u_hat_NLiter += u_hat_delta
             residual_NL = sqrt(sum(u_hat_delta .^ 2))
@@ -123,18 +135,15 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
     end
 
     # This will write only the LAST time-slab to a file.
-    if logdata
-        f = open("JFNKsolve.log", "w")
-
-        DelimitedFiles.writedlm(f, residuallog, ",")
-        close(f)
-    end
 
     return u_hat
 end
 
 
 function pseudotimesolve(u_hat0, do_decouple::Bool, dg::DG, param::PhysicsAndFluxParams)
+
+
+    display("WARNING: Pseudotime is not currently updated to work with Euler. Expect a fatal error.")
 
     if do_decouple
         display("Decoupled PS")
@@ -170,7 +179,7 @@ function pseudotimesolve(u_hat0, do_decouple::Bool, dg::DG, param::PhysicsAndFlu
             u_change = u_hatnew - u_hat
             PyPlot.figure("Intermediate solutions")
             PyPlot.clf()
-            u_NLiter = zeros(dg.Np*dg.N_elem)
+            u_NLiter = zeros(dg.N_soln_dof_global)
             for ielem in 1:dg.N_elem
                 u_hat_local = zeros(dg.Np)
                 for inode in 1:dg.Np
