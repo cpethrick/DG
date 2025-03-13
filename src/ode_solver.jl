@@ -1,13 +1,14 @@
 include("build_dg_residual.jl")
 include("set_up_dg.jl")
 include("parameters.jl")
+include("cost_tracking.jl")
 
 import LinearMaps
 import IterativeSolvers
 import PyPlot
 import DelimitedFiles
 
-function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
+function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams, ct::CostTracking)
 
     if cmp(param.spacetime_solver_type, "pseudotime")==0
         return pseudotimesolve(u_hat0, param.spacetime_decouple_slabs, dg, param)
@@ -20,11 +21,11 @@ function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
         if !param.spacetime_decouple_slabs
             # To accelerate convergence, first solve as a decoupled system, then use that to initialize.
             param.spacetime_decouple_slabs = true
-            init_from_decoupled = JFNKsolve(u_hat0, true, convergence_scaling*10^7, dg, param)
+            init_from_decoupled = JFNKsolve(u_hat0, true, convergence_scaling*10^7, dg, param, ct)
             param.spacetime_decouple_slabs = false
-            return JFNKsolve(init_from_decoupled, false, convergence_scaling, dg, param)
+            return JFNKsolve(init_from_decoupled, false, convergence_scaling, dg, param, ct)
         else
-            return JFNKsolve(u_hat0, param.spacetime_decouple_slabs, convergence_scaling,dg, param)
+            return JFNKsolve(u_hat0, param.spacetime_decouple_slabs, convergence_scaling,dg, param, ct)
         end
     else
         display("Error: Space-time solver type is illegal!")
@@ -34,7 +35,7 @@ function spacetimeimplicitsolve(u_hat0, dg::DG, param::PhysicsAndFluxParams)
 
 end
 
-function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,param::PhysicsAndFluxParams)
+function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,param::PhysicsAndFluxParams, ct::CostTracking)
 
 
     if do_decouple
@@ -88,7 +89,7 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
             PyPlot.tricontourf(dg.x, dg.y, u_NLiter,20)
             ==#
             #Define function of only u_hat_in. Passing zero as time - not used in PS (as far as I recall).
-            DG_residual_function(u_hat_in) =  assemble_residual(u_hat_in, 0.0, dg, param, subset_EIDs)
+            DG_residual_function(u_hat_in) =  assemble_residual(u_hat_in, 0.0, dg, param, ct, subset_EIDs)
             perturbation = sqrt(eps())
 
             jacobian_vector_product(v) = 1/perturbation * ( DG_residual_function(u_hat_NLiter .+ perturbation * v) - DG_residual_function(u_hat_NLiter))

@@ -45,6 +45,7 @@ include("ode_solver.jl")
 include("parameters.jl")
 include("post_processing.jl")
 include("test_scripts.jl")
+include("cost_tracking.jl")
 
 
 function calculate_integrated_numerical_entropy(u_hat, dg::DG, param::PhysicsAndFluxParams)
@@ -76,6 +77,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         N_state = 1
     end
     dg = init_DG(param.P, param.dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime)
+
+    cost_tracker = init_CostTracking()
 
     #==============================================================================
     Initialization
@@ -116,17 +119,16 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         display("Done time loop")
         L2_error, Linf_error, entropy_change = post_process(u_hat, current_time, u_hat0, dg, param) 
     else
-        u_hat = spacetimeimplicitsolve(u_hat0, dg, param)
+        u_hat = spacetimeimplicitsolve(u_hat0, dg, param, cost_tracker)
         #u_hat = u0
         L2_error, Linf_error, entropy_change = post_process(u_hat, u_hat0, dg, param) 
     end
     display("Reminder, c is ")
     display(param.fluxreconstructionC)
-    #==============================================================================
-    Analysis
-    ==============================================================================#
 
-    return L2_error, Linf_error, entropy_change#, solution
+    summary(cost_tracker)
+
+    return L2_error, Linf_error, entropy_change, cost_tracker#, solution
 end
 
 function run(param::PhysicsAndFluxParams)
@@ -147,7 +149,7 @@ function run(param::PhysicsAndFluxParams)
         # Start timer (NOTE: should change to BenchmarkTools.jl in the future)
         t = time()
         # Solve
-        (L2_err_store[i],Linf_err_store[i], entropy_change_store[i]) = setup_and_solve(N_elem,P,param)
+        (L2_err_store[i],Linf_err_store[i], entropy_change_store[i], cost_tracker) = setup_and_solve(N_elem,P,param)
         # End timer
         time_store[i] = time() - t
 

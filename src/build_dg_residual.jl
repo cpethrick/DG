@@ -5,6 +5,7 @@
 include("set_up_dg.jl")
 include("physics.jl")
 include("parameters.jl")
+include("cost_tracking.jl")
 
 function hadamard_product(A::AbstractMatrix, B::AbstractMatrix, N_rows::Int, N_cols::Int)
     #returns C = A ⊙ B, element-wise multiplication of matrices A and B
@@ -284,4 +285,13 @@ function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams, subset
         end
     end
     return rhs
+end
+
+
+function assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams, ct::CostTracking, subset_EIDs=nothing) 
+
+    update_CostTracking("assemble_residual", ct)
+
+    return assemble_residual(u_hat, t, dg::DG, param::PhysicsAndFluxParams, subset_EIDs)
+
 end
