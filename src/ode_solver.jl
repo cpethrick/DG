@@ -108,7 +108,7 @@ function JFNKsolve(u_hat0, do_decouple::Bool, tol_multiplier::Float64, dg::DG,pa
 
             #Inner loop: linear iterations (GMRES - use package)
             u_hat_delta,log = IterativeSolvers.gmres(FMap_DG_residual, -1.0 * DG_residual_function(u_hat_NLiter); 
-                                                     log=true, restart=500, abstol=tol_lin, reltol=tol_lin, verbose=false,
+                                                     log=true, restart=500, abstol=tol_lin, reltol=1E-2, verbose=false,
                                                      maxiter=max_iterations
                                                     ) #Note: gmres() initializes with zeros, while gmres!(x, FMap, b) initializes with x.)
             display(log)
