@@ -17,6 +17,7 @@ mutable struct PhysicsAndFluxParams
     usespacetime::Bool
     spacetime_decouple_slabs::Bool
     spacetime_solver_type::AbstractString #pseudotime or JFNK
+    spacetime_JFNK_solver_log::Bool #to control printing of the solver log to a file
     include_source::Bool
     alpha_split::Float64
     use_skew_symmetric_stiffness_operator::Bool
@@ -48,6 +49,7 @@ mutable struct PhysicsAndFluxParams
                          usespacetime::Bool,
                          spacetime_decouple_slabs::Bool,
                          spacetime_solver_type::AbstractString, 
+                         spacetime_JFNK_solver_log::Bool,
                          include_source::Bool,
                          alpha_split::Float64,
                          use_skew_symmetric_stiffness_operator::Bool,
@@ -72,6 +74,7 @@ mutable struct PhysicsAndFluxParams
                                 usespacetime::Bool,
                                 spacetime_decouple_slabs::Bool,
                                 spacetime_solver_type::AbstractString,
+                                spacetime_JFNK_solver_log::Bool,
                                 include_source::Bool,
                                 alpha_split::Float64,
                                 use_skew_symmetric_stiffness_operator::Bool,
@@ -158,6 +161,7 @@ function parse_default_parameters()
     usespacetime = parse_param_Bool("usespacetime", paramDF)
     spacetime_decouple_slabs = parse_param_Bool("spacetime_decouple_slabs", paramDF)
     spacetime_solver_type = parse_param_String("spacetime_solver_type", paramDF)
+    spacetime_JFNK_solver_log = parse_param_Bool("spacetime_JFNK_solver_log", paramDF)
     include_source = parse_param_Bool("include_source", paramDF)
     alpha_split = parse_param_Float64("alpha_split", paramDF)
     use_skew_symmetric_stiffness_operator = parse_param_Bool("use_skew_symmetric_stiffness_operator", paramDF)
@@ -183,6 +187,7 @@ function parse_default_parameters()
                                  usespacetime, 
                                  spacetime_decouple_slabs,
                                  spacetime_solver_type,
+                                 spacetime_JFNK_solver_log,
                                  include_source, 
                                  alpha_split, 
                                  use_skew_symmetric_stiffness_operator,
@@ -238,6 +243,9 @@ function parse_parameters(fname::String)
         end
         if "spacetime_solver_type" in newparamDF.name
             default_params.spacetime_solver_type = parse_param_String("spacetime_solver_type", newparamDF)
+        end
+        if "spacetime_JFNK_solver_log" in newparamDF.name
+            default_params.spacetime_JFNK_solver_log = parse_param_Bool("spacetime_JFNK_solver_log", newparamDF)
         end
         if "include_source" in newparamDF.name
             default_params.include_source = parse_param_Bool("include_source", newparamDF)
