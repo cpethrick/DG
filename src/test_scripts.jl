@@ -6,7 +6,6 @@ include("parameters.jl")
 
 function c_ramp_test(paramfile::String="default_parameters.csv")
     # Run as: `c_ramp_test("c_ramp/spacetime_linear_advection_P3.csv")`
-    # Note: manaully changing rel_tol to 1E-2
     #
     param = parse_parameters(paramfile)
     param.fr_c_name = "user-defined"
