@@ -1,13 +1,20 @@
 
 import PyPlot
-#import Printf
-#import DelimitedFiles
+import Printf
+import DelimitedFiles
 import LinearAlgebra
 import FastGaussQuadrature
 
 include("set_up_dg.jl")
 include("parameters.jl")
 include("physics.jl")
+
+function get_integrating_vector_for_conservation_checks(u_hat_local,dg::DG)
+    # in the future, this will have functionality to choose entropy variables. For now, just a conservation chcek.
+    ones_vector = ones(dg.N_soln)
+    ones_hat = dg.Pi_soln  * ones_vector
+    return ones_hat
+end
 
 function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxParams)
 
@@ -16,12 +23,31 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
         display("Warning: nstate>1 may break the conservation check!")
     end
 
+    integration_at_surfaces = zeros(2,dg.N_elem_per_dim)
+
     integrated_state_initial = 0.0
     integrated_state_final = 0.0
-    ones_hat = dg.Pi_soln  * ones(dg.N_soln)
     for ielem = 1:dg.N_elem
         if param.usespacetime
+            itslab = dg.EIDtoTSID[ielem]
             u_hat_local = u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof]
+            integrating_vector = get_integrating_vector_for_conservation_checks(u_hat_local,dg)
+
+            if itslab == 1
+
+                x_local = dg.VX[ielem] .+ 0.5* (dg.r_flux.+1) * dg.delta_x
+                y_local = zeros(size(x_local)) # leave zero as this is the lower face
+                u_face_bottom = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
+            else
+                u_face_bottom = project(dg.chi_face[:,:,3], u_hat_local, true, dg, param)
+            end
+            u_face_top = project(dg.chi_face[:,:,4], u_hat_local, true, dg, param)
+
+            integration_at_surfaces[1,itslab]+= integrating_vector' * dg.chi_face[:,:,3]' *dg.J_face* dg.W_face * u_face_bottom
+            integration_at_surfaces[2,itslab]+= integrating_vector' * dg.chi_face[:,:,4]' *dg.J_face* dg.W_face * u_face_top
+
+
+            #==
             # for spacetime, we want to consider initial as t=0 (bottom surface of the computational domain) and final as t=t_f (top surface)
             if ielem < dg.N_elem_per_dim+1
                 # face on bottom
@@ -32,16 +58,34 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
                 y_local = zeros(size(x_local)) # leave zero as this is the lower face
                 u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
 
-                integrated_state_initial += u_hat_local' * dg.MpK * dg.M_inv * dg.chi_face[:,:,3]' *dg.J_face* dg.W_face * u_face
+                integrated_state_initial += ones_hat' * dg.chi_face[:,:,3]' *dg.J_face* dg.W_face * u_face
 
             elseif ielem > dg.N_elem_per_dim^dim - dg.N_elem_per_dim
                 # face on top
                 # The next line does u_face =  chi_face[4] * u_hat but in a separate function for generality with N_state>1.
                 u_face = project(dg.chi_face[:,:,4], u_hat_local, true, dg, param)
-                integrated_state_final += u_hat_local' * dg.MpK * dg.M_inv * dg.chi_face[:,:,4]' * dg.J_face * dg.W_face * u_face
+                integrated_state_final += ones_hat' * dg.chi_face[:,:,4]' * dg.J_face * dg.W_face * u_face
             end
+            ==#
+
         end
     end
+
+
+    if true
+        fname = "conservation_check.csv"
+        f = open(fname, "w")
+        display(integration_at_surfaces)
+        display([NaN integration_at_surfaces[2,:]'])
+        DelimitedFiles.writedlm(f, [dg.VX[1:end] [integration_at_surfaces[1,:]' NaN]' [NaN integration_at_surfaces[2,:]']'], ",")
+        close(f)
+
+    end
+
+    display(integration_at_surfaces)
+
+    integrated_state_initial = integration_at_surfaces[1,end]
+    integrated_state_final = integration_at_surfaces[2,1]
 
     display("Initial integrated state:")
     display(integrated_state_initial)
