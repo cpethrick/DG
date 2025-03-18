@@ -650,7 +650,7 @@ function calculate_exact_solution(x, y, Np, current_time, dg::DG, param::Physics
     elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == false
         u_exact = sin.(π * (x.- param.advection_speed * current_time)) .+ 0.01
     elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == true 
-        u_exact = sin.(π * (x - param.advection_speed * y)) .+ 0.01
+        u_exact = sin.(π * (x - param.advection_speed * y)) .+ 1.01
     elseif cmp(param.pde_type, "euler1D")==0
         if param.usespacetime
             display("Warning: exact soln not correct for space time!")
