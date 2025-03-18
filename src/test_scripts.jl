@@ -7,12 +7,19 @@ include("parameters.jl")
 function c_ramp_test(paramfile::String="default_parameters.csv")
     # Run as: `c_ramp_test("c_ramp/spacetime_linear_advection_P3.csv")`
     #
+    #
+    special_c_values = true # run c values cDG, cHu, cSD
     param = parse_parameters(paramfile)
     param.fr_c_name = "user-defined"
 
     fname = paramfile[1:end-4]*"_result.csv"
-
     fr_c_ramp_values = exp10.(range(-7.0, 4.0, length=31))
+    fr_c_names = []
+    if special_c_values
+        fr_c_ramp_values = [0, 0, 0]
+        fr_c_names = ["cDG", "cSD", "cHu"]
+        fname = paramfile[1:end-4]*"_result_specialCvalues.csv"
+    end
    
     #can append special values here (cHU, cSD)
 
@@ -22,9 +29,14 @@ function c_ramp_test(paramfile::String="default_parameters.csv")
     f = open(fname, "w")
     DelimitedFiles.writedlm(f, ["c_value" "OOA" "number_iterations"], ",")
     close(f)
-    for fr_c_val in fr_c_ramp_values
+    for i in 1:length(fr_c_ramp_values)
+        fr_c_val = fr_c_ramp_values[i]
         param.fr_c_userdefined = fr_c_val
+        if special_c_values
+            param.fr_c_name = fr_c_names[i]
+        end
         set_FR_value(param)
+        fr_c_val = param.fluxreconstructionC
         (err_L2_small, err_Linf_small, entropy_ch_small,_) = setup_and_solve(N_small, param.P, param)
         (err_L2_big, err_Linf_big, entropy_ch_big, cost_tracker) = setup_and_solve(N_big, param.P, param)
         L2_OOA = log(err_L2_small/err_L2_big) / log(2.0)
