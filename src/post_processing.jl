@@ -98,6 +98,26 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
     return conservation
 end
 
+function calculate_projection_error_local(u_face_interior, u_face_Dirichlet, ielem, dg::DG, param::PhysicsAndFluxParams)
+
+    # get entropy potential and entropy variables at the face (interior soln)
+    phi_face_interior = get_entropy_potential(u_face_interior, param)
+    phi_face_Dirichlet = get_entropy_potential(u_face_Dirichlet, param)
+    v_face_interior = get_entropy_variables(u_face_interior, param)
+    v_face_Dirichlet = get_entropy_variables(u_face_Dirichlet, param)
+
+    phi_jump = phi_face_interior - phi_face_Dirichlet
+    v_jump = v_face_interior - v_face_Dirichlet
+
+    vjumpTtimesu = zeros(size(phi_face_Dirichlet))
+    for inode = 1:dg.N_vol_per_dim
+        node_indices = dg.N_vol_per_dim*(1:dg.N_state) .- dg.N_vol_per_dim .+ inode
+        vjumpTtimesu[inode] += (v_jump[node_indices])' * u_face_Dirichlet[node_indices]
+    end
+
+    return (phi_jump - vjumpTtimesu)' * dg.W_face * dg.J_face * ones(size(phi_jump))
+end
+
 function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::PhysicsAndFluxParams)
     entropy_initial = 0
     entropy_final = 0
@@ -121,23 +141,23 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
 
 
             # get entropy potential and entropy variables at the face (interior soln)
-            phi_face_interior = get_entropy_potential(u_face_interior, param)
-            phi_face_Dirichlet = get_entropy_potential(u_face_Dirichlet, param)
-            v_face_interior = get_entropy_variables(u_face_interior, param)
-            v_face_Dirichlet = get_entropy_variables(u_face_Dirichlet, param)
+            #phi_face_interior = get_entropy_potential(u_face_interior, param)
+            #phi_face_Dirichlet = get_entropy_potential(u_face_Dirichlet, param)
+            #v_face_interior = get_entropy_variables(u_face_interior, param)
+            #v_face_Dirichlet = get_entropy_variables(u_face_Dirichlet, param)
 
-            phi_jump = phi_face_interior - phi_face_Dirichlet
-            v_jump = v_face_interior - v_face_Dirichlet
-
-
-            vjumpTtimesu = zeros(size(phi_face_Dirichlet))
-            for inode = 1:dg.N_vol_per_dim
-                node_indices = dg.N_vol_per_dim*(1:dg.N_state) .- dg.N_vol_per_dim .+ inode
-                vjumpTtimesu[inode] += (v_jump[node_indices])' * u_face_Dirichlet[node_indices]
-            end
+            #phi_jump = phi_face_interior - phi_face_Dirichlet
+            #v_jump = v_face_interior - v_face_Dirichlet
 
 
-            projection_error += (phi_jump - vjumpTtimesu)' * dg.W_face * dg.J_face * ones(size(phi_jump))
+            #vjumpTtimesu = zeros(size(phi_face_Dirichlet))
+            #for inode = 1:dg.N_vol_per_dim
+            #    node_indices = dg.N_vol_per_dim*(1:dg.N_state) .- dg.N_vol_per_dim .+ inode
+            #    vjumpTtimesu[inode] += (v_jump[node_indices])' * u_face_Dirichlet[node_indices]
+            #end
+
+
+            projection_error += calculate_projection_error_local(u_face_interior,u_face_Dirichlet, ielem, dg,param)#(phi_jump - vjumpTtimesu)' * dg.W_face * dg.J_face * ones(size(phi_jump))
         elseif ielem > dg.N_elem_per_dim^dg.dim - dg.N_elem_per_dim
             # face on top (t=tf)
             u_hat_local = u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof]
