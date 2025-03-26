@@ -8,12 +8,22 @@ import FastGaussQuadrature
 include("set_up_dg.jl")
 include("parameters.jl")
 include("physics.jl")
+include("build_dg_residual.jl")
 
 function get_integrating_vector_for_conservation_checks(u_hat_local,dg::DG)
     # in the future, this will have functionality to choose entropy variables. For now, just a conservation chcek.
     ones_vector = ones(dg.N_soln)
     ones_hat = dg.Pi_soln  * ones_vector
-    return ones_hat
+    return u_hat_local
+end
+
+function calculate_numerical_flux_for_postprocessing(iface,ielem,u_hat_local, u_hat_global, dg, param  )
+
+    # get solution at faces
+    uM = get_solution_at_face(true, ielem, iface, u_hat_global, u_hat_local, dg, param)
+    uP = get_solution_at_face(false, ielem, iface, u_hat_global, u_hat_local, dg, param)
+
+    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], 1, 2, 1, dg, param) #some parameters are hard-coded for linear advection!!
 end
 
 function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxParams)
@@ -24,6 +34,7 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
     end
 
     integration_at_surfaces = zeros(2,dg.N_elem_per_dim)
+    volume_integration = zeros(3,dg.N_elem_per_dim)
 
     integration_initial = 0.0
     integration_final = 0.0
@@ -46,16 +57,23 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
             integration_at_surfaces[1,itslab]+= integrating_vector' * dg.chi_face[:,:,3]' *dg.J_face* dg.W_face * u_face_bottom
             integration_at_surfaces[2,itslab]+= integrating_vector' * dg.chi_face[:,:,4]' *dg.J_face* dg.W_face * u_face_top
 
+            volume_integration[1,itslab] += u_hat_local' * dg.MpK * dg.M_inv * dg.S_eta * u_hat_local
+            volume_integration[2,itslab] += u_hat_local' * dg.MpK * dg.M_inv * dg.chi_face[:,:,3]' * dg.W_face * dg.LFIDtoNormal[3,2]  * (
+                                                             calculate_numerical_flux_for_postprocessing(3,ielem,u_hat_local, u_hat, dg, param)
+                                                             - dg.phi_face[:,:,3] * u_hat_local )
+            volume_integration[3,itslab] += u_hat_local' * dg.MpK * dg.M_inv * dg.chi_face[:,:,4]' * dg.W_face * dg.LFIDtoNormal[4,2]  * (
+                                                             calculate_numerical_flux_for_postprocessing(4,ielem,u_hat_local, u_hat, dg, param)
+                                                             - dg.phi_face[:,:,4] * u_hat_local )
+
         end
     end
 
 
     if true
-        fname = "conservation_check.csv"
+        fname = "conservation_check_"*string(dg.N_elem_per_dim)*"x"*string(dg.N_elem_per_dim)*"_"*param.fr_c_name*".csv"
         f = open(fname, "w")
-        display(integration_at_surfaces)
-        display([NaN integration_at_surfaces[2,:]'])
-        DelimitedFiles.writedlm(f, [dg.VX[1:end] [integration_at_surfaces[1,:]' NaN]' [NaN integration_at_surfaces[2,:]']'], ",")
+        DelimitedFiles.writedlm(f, ["x" "JW_integration_bottom_face" "JW_integration_top_face" "volume_integration" "face_term_bottom_face" "face_term_top_face"], ",")
+        DelimitedFiles.writedlm(f, [dg.VX[1:end] [integration_at_surfaces[1,:]' NaN]' [NaN integration_at_surfaces[2,:]']' [[NaN NaN NaN]; volume_integration']], ",")
         close(f)
 
     end
@@ -69,6 +87,14 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
     display(integration_initial)
     display("Final integrated state:")
     display(integration_final)
+
+
+    display("Volume integration")
+    display(volume_integration)
+    display("Sum over all timeslabs")
+    display(sum(volume_integration))
+
+    
 
     conservation = integration_final - integration_initial
     display("Conservation:")

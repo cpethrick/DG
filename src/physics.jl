@@ -87,7 +87,7 @@ function get_entropy_variables(solution, param::PhysicsAndFluxParams)
 
         return entropy_variables ./ (gamm1) #Scale by gamma-1 s.t. we are consistent with the numerical entropy function used in Friedrichs et al.
     else
-        display("Warning: entropy variables not defined for this PDE!")
+        #display("Warning: entropy variables not defined for this PDE!")
         return solution
     end
 end
@@ -122,7 +122,7 @@ function get_solution_variables(entropy_variables, param::PhysicsAndFluxParams)
 
         return solution
     else
-        display("Warning: entropy variables not defined for this PDE!")
+        #display("Warning: entropy variables not defined for this PDE!")
         return entropy_variables
     end
 end
@@ -141,7 +141,7 @@ function get_entropy_potential(solution, param::PhysicsAndFluxParams)
         rho = solution[1:N_nodes]
         return rho
     else
-        display("Warning: entropy potential not defined for this PDE!")
+        #display("Warning: entropy potential not defined for this PDE!")
         return solution
     end
 end
@@ -166,7 +166,7 @@ function get_numerical_entropy_function(solution, param::PhysicsAndFluxParams)
 
         return  -1.0 * rho .* entropy ./ gamm1
     else
-        display("Warning: entropy function not defined for this PDE!")
+        #display("Warning: entropy function not defined for this PDE!")
         return solution
     end
 end
@@ -257,15 +257,15 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
                     # which corresponds to the past
                     f_numerical = uP_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
                 elseif n_face[direction] == 1
-                    # face is bottom. Use internal solution
+                    # face is top. Use internal solution
                     # which corresonds to the past
                     f_numerical = uM_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
                 end # if face normal ==0,  leave f_numercal as zeros.
             end
         elseif cmp(param.pde_type, "linear_adv_1D")==0
             a = param.advection_speed
-            #alpha = 0 #upwind
-            alpha = 1 #central
+            alpha = 0 #upwind
+            #alpha = 1 #central
             if direction ==1 
                 f_numerical = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face[direction]) * (uM_face.-uP_face) # lin. adv, upwind/central
             end # numerical flux only in x-direction.
