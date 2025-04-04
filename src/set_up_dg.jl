@@ -90,6 +90,15 @@ mutable struct DG
     K::AbstractMatrix{Float64}
     QtildemQtildeT::AbstractArray{Float64}
 
+    #The following are not currently used in the solver, but are included to 
+    #have consistent notation with the paper.
+    L_xi1::AbstractMatrix{Float64}
+    L_xi2::AbstractMatrix{Float64}
+    L_tau3::AbstractMatrix{Float64}
+    L_tau4::AbstractMatrix{Float64}
+    D_xi::AbstractMatrix{Float64}
+    D_tau::AbstractMatrix{Float64}
+
     #Incomplete initializer - only assign Category 1 variables.
     DG(P::Int, 
        dim::Int, 
@@ -502,6 +511,18 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
 
     #display("Skew-symmetric stiffness operator:")
     #display(dg.QtildemQtildeT)
+    #
+    #
+    #The following are not used in calculation, but are constructed consistent with defns in the paper
+
+    if dim==2 && usespacetime
+        dg.L_tau3 = dg.M_inv * dg.chi_face[:,:,3]' * dg.W_face * dg.LFIDtoNormal[3,2]
+        dg.L_tau4 = dg.M_inv * dg.chi_face[:,:,4]' * dg.W_face * dg.LFIDtoNormal[4,2]
+        dg.D_tau = dg.M_inv * dg.chi_soln' * dg.W_soln * dg.d_phi_flux_d_eta
+    end
+    dg.L_xi1 = dg.MpK_inv * dg.chi_face[:,:,1]' * dg.W_face * dg.LFIDtoNormal[1,1]
+    dg.L_xi2 = dg.MpK_inv * dg.chi_face[:,:,2]' * dg.W_face * dg.LFIDtoNormal[2,1]
+    dg.D_xi = dg.MpK_inv * dg.chi_soln' * dg.W_soln * dg.d_phi_flux_d_xi
 
     return dg
 
