@@ -17,13 +17,13 @@ function get_integrating_vector_for_conservation_checks(u_hat_local,dg::DG)
     return u_hat_local
 end
 
-function calculate_numerical_flux_for_postprocessing(iface,ielem,u_hat_local, u_hat_global, dg, param  )
+function calculate_numerical_flux_for_postprocessing(direction,iface,ielem,u_hat_local, u_hat_global, dg, param  )
 
     # get solution at faces
     uM = get_solution_at_face(true, ielem, iface, u_hat_global, u_hat_local, dg, param)
     uP = get_solution_at_face(false, ielem, iface, u_hat_global, u_hat_local, dg, param)
 
-    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], 1, 2, 1, dg, param) #some parameters are hard-coded for linear advection!!
+    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], 1, direction, 1, dg, param) #some parameters are hard-coded for linear advection!!
 end
 
 function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxParams)
@@ -57,19 +57,52 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
             integration_at_surfaces[1,itslab]+= integrating_vector' * dg.chi_face[:,:,3]' *dg.J_face* dg.W_face * u_face_bottom
             integration_at_surfaces[2,itslab]+= integrating_vector' * dg.chi_face[:,:,4]' *dg.J_face* dg.W_face * u_face_top
 
-            volume_integration[1,itslab] += u_hat_local' * dg.MpK * dg.M_inv * dg.S_eta * u_hat_local
+            # TEMPORAL TERMS
+            f_hat_local = calculate_flux(dg.chi_soln*u_hat_local,2,1, dg, param)
+            volume_integration[1,itslab] += u_hat_local' * dg.MpK * dg.M_inv * dg.S_eta * f_hat_local
             volume_integration[2,itslab] += u_hat_local' * dg.MpK * dg.M_inv * dg.chi_face[:,:,3]' * dg.W_face * dg.LFIDtoNormal[3,2]  * (
-                                                             calculate_numerical_flux_for_postprocessing(3,ielem,u_hat_local, u_hat, dg, param)
-                                                             - dg.phi_face[:,:,3] * u_hat_local )
-            volume_integration[3,itslab] += u_hat_local' * dg.MpK * dg.M_inv * dg.chi_face[:,:,4]' * dg.W_face * dg.LFIDtoNormal[4,2]  * (
-                                                             calculate_numerical_flux_for_postprocessing(4,ielem,u_hat_local, u_hat, dg, param)
-                                                             - dg.phi_face[:,:,4] * u_hat_local )
+                                                             calculate_numerical_flux_for_postprocessing(2,3,ielem,u_hat_local, u_hat, dg, param)
+                                                             - dg.phi_face[:,:,3] * f_hat_local )
+            volume_integration[2,itslab] += u_hat_local' * dg.MpK * dg.M_inv * dg.chi_face[:,:,4]' * dg.W_face * dg.LFIDtoNormal[4,2]  * (
+                                                             calculate_numerical_flux_for_postprocessing(2,4,ielem,u_hat_local, u_hat, dg, param)
+                                                             - dg.phi_face[:,:,4] * f_hat_local )
+            #==
+            if param.fluxreconstructionC > 0.0
+                display("Error: the following assumes cdg!!")
+                return NaN
+            end
+            f_hat_local = calculate_flux(dg.chi_soln*u_hat_local,2,1, dg, param)
+            volume_integration[itslab] += -0.5 * u_hat_local' * dg.chi_face[:,:,3]' * dg.W_face * dg.LFIDtoNormal[3,2]  * (
+                                                                                                                         dg.phi_face[:,:,3] * f_hat_local)
+            volume_integration[itslab] += -0.5 * u_hat_local' * dg.chi_face[:,:,4]' * dg.W_face * dg.LFIDtoNormal[4,2]  * (
+                                                                                                                         dg.phi_face[:,:,4] * f_hat_local)
+#            if itslab == 1
+                # add initial condition via numerical flux function
+                volume_integration[itslab] += u_hat_local' * dg.chi_face[:,:,3]' * dg.W_face * dg.LFIDtoNormal[3,2]  * (
+                                                        calculate_numerical_flux_for_postprocessing(2,3,ielem,u_hat_local, u_hat, dg, param) )
+#            elseif itslab == dg.N_elem_per_dim
+                # add upwind out of the tf surface
+                volume_integration[itslab] += u_hat_local' * dg.chi_face[:,:,4]' * dg.W_face * dg.LFIDtoNormal[4,2]  * (
+                                                        calculate_numerical_flux_for_postprocessing(2,4,ielem,u_hat_local, u_hat, dg, param) )
+ #           end
+
+==#
+           
+            # SPATIAL TERMS
+            f_hat_local = calculate_flux(dg.chi_soln*u_hat_local,1,1, dg, param)
+            volume_integration[3,itslab] +=  u_hat_local' * dg.S_xi * f_hat_local
+            volume_integration[3,itslab] += u_hat_local' * dg.chi_face[:,:,1]' * dg.W_face * dg.LFIDtoNormal[1,1]  * (
+                                                             calculate_numerical_flux_for_postprocessing(1,1,ielem,u_hat_local, u_hat, dg, param)
+                                                             - dg.phi_face[:,:,1] * f_hat_local )
+            volume_integration[3,itslab] += u_hat_local' * dg.chi_face[:,:,2]' * dg.W_face * dg.LFIDtoNormal[2,1]  * (
+                                                             calculate_numerical_flux_for_postprocessing(1,2,ielem,u_hat_local, u_hat, dg, param)
+                                                             - dg.phi_face[:,:,2] * f_hat_local )
 
         end
     end
 
 
-    if true
+    if false
         fname = "conservation_check_"*string(dg.N_elem_per_dim)*"x"*string(dg.N_elem_per_dim)*"_"*param.fr_c_name*".csv"
         f = open(fname, "w")
         DelimitedFiles.writedlm(f, ["x" "JW_integration_bottom_face" "JW_integration_top_face" "volume_integration" "face_term_bottom_face" "face_term_top_face"], ",")
@@ -90,8 +123,10 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
 
 
     display("Volume integration")
-    display(volume_integration)
+    display(volume_integration')
     display("Sum over all timeslabs")
+    display(sum(volume_integration,dims=2)')
+    display("Sum of all terms in domain")
     display(sum(volume_integration))
 
     

@@ -9,4 +9,5 @@ alpha_split,1.0
 include_source,false
 advection_speed,0.3
 do_conservation_check,true
-fr_c_name,cDG
+fr_c_name,cHU
+fr_c_userdefined,1

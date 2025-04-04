@@ -264,8 +264,8 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
             end
         elseif cmp(param.pde_type, "linear_adv_1D")==0
             a = param.advection_speed
-            alpha = 0 #upwind
-            #alpha = 1 #central
+            #alpha = 0 #upwind
+            alpha = 1 #central
             if direction ==1 
                 f_numerical = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face[direction]) * (uM_face.-uP_face) # lin. adv, upwind/central
             end # numerical flux only in x-direction.
