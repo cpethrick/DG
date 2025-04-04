@@ -4,6 +4,25 @@ import PyPlot
 using LaTeXStrings
 include("parameters.jl")
 
+
+function return_dg_object(N_elem_per_dim, paramfile::String="default_parameters.csv")
+    param = parse_parameters(paramfile)
+
+    x_Llim = 0.0
+    x_Rlim = param.domain_size
+
+    dim = param.dim 
+    #==============================================================================
+    Start Up
+    ==============================================================================#
+    if cmp(param.pde_type, "euler1D") == 0
+        N_state = 3
+    else
+        N_state = 1
+    end
+    return init_DG(param.P, param.dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime)
+end
+
 function c_ramp_test(paramfile::String="default_parameters.csv")
     # Run as: `c_ramp_test("c_ramp/spacetime_linear_advection_P3.csv")`
     #
