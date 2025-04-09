@@ -35,6 +35,7 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
 
     integration_at_surfaces = zeros(2,dg.N_elem_per_dim)
     volume_integration = zeros(3,dg.N_elem_per_dim)
+    display("============================")
 
     integration_initial = 0.0
     integration_final = 0.0
@@ -58,19 +59,40 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
             integration_at_surfaces[2,itslab]+= integrating_vector' * dg.chi_face[:,:,4]' *dg.J_face* dg.W_face * u_face_top
 
             # TEMPORAL TERMS
+            #
+
+            display(" ")
+            display(ielem)
+            display(u_hat_local)
+            
             f_hat_local = calculate_flux(dg.chi_soln*u_hat_local,2,1, dg, param)
-            volume_integration[1,itslab] += u_hat_local' * dg.MpK * dg.M_inv * dg.S_eta * f_hat_local
-            volume_integration[2,itslab] += u_hat_local' * dg.MpK * dg.M_inv * dg.chi_face[:,:,3]' * dg.W_face * dg.LFIDtoNormal[3,2]  * (
+            volume_integration[1,itslab] += u_hat_local' * dg.MpK * dg.D_tau * f_hat_local
+            display(dg.MpK * dg.D_tau * f_hat_local)
+            prod=dg.MpK * dg.D_tau * f_hat_local
+            PyPlot.figure("Across 3 bottom surface")
+            PyPlot.clf()
+            PyPlot.plot(u_hat_local[1:4], label="u hat")
+            PyPlot.plot(f_hat_local[1:4], label="f_hat")
+            PyPlot.plot(prod[1:4], label="dg.MpK * dg.D_tau * f_hat_local")
+            PyPlot.legend()
+
+            volume_integration[2,itslab] += u_hat_local' * dg.MpK * dg.L_tau3 * (
                                                              calculate_numerical_flux_for_postprocessing(2,3,ielem,u_hat_local, u_hat, dg, param)
                                                              - dg.phi_face[:,:,3] * f_hat_local )
-            volume_integration[2,itslab] += u_hat_local' * dg.MpK * dg.M_inv * dg.chi_face[:,:,4]' * dg.W_face * dg.LFIDtoNormal[4,2]  * (
+            display(
+                                                             calculate_numerical_flux_for_postprocessing(2,3,ielem,u_hat_local, u_hat, dg, param)
+                                                             - dg.phi_face[:,:,3] * f_hat_local )
+            volume_integration[2,itslab] += u_hat_local' * dg.L_tau4 * (
                                                              calculate_numerical_flux_for_postprocessing(2,4,ielem,u_hat_local, u_hat, dg, param)
                                                              - dg.phi_face[:,:,4] * f_hat_local )
-            #==
+            display(
+                                                             calculate_numerical_flux_for_postprocessing(2,4,ielem,u_hat_local, u_hat, dg, param)
+                                                             - dg.phi_face[:,:,4] * f_hat_local )
             if param.fluxreconstructionC > 0.0
                 display("Error: the following assumes cdg!!")
                 return NaN
             end
+            #==
             f_hat_local = calculate_flux(dg.chi_soln*u_hat_local,2,1, dg, param)
             volume_integration[itslab] += -0.5 * u_hat_local' * dg.chi_face[:,:,3]' * dg.W_face * dg.LFIDtoNormal[3,2]  * (
                                                                                                                          dg.phi_face[:,:,3] * f_hat_local)
@@ -101,6 +123,7 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
         end
     end
 
+    display("============================")
 
     if false
         fname = "conservation_check_"*string(dg.N_elem_per_dim)*"x"*string(dg.N_elem_per_dim)*"_"*param.fr_c_name*".csv"
@@ -113,13 +136,13 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
 
     display(integration_at_surfaces)
 
-    integration_initial = integration_at_surfaces[1,end]
-    integration_final = integration_at_surfaces[2,1]
+    #integration_initial = integration_at_surfaces[1,end]
+    #integration_final = integration_at_surfaces[2,1]
 
-    display("Initial integrated state:")
-    display(integration_initial)
-    display("Final integrated state:")
-    display(integration_final)
+    #display("Initial integrated state:")
+    #display(integration_initial)
+    #display("Final integrated state:")
+    #display(integration_final)
 
 
     display("Volume integration")
@@ -131,10 +154,11 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
 
     
 
-    conservation = integration_final - integration_initial
-    display("Conservation:")
-    display(conservation)
-    return conservation
+    #conservation = integration_final - integration_initial
+    #display("Conservation:")
+    #display(conservation)
+    return sum(volume_integration)
+    #return conservation
 end
 
 function calculate_projection_error_local(u_face_interior, u_face_Dirichlet, ielem, dg::DG, param::PhysicsAndFluxParams)

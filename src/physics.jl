@@ -777,7 +777,7 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
         end
 
     else
-        return sin.(π * (x)) .+ 1.01
+        return sin.(π * (x)) .+ 1.0
     end
 end
 
