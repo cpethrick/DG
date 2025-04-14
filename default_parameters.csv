@@ -23,3 +23,4 @@ fr_c_userdefined,0.0
 do_conservation_check,false
 debugmode,false
 convergence_table_name,none
+read_soln_from_file,false

@@ -32,6 +32,7 @@ mutable struct PhysicsAndFluxParams
     do_conservation_check::Bool # Controls how well-converged the solution is
     debugmode::Bool
     convergence_table_name::AbstractString # none or descriptive name
+    read_soln_from_file::Bool
 
     # dependant params: set based on above required params.
     #set based on value of fr_c_name
@@ -63,7 +64,8 @@ mutable struct PhysicsAndFluxParams
                          fr_c_userdefined::Float64,
                          do_conservation_check::Bool,
                          debugmode::Bool,
-                         convergence_table_name::AbstractString
+                         convergence_table_name::AbstractString,
+                         read_soln_from_file::Bool
                         ) = new(
                                 dim::Int64,
                                 n_times_to_solve::Int64,
@@ -88,7 +90,8 @@ mutable struct PhysicsAndFluxParams
                                 fr_c_userdefined::Float64,
                                 do_conservation_check::Bool,
                                 debugmode::Bool,
-                                convergence_table_name::AbstractString
+                                convergence_table_name::AbstractString,
+                                read_soln_from_file::Bool
                                )
 
 
@@ -176,6 +179,7 @@ function parse_default_parameters()
     do_conservation_check = parse_param_Bool("do_conservation_check",paramDF)
     debugmode = parse_param_Bool("debugmode", paramDF)
     convergence_table_name = parse_param_String("convergence_table_name",paramDF)
+    read_soln_from_file = parse_param_Bool("read_soln_from_file", paramDF)
 
     param = PhysicsAndFluxParams(
                                  dim,
@@ -201,7 +205,8 @@ function parse_default_parameters()
                                  fr_c_userdefined,
                                  do_conservation_check,
                                  debugmode,
-                                 convergence_table_name
+                                 convergence_table_name,
+                                 read_soln_from_file
                                 )
     set_FR_value(param)
 
@@ -290,6 +295,9 @@ function parse_parameters(fname::String)
         end
         if "convergence_table_name" in newparamDF.name
             default_params.convergence_table_name = parse_param_String("convergence_table_name", newparamDF)
+        end
+        if "read_soln_from_file" in newparamDF.name
+            default_params.read_soln_from_file = parse_param_Bool("read_soln_from_file", newparamDF)
         end
     end
 
