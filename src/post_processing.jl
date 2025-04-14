@@ -78,7 +78,8 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
 
 
     entropy_integration_at_surfaces = zeros(2,dg.N_elem_per_dim)
-    entropy_initial = entropy_integration_at_surfaces[1,1]
+
+    slabwise_entropy = zeros(3,dg.N_elem_per_dim)
 
     for ielem = 1:dg.N_elem
         itslab = dg.EIDtoTSID[ielem]
@@ -105,8 +106,92 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
         u_face_top = project(dg.chi_face[:,:,4], u_hat_local, true, dg, param)
         s_vec = get_numerical_entropy_function(u_face_top,param)
         entropy_integration_at_surfaces[2,itslab] += s_vec' * dg.W_face * dg.J_face * ones(size(s_vec))
-    
+
+
+
+
+        # Setup for volume testing
+        u_soln = project(dg.chi_soln, u_hat_local, true, dg, param)
+        v_soln = get_entropy_variables(u_soln, param)
+        v_hat_local = zeros(dg.N_soln_dof)
+        for istate = 1:dg.N_state
+            v_hat_local[dg.StIDLIDtoLSID[istate, :]] = dg.Pi_soln * v_soln[dg.StIDLIDtoLSID[istate, :]]
+        end
+        u_flux = project(dg.chi_flux, u_hat_local, true, dg, param)
+
+        # Spatial terms
+        #
+        #
+        # Note to self - the signs are implemented correctly.
+        # In build_dg_residual.jl, I multiply by -1 at the very end to bring the residual to the LHS.
+        for istate in 1:dg.N_state
+            spatial_terms = calculate_volume_terms_skew_symm(istate, u_hat_local,1, dg, param)
+            for iface in 1:2
+
+                direction = 1 #space
+
+                uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
+                uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg, param)
+
+                spatial_terms .+= calculate_face_numerical_flux_term(ielem,istate, iface, u_hat_local, uM, uP, direction, dg, param)
+            end
+            cell_entropy = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.MpK_inv * spatial_terms # Multiplication by MpK_inv due to definition of volume&surface terms
+            slabwise_entropy[3, itslab] += cell_entropy
+        end
+        # Temporal terms
+        #
+        #
+        u_v_reshaped = zeros(dg.N_flux, dg.N_state)
+        for istate = 1:dg.N_state
+            u_v_reshaped[1:dg.N_flux, istate] = u_flux[(1:dg.N_flux) .+ (istate-1) * dg.N_flux]
+        end
+        for istate in 1:dg.N_state
+
+            direction = 2 #time
+            skew_symmetric_vv_term = dg.W_flux * dg.d_phi_flux_d_xi- dg.d_phi_flux_d_xi' * dg.W_flux
+            # I want chi_v * skew_symmetric_vv_term * volume part of 2-pt flux * ones
+            #vv_two_point_flux = calculate_two_point_flux(u_flux,u_flux, direction, istate::Int64, dg::DG, param::PhysicsAndFluxParams)
+
+            reference_two_point_flux = zeros(dg.N_flux,dg.N_flux)
+            # I think I need to reformat u_flux: it's expecting an input where cols are states.
+            for i =1:dg.N_flux
+                ui = u_v_reshaped[i,:]
+                for j = 1:dg.N_flux
+                    uj=u_v_reshaped[j,:]
+                    two_pt_flux = calculate_two_point_flux(ui, uj, direction,istate, dg, param)
+                    reference_two_point_flux[i,j] = two_pt_flux[1]
+                end
+            end
+            temporal_vol_term_VVonly = dg.chi_flux' * hadamard_product(skew_symmetric_vv_term,reference_two_point_flux, dg.N_flux ,dg.N_flux) * ones(dg.N_flux)
+
+            slabwise_entropy[1, itslab] += v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv *temporal_vol_term_VVonly
+            
+
+            temporal_face_terms= 0*temporal_vol_term_VVonly
+            for iface in 3:4
+
+                uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
+                uP = get_solution_at_face(false, ielem, iface, u_hat, u_hat_local, dg, param)
+
+                temporal_face_terms .+= calculate_face_numerical_flux_term(ielem,istate, iface, u_hat_local, uM, uP, direction, dg, param)
+            end
+            temporal_vol_term = calculate_volume_terms_skew_symm(istate, u_hat_local,2, dg, param)
+            cell_entropy_vol = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_vol_term # Multiplication by MpK_inv due to definition of volume&surface terms
+
+            display(slabwise_entropy[1,itslab])
+            display(cell_entropy_vol)
+            display(v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_face_terms)
+
+            cell_entropy_face = cell_entropy_vol - slabwise_entropy[1, itslab] + v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_face_terms # Multiplication by MpK_inv due to definition of volume&surface terms
+            slabwise_entropy[2, itslab] += cell_entropy_face
+        end
     end
+
+    display("slabwise entropy")
+    display(slabwise_entropy')
+
+    display("Sum over all entries")
+    display(sum(slabwise_entropy))
 
     entropy_initial = entropy_integration_at_surfaces[1,1]
     entropy_final = entropy_integration_at_surfaces[2,end]
