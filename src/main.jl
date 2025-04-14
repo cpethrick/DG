@@ -118,8 +118,17 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         (u_hat,current_time) = physicaltimesolve(u_hat0, dt, Nsteps, dg, param)
         display("Done time loop")
         L2_error, Linf_error, entropy_change = post_process(u_hat, current_time, u_hat0, dg, param) 
+    elseif param.read_soln_from_file
+        # user is responsible for ensuring that this file exists...
+        u_hat = vec(DelimitedFiles.readdlm("u_hat_stored.csv"))
+        L2_error, Linf_error, entropy_change = post_process(u_hat, u_hat0, dg, param) 
     else
         u_hat = spacetimeimplicitsolve(u_hat0, dg, param, cost_tracker)
+        #== uncomment to write solution to file
+       
+        write_to_file(u_hat)
+        
+        ==#
         #u_hat = u0
         L2_error, Linf_error, entropy_change = post_process(u_hat, u_hat0, dg, param) 
     end
