@@ -170,8 +170,12 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
                 end
             end
             temporal_vol_term_VVonly = dg.chi_flux' * hadamard_product(skew_symmetric_vv_term,reference_two_point_flux, dg.N_flux ,dg.N_flux) * ones(dg.N_flux)
+            cell_entropy_VV = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv *temporal_vol_term_VVonly
+            slabwise_entropy[1,itslab] += cell_entropy_VV
 
-            slabwise_entropy[1, itslab] += v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv *temporal_vol_term_VVonly
+
+            temporal_vol_term = calculate_volume_terms_skew_symm(istate, u_hat_local,2, dg, param)
+            cell_entropy_skew_symm = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_vol_term # Multiplication by MpK_inv due to definition of volume&surface terms
             
 
             temporal_face_terms= 0*temporal_vol_term_VVonly
@@ -182,15 +186,12 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
 
                 temporal_face_terms .+= calculate_face_numerical_flux_term(ielem,istate, iface, u_hat_local, uM, uP, direction, dg, param)
             end
-            temporal_vol_term = calculate_volume_terms_skew_symm(istate, u_hat_local,2, dg, param)
-            cell_entropy_vol = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_vol_term # Multiplication by MpK_inv due to definition of volume&surface terms
 
-            display(slabwise_entropy[1,itslab])
-            display(cell_entropy_vol)
-            display(v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_face_terms)
 
-            cell_entropy_face = cell_entropy_vol - slabwise_entropy[1, itslab] + v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_face_terms # Multiplication by MpK_inv due to definition of volume&surface terms
+            cell_entropy_face = cell_entropy_skew_symm - cell_entropy_VV + v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_face_terms # Multiplication by MpK_inv due to definition of volume&surface terms
+            #cell_entropy_face = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_face_terms # Multiplication by MpK_inv due to definition of volume&surface terms
             slabwise_entropy[2, itslab] += cell_entropy_face
+
         end
     end
 
