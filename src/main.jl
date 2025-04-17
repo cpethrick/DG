@@ -124,6 +124,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         L2_error, Linf_error, entropy_change = post_process(u_hat, u_hat0, dg, param) 
     else
         u_hat = spacetimeimplicitsolve(u_hat0, dg, param, cost_tracker)
+        write_to_file(u_hat)
         #== uncomment to write solution to file
        
         write_to_file(u_hat)
@@ -298,3 +299,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
 end
 
 main()
+main("spacetime_euler_entropy_preservation.csv")

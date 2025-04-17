@@ -1,6 +1,6 @@
 name,value
 n_times_to_solve,1
-P,3
+P,6
 domain_size,1.0
 debugmode,false
 pde_type,euler1D
@@ -18,3 +18,4 @@ dim,2
 usespacetime,true
 fr_c_name,cDG
 do_conservation_check,true
+read_soln_from_file,false
