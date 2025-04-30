@@ -86,7 +86,7 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
 
     entropy_integration_at_surfaces = zeros(2,dg.N_elem_per_dim)
 
-    slabwise_entropy = zeros(3,dg.N_elem_per_dim)
+    slabwise_entropy = zeros(4,dg.N_elem_per_dim)
 
     for ielem = 1:dg.N_elem
         itslab = dg.EIDtoTSID[ielem]
@@ -143,28 +143,35 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
                 spatial_terms .+= calculate_face_numerical_flux_term(ielem,istate, iface, u_hat_local, uM, uP, direction, dg, param)
             end
             cell_entropy = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.MpK_inv * spatial_terms # Multiplication by MpK_inv due to definition of volume&surface terms
-            slabwise_entropy[3, itslab] += cell_entropy
+            slabwise_entropy[4, itslab] += cell_entropy
         end
         # Temporal terms
         #
         #
-        u_v_reshaped = zeros(dg.N_flux, dg.N_state)
+        u_vf = zeros(dg.N_flux+dg.N_faces*dg.N_face, dg.N_state) # columns are states.
+
+        u_tilde_volume = entropy_project(dg.chi_flux, u_hat_local, dg, param)
         for istate = 1:dg.N_state
-            u_v_reshaped[1:dg.N_flux, istate] = u_flux[(1:dg.N_flux) .+ (istate-1) * dg.N_flux]
+            u_vf[1:dg.N_flux, istate] = u_tilde_volume[(1:dg.N_flux) .+ (istate-1) * dg.N_flux]
+        end
+        for iface = 1:dg.N_faces
+            u_tilde_face =  entropy_project(dg.chi_face[:,:,iface], u_hat_local, dg, param)
+            for istate = 1:dg.N_state
+                u_vf[(1:dg.N_face) .+ dg.N_flux .+ (iface-1)*dg.N_face, istate] = u_tilde_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
+            end
         end
         for istate in 1:dg.N_state
 
             direction = 2 #time
-            skew_symmetric_vv_term = dg.W_flux * dg.d_phi_flux_d_xi- dg.d_phi_flux_d_xi' * dg.W_flux
-            # I want chi_v * skew_symmetric_vv_term * volume part of 2-pt flux * ones
-            #vv_two_point_flux = calculate_two_point_flux(u_flux,u_flux, direction, istate::Int64, dg::DG, param::PhysicsAndFluxParams)
+            # next two lines are equivalent
+            #skew_symmetric_vv_term = dg.W_flux * dg.d_phi_flux_d_eta - dg.d_phi_flux_d_eta' * dg.W_flux
+            skew_symmetric_vv_term = dg.QtildemQtildeT[1:dg.N_flux, 1:dg.N_flux,direction]
 
             reference_two_point_flux = zeros(dg.N_flux,dg.N_flux)
-            # I think I need to reformat u_flux: it's expecting an input where cols are states.
-            for i =1:dg.N_flux
-                ui = u_v_reshaped[i,:]
+            for i =1:dg.N_flux # only loop through colume terms
+                ui = u_vf[i,:]
                 for j = 1:dg.N_flux
-                    uj=u_v_reshaped[j,:]
+                    uj=u_vf[j,:]
                     two_pt_flux = calculate_two_point_flux(ui, uj, direction,istate, dg, param)
                     reference_two_point_flux[i,j] = two_pt_flux[1]
                 end
@@ -174,8 +181,24 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
             slabwise_entropy[1,itslab] += cell_entropy_VV
 
 
-            temporal_vol_term = calculate_volume_terms_skew_symm(istate, u_hat_local,2, dg, param)
-            cell_entropy_skew_symm = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_vol_term # Multiplication by MpK_inv due to definition of volume&surface terms
+            #temporal_vol_term = calculate_volume_terms_skew_symm(istate, u_hat_local,2, dg, param)
+            skew_symmetric_remove_vv_term = dg.QtildemQtildeT[:, :, direction]
+            skew_symmetric_remove_vv_term[1:dg.N_flux, 1:dg.N_flux] .-= skew_symmetric_vv_term # Top-left part is now zero.
+
+            reference_two_point_flux = zeros(size(u_vf)[1],size(u_vf)[1])
+            for i =1:size(u_vf)[1] #loop through all, recalling that the hadamard product will get rid of vol-vol terms
+                ui = u_vf[i,:]
+                for j = 1:size(u_vf)[1]
+                    uj=u_vf[j,:]
+                    two_pt_flux = calculate_two_point_flux(ui, uj, direction,istate, dg, param)
+                    reference_two_point_flux[i,j] = two_pt_flux[1]
+                end
+            end
+            temporal_vol_term_VFonly = dg.chi_vf * hadamard_product(skew_symmetric_remove_vv_term,reference_two_point_flux, size(u_vf)[1],size(u_vf)[1]) * ones(size(u_vf)[1])
+            #cell_entropy_skew_symm = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_vol_term # Multiplication by MpK_inv due to definition of volume&surface terms
+            #
+            cell_entropy_faceskew_M = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.M * dg.M_inv * (temporal_vol_term_VFonly)
+            cell_entropy_faceskew_K = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.K * dg.M_inv * (temporal_vol_term_VFonly)
             
 
             temporal_face_terms= 0*temporal_vol_term_VVonly
@@ -188,15 +211,36 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
             end
 
 
-            cell_entropy_face = cell_entropy_skew_symm - cell_entropy_VV + v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_face_terms # Multiplication by MpK_inv due to definition of volume&surface terms
+            #cell_entropy_face = cell_entropy_skew_symm - cell_entropy_VV + v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_face_terms # Multiplication by MpK_inv due to definition of volume&surface terms
+            cell_entropy_face_M = cell_entropy_faceskew_M +  v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.M * dg.M_inv * temporal_face_terms
+            cell_entropy_face_K = cell_entropy_faceskew_K +  v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.K * dg.M_inv * temporal_face_terms
             #cell_entropy_face = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_face_terms # Multiplication by MpK_inv due to definition of volume&surface terms
-            slabwise_entropy[2, itslab] += cell_entropy_face
+            slabwise_entropy[2, itslab] += cell_entropy_face_M
+            slabwise_entropy[3, itslab] += cell_entropy_face_K
+
+            if itslab == 4 && ielem == 26 && istate == 1
+                display("elem id:")
+                display(ielem)
+                display("vol")
+                display(cell_entropy_VV)
+                display("face M")
+                display(cell_entropy_face_M)
+                display("face K")
+                display(cell_entropy_face_K)
+                display("face terms from skew-symm operator")
+                display(temporal_vol_term_VFonly)
+                display("face terms from numerical flux")
+                display(temporal_face_terms)
+            end
 
         end
     end
 
     display("slabwise entropy")
     display(slabwise_entropy')
+
+    display("sum of columns")
+    display(sum(slabwise_entropy',dims=1))
 
     display("Sum over all entries")
     display(sum(slabwise_entropy))
