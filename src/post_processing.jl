@@ -82,11 +82,17 @@ end
 
 function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::PhysicsAndFluxParams)
     projection_error = 0
+    projection_2point63 = 0
 
+    interior_faces_term = 0
+
+    entropy_initial_internal=0
 
     entropy_integration_at_surfaces = zeros(2,dg.N_elem_per_dim)
 
     slabwise_entropy = zeros(4,dg.N_elem_per_dim)
+    slabwise_entropy_K = zeros(4,dg.N_elem_per_dim)
+    spatial_sum = 0
 
     for ielem = 1:dg.N_elem
         itslab = dg.EIDtoTSID[ielem]
@@ -102,12 +108,52 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
 
             s_vec = get_numerical_entropy_function(u_face_Dirichlet,param)
             entropy_integration_at_surfaces[1,1] += s_vec' * dg.W_face * dg.J_face * ones(size(s_vec))
+            entropy_initial_internal += (get_numerical_entropy_function(u_face_interior,param))' * dg.W_face * dg.J_face * ones(size(s_vec))
             projection_error += calculate_projection_error_local(u_face_interior,u_face_Dirichlet, ielem, dg,param)#(phi_jump - vjumpTtimesu)' * dg.W_face * dg.J_face * ones(size(phi_jump))
+
+            v_internal = get_entropy_variables(u_face_interior, param)
+            u_jump = u_face_interior - u_face_Dirichlet 
+
+            vTtimesujump = zeros(dg.N_vol_per_dim)
+            for inode = 1:dg.N_vol_per_dim
+                node_indices = dg.N_vol_per_dim*(1:dg.N_state) .- dg.N_vol_per_dim .+ inode
+                vTtimesujump[inode] += (v_internal[node_indices])' * u_jump[node_indices]
+            end
+
+            projection_2point63 -= vTtimesujump' * dg.W_face * dg.J_face * ones(size(vTtimesujump)) # -'ve to match sign of friedrichs
         else
             # face on bottom of element
             u_face_bottom_interior = project(dg.chi_face[:,:,3],  u_hat_local,true,dg,param)
             s_vec = get_numerical_entropy_function(u_face_bottom_interior,param)
             entropy_integration_at_surfaces[1,itslab] += s_vec' * dg.W_face * dg.J_face * ones(size(s_vec))
+            
+
+
+            # Interior faces term : eq. 2. 62
+            u_m = u_face_bottom_interior
+            u_p = get_solution_at_face(false, ielem, 3, u_hat, u_hat_local, dg, param) # Exterior value of 3rd face
+
+            u_star = zeros(size(u_m))
+            for istate = 1:dg.N_state
+                u_star[(1:dg.N_face) .+ (istate-1)*dg.N_face] .= calculate_numerical_flux(u_m,u_p,[0,-1], istate, 2, 1, dg, param)
+            end 
+            u_star /= dg.C_m[2,2] #  calculate_numerical_flux returns REFERENCE flux.
+
+            v_m = get_entropy_variables(u_m,param)
+            v_p= get_entropy_variables(u_p,param)
+            v_jump = v_m-v_p
+
+            phi_m = get_entropy_potential(u_m,param)
+            phi_p= get_entropy_potential(u_p,param)
+            phi_jump = phi_m-phi_p
+
+            vjumpTtimesustar = zeros(size(phi_jump))
+            for inode = 1:dg.N_vol_per_dim
+                node_indices = dg.N_vol_per_dim*(1:dg.N_state) .- dg.N_vol_per_dim .+ inode
+                vjumpTtimesustar[inode] += (v_jump[node_indices])' * u_star[node_indices]
+            end
+
+            interior_faces_term+= (vjumpTtimesustar - phi_jump)' * dg.W_face * dg.J_face * ones(size(phi_jump))
         end
 
         u_face_top = project(dg.chi_face[:,:,4], u_hat_local, true, dg, param)
@@ -116,18 +162,16 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
 
 
 
-
         # Setup for volume testing
         u_soln = project(dg.chi_soln, u_hat_local, true, dg, param)
+        u_flux = project(dg.chi_flux, u_hat_local, true, dg, param)
         v_soln = get_entropy_variables(u_soln, param)
         v_hat_local = zeros(dg.N_soln_dof)
         for istate = 1:dg.N_state
             v_hat_local[dg.StIDLIDtoLSID[istate, :]] = dg.Pi_soln * v_soln[dg.StIDLIDtoLSID[istate, :]]
         end
-        u_flux = project(dg.chi_flux, u_hat_local, true, dg, param)
 
         # Spatial terms
-        #
         #
         # Note to self - the signs are implemented correctly.
         # In build_dg_residual.jl, I multiply by -1 at the very end to bring the residual to the LHS.
@@ -143,7 +187,7 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
                 spatial_terms .+= calculate_face_numerical_flux_term(ielem,istate, iface, u_hat_local, uM, uP, direction, dg, param)
             end
             cell_entropy = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.MpK_inv * spatial_terms # Multiplication by MpK_inv due to definition of volume&surface terms
-            slabwise_entropy[4, itslab] += cell_entropy
+            spatial_sum+= cell_entropy
         end
         # Temporal terms
         #
@@ -177,13 +221,21 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
                 end
             end
             temporal_vol_term_VVonly = dg.chi_flux' * hadamard_product(skew_symmetric_vv_term,reference_two_point_flux, dg.N_flux ,dg.N_flux) * ones(dg.N_flux)
-            cell_entropy_VV = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv *temporal_vol_term_VVonly
+            cell_entropy_VV = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.M * dg.M_inv *temporal_vol_term_VVonly
             slabwise_entropy[1,itslab] += cell_entropy_VV
-
+            cell_entropy_VV = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.K * dg.M_inv *temporal_vol_term_VVonly
+            slabwise_entropy_K[1,itslab] += cell_entropy_VV
 
             #temporal_vol_term = calculate_volume_terms_skew_symm(istate, u_hat_local,2, dg, param)
             skew_symmetric_remove_vv_term = dg.QtildemQtildeT[:, :, direction]
             skew_symmetric_remove_vv_term[1:dg.N_flux, 1:dg.N_flux] .-= skew_symmetric_vv_term # Top-left part is now zero.
+
+            skew_symmetric_top_left_only = copy(skew_symmetric_remove_vv_term)
+            skew_symmetric_top_left_only[:,1:dg.N_flux] .= 0
+
+            skew_symmetric_bot_left_only = copy(skew_symmetric_remove_vv_term)
+            skew_symmetric_bot_left_only[1:dg.N_flux,:] .= 0
+
 
             reference_two_point_flux = zeros(size(u_vf)[1],size(u_vf)[1])
             for i =1:size(u_vf)[1] #loop through all, recalling that the hadamard product will get rid of vol-vol terms
@@ -194,12 +246,21 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
                     reference_two_point_flux[i,j] = two_pt_flux[1]
                 end
             end
-            temporal_vol_term_VFonly = dg.chi_vf * hadamard_product(skew_symmetric_remove_vv_term,reference_two_point_flux, size(u_vf)[1],size(u_vf)[1]) * ones(size(u_vf)[1])
+            #temporal_vol_term_VFonly = dg.chi_vf * hadamard_product(skew_symmetric_remove_vv_term,reference_two_point_flux, size(u_vf)[1],size(u_vf)[1]) * ones(size(u_vf)[1])
+            temporal_vol_term_top_left_only = dg.chi_vf * hadamard_product(skew_symmetric_top_left_only,reference_two_point_flux, size(u_vf)[1],size(u_vf)[1]) * ones(size(u_vf)[1])
+            temporal_vol_term_bot_left_only = dg.chi_vf * hadamard_product(skew_symmetric_bot_left_only,reference_two_point_flux, size(u_vf)[1],size(u_vf)[1]) * ones(size(u_vf)[1])
             #cell_entropy_skew_symm = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_vol_term # Multiplication by MpK_inv due to definition of volume&surface terms
-            #
-            cell_entropy_faceskew_M = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.M * dg.M_inv * (temporal_vol_term_VFonly)
-            cell_entropy_faceskew_K = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.K * dg.M_inv * (temporal_vol_term_VFonly)
-            
+            #cell_entropy_faceskew_M = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.M * dg.M_inv * (temporal_vol_term_VFonly)
+            #cell_entropy_faceskew_K = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.K * dg.M_inv * (temporal_vol_term_VFonly)
+
+            cell_entropy_skew_top_right = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.M * dg.M_inv * (temporal_vol_term_top_left_only)
+            cell_entropy_skew_bot_left = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.M * dg.M_inv * (temporal_vol_term_bot_left_only)
+            slabwise_entropy[2, itslab] += cell_entropy_skew_top_right 
+            slabwise_entropy[3, itslab] += cell_entropy_skew_bot_left
+            cell_entropy_skew_top_right = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.K * dg.M_inv * (temporal_vol_term_top_left_only)
+            cell_entropy_skew_bot_left = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.K * dg.M_inv * (temporal_vol_term_bot_left_only)
+            slabwise_entropy_K[2, itslab] += cell_entropy_skew_top_right 
+            slabwise_entropy_K[3, itslab] += cell_entropy_skew_bot_left
 
             temporal_face_terms= 0*temporal_vol_term_VVonly
             for iface in 3:4
@@ -212,26 +273,14 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
 
 
             #cell_entropy_face = cell_entropy_skew_symm - cell_entropy_VV + v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_face_terms # Multiplication by MpK_inv due to definition of volume&surface terms
-            cell_entropy_face_M = cell_entropy_faceskew_M +  v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.M * dg.M_inv * temporal_face_terms
-            cell_entropy_face_K = cell_entropy_faceskew_K +  v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.K * dg.M_inv * temporal_face_terms
+            cell_entropy_face_M = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.M * dg.M_inv * temporal_face_terms
+            cell_entropy_face_K = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.K * dg.M_inv * temporal_face_terms
             #cell_entropy_face = v_hat_local[dg.StIDLIDtoLSID[istate, :]]' * dg.MpK * dg.M_inv * temporal_face_terms # Multiplication by MpK_inv due to definition of volume&surface terms
-            slabwise_entropy[2, itslab] += cell_entropy_face_M
-            slabwise_entropy[3, itslab] += cell_entropy_face_K
+            #slabwise_entropy[2, itslab] += cell_entropy_faceskew_M
+            slabwise_entropy[4,itslab] += cell_entropy_face_M
+            slabwise_entropy_K[4,itslab] += cell_entropy_face_K
+            #slabwise_entropy[3, itslab] += cell_entropy_face_K + cell_entropy_faceskew_K
 
-            if itslab == 4 && ielem == 26 && istate == 1
-                display("elem id:")
-                display(ielem)
-                display("vol")
-                display(cell_entropy_VV)
-                display("face M")
-                display(cell_entropy_face_M)
-                display("face K")
-                display(cell_entropy_face_K)
-                display("face terms from skew-symm operator")
-                display(temporal_vol_term_VFonly)
-                display("face terms from numerical flux")
-                display(temporal_face_terms)
-            end
 
         end
     end
@@ -240,11 +289,24 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
     display(slabwise_entropy')
 
     display("sum of columns")
+    sum_cols = sum(slabwise_entropy',dims=1)
     display(sum(slabwise_entropy',dims=1))
 
     display("Sum over all entries")
     display(sum(slabwise_entropy))
 
+    display("slabwise entropy from K")
+    display(slabwise_entropy_K')
+
+    display("sum of columns")
+    sum_cols = sum(slabwise_entropy_K',dims=1)
+    display(sum(slabwise_entropy_K',dims=1))
+
+    display("Sum over all entries")
+    display(sum(slabwise_entropy_K))
+
+    display("Spatial terms")
+    display(spatial_sum)
     entropy_initial = entropy_integration_at_surfaces[1,1]
     entropy_final = entropy_integration_at_surfaces[2,end]
 
@@ -252,12 +314,25 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
     display(entropy_final)
     display("Initial entropy from boundary condition is")
     display(entropy_initial)
+    display("Initial entropy from solution (internal) is")
+    display(entropy_initial_internal)
+    display("Interior faces term 2.62 is")
+    display(interior_faces_term)
     display("Projection error is ")
     display(projection_error)
+    display("Term from first line of 2.63 is")
+    display(projection_2point63)
     display("Entropy preservation:")
     display(entropy_final - entropy_initial + projection_error)
     display("Without projection correction:")
     display(entropy_final - entropy_initial)
+    display("Final - initial (internal):")
+    display(entropy_final-entropy_initial_internal)
+    display("FInal diff")
+    display(entropy_final-entropy_initial_internal - (sum_cols[1]+sum_cols[2]))
+    display("Sum of vv and vf")
+    display((sum_cols[1]+sum_cols[2]))
+
     if true
         fname = "entropy_preservation_check.csv"
         f = open(fname, "w")
