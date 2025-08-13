@@ -233,13 +233,16 @@ function assemble_local_state_residual(ielem,istate, u_hat, t, dg::DG, param::Ph
     end
 
     for idim = 1:dg.dim
-        if param.use_skew_symmetric_stiffness_operator
+        if param.use_skew_symmetric_stiffness_operator && idim==2 && param.strong_in_time
+            # If param.strong_in_time is true, use strong DG formulation in the temporal dimension.
+            rhs_local_state_dim = calculate_dim_cellwise_residual(ielem,istate,u_hat,u_hat_local,idim,dg,param)
+        elseif param.use_skew_symmetric_stiffness_operator
             rhs_local_state_dim = calculate_dim_cellwise_residual_skew_symm(ielem,istate,u_hat,u_hat_local,idim,dg,param)
         else
             rhs_local_state_dim = calculate_dim_cellwise_residual(ielem,istate,u_hat,u_hat_local,idim,dg,param)
         end
         if idim == 2 && param.usespacetime
-            rhs_local_state += -1* dg.M_inv * (rhs_local_state_dim)
+            rhs_local_state += -1 * dg.M_inv * (rhs_local_state_dim)
         else
             rhs_local_state += -1 * dg.MpK_inv * (rhs_local_state_dim)
         end

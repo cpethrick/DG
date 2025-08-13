@@ -21,6 +21,7 @@ mutable struct PhysicsAndFluxParams
     include_source::Bool
     alpha_split::Float64
     use_skew_symmetric_stiffness_operator::Bool
+    strong_in_time::Bool # Flag for doing NSFR in space and DG (non-split) in time
     advection_speed::Float64
     finaltime::Float64
     volumenodes::String #"GLL" or "GL"
@@ -54,6 +55,7 @@ mutable struct PhysicsAndFluxParams
                          include_source::Bool,
                          alpha_split::Float64,
                          use_skew_symmetric_stiffness_operator::Bool,
+                         strong_in_time::Bool,
                          advection_speed::Float64,
                          finaltime::Float64,
                          volumenodes::AbstractString, #"GLL" or "GL"
@@ -80,6 +82,7 @@ mutable struct PhysicsAndFluxParams
                                 include_source::Bool,
                                 alpha_split::Float64,
                                 use_skew_symmetric_stiffness_operator::Bool,
+                                strong_in_time::Bool,
                                 advection_speed::Float64,
                                 finaltime::Float64,
                                 volumenodes::AbstractString, #"GLL" or "GL"
@@ -168,6 +171,7 @@ function parse_default_parameters()
     include_source = parse_param_Bool("include_source", paramDF)
     alpha_split = parse_param_Float64("alpha_split", paramDF)
     use_skew_symmetric_stiffness_operator = parse_param_Bool("use_skew_symmetric_stiffness_operator", paramDF)
+    strong_in_time= parse_param_Bool("strong_in_time", paramDF)
     advection_speed = parse_param_Float64("advection_speed", paramDF)
     finaltime = parse_param_Float64("finaltime", paramDF)
     volumenodes = parse_param_String("volumenodes", paramDF)
@@ -195,6 +199,7 @@ function parse_default_parameters()
                                  include_source, 
                                  alpha_split, 
                                  use_skew_symmetric_stiffness_operator,
+                                 strong_in_time,
                                  advection_speed, 
                                  finaltime, 
                                  volumenodes, 
