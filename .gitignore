@@ -1,11 +1,14 @@
 *.pdf
+*.png
 *.swp
 *.swo
 *.log
+conservation_check*
+u_hat_stored*
 results/*
 result/*
 result.csv
-c_ramp/*result.csv
+c_ramp/*result*
 c_ramp/*.py
 *result.csv
 c_ramp/c_ramp_plot.py
