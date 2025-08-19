@@ -12,6 +12,7 @@ spacetime_JFNK_solver_log,false
 include_source,true
 alpha_split,0.666666666666667
 use_skew_symmetric_stiffness_operator,false
+strong_in_time,false
 advection_speed,1.0
 finaltime,1.0
 volumenodes,GL

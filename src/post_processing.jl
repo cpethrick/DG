@@ -397,6 +397,8 @@ function display_plots(x_overint_1D,x_overint,y_overint,u0_overint_1D, u_calc_fi
         PyPlot.clf()
         PyPlot.tricontourf(x_overint, y_overint, u_calc_final_overint, 20)
         PyPlot.colorbar()
+        PyPlot.xlabel("Spatial direction")
+        PyPlot.ylabel("Temporal direction")
         PyPlot.figure("Final exact soln, overintegrated")
         PyPlot.clf()
         PyPlot.tricontourf(x_overint, y_overint, u_exact_overint, 20)
