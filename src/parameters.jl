@@ -266,6 +266,9 @@ function parse_parameters(fname::String)
         if "use_skew_symmetric_stiffness_operator" in newparamDF.name
             default_params.use_skew_symmetric_stiffness_operator = parse_param_Bool("use_skew_symmetric_stiffness_operator", newparamDF)
         end
+        if "strong_in_time" in newparamDF.name
+            default_params.strong_in_time= parse_param_Bool("strong_in_time", newparamDF)
+        end
         if "advection_speed" in newparamDF.name
             default_params.advection_speed = parse_param_Float64("advection_speed", newparamDF)
         end
