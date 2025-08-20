@@ -555,19 +555,19 @@ function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFl
         # Redirect to scalar-valued version
         f = calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
     elseif direction == 1 && cmp(param.pde_type, "euler1D") == 0
-        f = zeros(dg.Np) # calculated for one state at a time
+        f = zeros(dg.N_soln) # calculated for one state at a time
         u_node = zeros(dg.N_state)
-        for inode = 1:dg.Np
+        for inode = 1:dg.N_soln
             u_node = u[dg.StIDLIDtoLSID[:,inode]]
             if istate == 1
                 f_node = u_node[2]
             elseif istate == 2
                 v = u_node[2]/u_node[1]
-                p = get_pressure_ideal_gas(u)
+                p = get_pressure_ideal_gas(u_node)[1]
                 f_node = u_node[1] * v * v + p
             elseif istate == 3
                 v = u_node[2]/u_node[1]
-                p = get_pressure_ideal_gas(u_node)
+                p = get_pressure_ideal_gas(u_node)[1]
                 f_node = (u_node[3] +p)*v
             else
                 display("Warning! There should only be three states for 1D Euler.")
@@ -577,7 +577,7 @@ function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFl
         end
     elseif direction == 2  && cmp(param.pde_type, "euler1D") == 0
         # Time - physical flux will just be advective.
-        f = u[dg.StIDLIDtoLSID[istate,inode]]
+        f = u[dg.StIDLIDtoLSID[istate,:]]
     end
 
     # No pde_type check as the only vector-valued PDE is Euler
