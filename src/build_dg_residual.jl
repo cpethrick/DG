@@ -6,20 +6,8 @@ include("set_up_dg.jl")
 include("physics.jl")
 include("parameters.jl")
 include("cost_tracking.jl")
+include("operators.jl")
 
-function hadamard_product(A::AbstractMatrix, B::AbstractMatrix, N_rows::Int, N_cols::Int)
-    #returns C = A ⊙ B, element-wise multiplication of matrices A and B
-    
-    C = zeros(N_rows,N_cols)
-    for irow = 1:N_rows
-        for icol = 1:N_cols
-            C[irow,icol] = A[irow,icol] * B[irow,icol]
-        end
-    end
-
-    return C
-    
-end
 
 function project(chi_project, u_hat, do_entropy_projection::Bool, dg::DG, param::PhysicsAndFluxParams)
 
@@ -200,7 +188,7 @@ function calculate_volume_terms_skew_symm(istate,u_hat_local, direction, dg::DG,
         end
     end
 
-    volume_term = dg.chi_vf * hadamard_product(dg.QtildemQtildeT[:,:,direction], reference_two_point_flux, size(u_vf)[1], size(u_vf)[1]) * ones(size(u_vf)[1])
+    volume_term = dg.chi_vf * hadamard_product(dg.QtildemQtildeT[:,:,direction], reference_two_point_flux) * ones(size(u_vf)[1])
 
     return volume_term
 end

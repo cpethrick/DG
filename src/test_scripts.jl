@@ -32,7 +32,7 @@ function c_ramp_test(paramfile::String="default_parameters.csv")
     param.fr_c_name = "user-defined"
 
     fname = paramfile[1:end-4]*"_result.csv"
-    fr_c_ramp_values = exp10.(range(-7.0, 4.0, length=31))
+    fr_c_ramp_values = exp10.(range(-7.0, 4.0, length=11))
     fr_c_names = []
     if special_c_values
         fr_c_ramp_values = [0, 0, 0]
@@ -133,5 +133,23 @@ function reference_element_figure()
     PyPlot.savefig("reference_element.pdf", bbox_inches="tight")
 
 
+
+end
+
+
+
+function get_dg_object(N_elem_per_dim = 4, paramfile::AbstractString="default_parameters.csv")
+
+    param = parse_parameters(paramfile)
+
+    if cmp(param.pde_type, "euler1D") == 0
+        N_state = 3
+    else
+        N_state = 1
+    end
+    x_Llim = 0.0
+    x_Rlim = param.domain_size
+    dg = init_DG(param.P, param.dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime)
+    return dg
 
 end

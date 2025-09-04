@@ -1,3 +1,5 @@
+include("operators.jl")
+
 mutable struct DG
     # Category 1: inputs
     P::Int #polynomial degree
@@ -110,34 +112,6 @@ mutable struct DG
                                                N_state::Int,
                                                domain_x_limits::Vector{Float64})
 
-end
-
-
-function tensor_product_2D(A::AbstractMatrix, B::AbstractMatrix)
-    # Modelled after tensor_product() function in PHiLiP
-    # Returns C = A⊗ B
-
-    rows_A = size(A)[1]
-    rows_B = size(B)[1]
-    cols_A = size(A)[2]
-    cols_B = size(B)[2]
-    
-    C = zeros(Float64, (rows_A*rows_B, cols_A*cols_B))
-
-    for j = 1:rows_B
-        for k = 1:rows_A
-            for n = 1:cols_B
-                for o = 1:cols_A
-                    irow = rows_A * (j-1) + k
-                    icol = cols_A * (n-1) + o
-                    C[irow, icol] = A[k,o] * B[j,n]
-                end
-            end
-        end
-    end
-
-    return C
-    
 end
 
 
