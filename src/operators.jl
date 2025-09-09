@@ -1,4 +1,3 @@
-
 function tensor_product_2D(A::AbstractMatrix, B::AbstractMatrix)
     # Modelled after tensor_product() function in PHiLiP
     # Returns C = A⊗ B
@@ -47,4 +46,12 @@ function hadamard_product(A::AbstractMatrix, B::AbstractMatrix)
 
     return C
     
+end
+
+function matrix_vector_product(A::AbstractMatrix, b::AbstractVector)
+    # returns c = A b, matrix-vector product.
+
+    c = A * b # naive implementation
+
+    return c
 end
