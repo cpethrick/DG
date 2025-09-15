@@ -6,6 +6,7 @@ import FastGaussQuadrature
 import Random
 import LinearAlgebra
 import PyPlot
+import LaTeXStrings
 
 mutable struct TensorProductMatrix2D
     # Assume matrix is 2D tensor product.
@@ -105,24 +106,41 @@ function test_tensor_product(N)
 end
 
 
-test_tensor_product(4)
+#test_tensor_product(4)
 
-end_number = 30
-result = zeros(end_number,3)
+function scaling_figure()
+end_number = 45
+result = zeros(end_number,5)
 for N in range(2,end_number+1)
     (timing_naive,timing_tensor_prod) = (0,0)
-    for i in 1:10
+    for i in 1:300
         (timing_n,timing_p) = test_tensor_product(N)
         timing_naive += timing_n
         timing_tensor_prod += timing_p
     end
    result[N-1,1] = N
    result[N-1,2] = timing_naive
-   result[N-1,3] = timing_tensor_prod
+   result[N-1,4] = timing_tensor_prod
+   if N > 2
+       result[N-1,3] = log(result[N-1,2]/result[N-2,2]) / log((N-1)/(N-2))
+       result[N-1,5] = log(result[N-1,4]/result[N-2,4]) / log((N-1)/(N-2))
+   end
 end
 display("N, naive, tensor-prod")
 display(result)
 
 PyPlot.clf()
-PyPlot.plot(result[:,1], result[:,2:3])
-PyPlot.legend(["Naive implementation", "Tensor product"])
+(fig,axs) = PyPlot.subplots(2,1,num="Scaling")
+PyPlot.sca(axs[1])
+PyPlot.loglog(result[:,1], result[:,[2,4]])
+PyPlot.loglog(result[:,1], 1E-7*[result[:,1].^3 result[:,1].^4], linewidth = 0.5, color="gray")
+PyPlot.legend(["Naive implementation", "Sum factorized"])
+PyPlot.ylabel("Time for 300 evaluations")
+PyPlot.title(LaTeXStrings.latexstring("Scaling of matrix-vector product \$b_{N^2} = (A_{N\\times N}\\otimes A_{N\\times N}) x_{N^2} \$"))
+PyPlot.sca(axs[2])
+PyPlot.semilogx(result[:,1], result[:,[3,5]])
+PyPlot.ylabel("Scaling")
+PyPlot.axhline(3,linewidth = 0.5, color="gray")
+PyPlot.axhline(4,linewidth = 0.5, color="gray")
+PyPlot.xlabel("Basis dimension N")
+end
