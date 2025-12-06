@@ -1,3 +1,4 @@
+
 mutable struct DG
     # Category 1: inputs
     P::Int #polynomial degree
@@ -113,34 +114,6 @@ mutable struct DG
 end
 
 
-function tensor_product_2D(A::AbstractMatrix, B::AbstractMatrix)
-    # Modelled after tensor_product() function in PHiLiP
-    # Returns C = A⊗ B
-
-    rows_A = size(A)[1]
-    rows_B = size(B)[1]
-    cols_A = size(A)[2]
-    cols_B = size(B)[2]
-    
-    C = zeros(Float64, (rows_A*rows_B, cols_A*cols_B))
-
-    for j = 1:rows_B
-        for k = 1:rows_A
-            for n = 1:cols_B
-                for o = 1:cols_A
-                    irow = rows_A * (j-1) + k
-                    icol = cols_A * (n-1) + o
-                    C[irow, icol] = A[k,o] * B[j,n]
-                end
-            end
-        end
-    end
-
-    return C
-    
-end
-
-
 function build_coords_vectors(ref_vec_1D, dg::DG)
 
     x = zeros(dg.N_elem*(length(ref_vec_1D)^dg.dim))
@@ -185,6 +158,9 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     dg = DG(P, dim, N_elem_per_dim, N_state, domain_x_limits)
     dg.N_soln_per_dim = P+1
     dg.N_flux_per_dim = dg.N_soln_per_dim + fluxnodes_overintegration
+
+    # Flag to set reference cell from 0 to 1, matching PHiLiP.
+    reference_cell_01 = false
 
     if dim == 1
         dg.N_soln = dg.N_soln_per_dim
@@ -330,8 +306,10 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     else
         display("Illegal soln node choice!")
     end
-    # dg.r_soln= dg.r_soln * 0.5 .+ 0.5 # for changing ref element to match PHiLiP for debugging purposes
-    # dg.w_soln /= 2.0
+    if reference_cell_01
+        dg.r_soln= dg.r_soln * 0.5 .+ 0.5 # for changing ref element to match PHiLiP for debugging purposes
+        dg.w_soln /= 2.0
+    end
 
     # Basis function nodes (shape functions, interpolation nodes)
     if cmp(basisnodes, "GLL") == 0 
@@ -343,8 +321,10 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     else
         display("Illegal basis node choice!")
     end
-    # dg.r_basis = dg.r_basis * 0.5 .+ 0.5
-    # dg.w_basis /= 2.0
+    if reference_cell_01
+        dg.r_basis = dg.r_basis * 0.5 .+ 0.5
+        dg.w_basis /= 2.0
+    end
     
     # Flux nodes (shape functions, interpolation nodes)
     # Assume collocated flux basis nodes.
@@ -361,16 +341,21 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         display("Overintegrating the flux by")
         display(fluxnodes_overintegration)
     end
-    # dg.r_flux = dg.r_flux * 0.5 .+ 0.5
-    # dg.w_flux /= 2.0
+    if reference_cell_01
+        dg.r_flux = dg.r_flux * 0.5 .+ 0.5
+        dg.w_flux /= 2.0
+    end
 
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], dg.N_elem_per_dim+1) |> collect
     display("Elements per dim:")
     display(dg.N_elem_per_dim)
     dg.delta_x = dg.VX[2]-dg.VX[1]
     # constant jacobian on all elements as they are evenly spaced
-    jacobian = (dg.delta_x/2.0)^dim #reference element is 2 units long
-    # jacobian = (dg.delta_x/1.0)^dim
+    cell_length = 2.0
+    if reference_cell_01
+        cell_length = 1.0
+    end
+    jacobian = (dg.delta_x/cell_length)^dim #reference element is 2 units long
     dg.J_soln = LinearAlgebra.diagm(ones(length(dg.r_soln)^dim)*jacobian)
 
     (dg.x, dg.y) = build_coords_vectors(dg.r_soln, dg) 
@@ -381,7 +366,12 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         dg.d_phi_flux_d_xi = gradvandermonde1D(dg.r_flux,dg.r_flux)
         d_chi_flux_d_xi = gradvandermonde1D(dg.r_flux,dg.r_basis)
         #reference coordinates of L and R faces
-        r_f_L::Float64 = -1
+        r_f_L::Float64 = 0
+        if reference_cell_01
+            r_f_L= 0
+        else
+            r_f_L= -1
+        end
         r_f_R::Float64 = 1
         dg.chi_face = assembleFaceVandermonde1D(r_f_L,r_f_R,dg.r_basis)
         dg.phi_face = assembleFaceVandermonde1D(r_f_L,r_f_R,dg.r_flux)
@@ -405,7 +395,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         dg.W_flux = LinearAlgebra.diagm(vec(dg.w_flux*dg.w_flux'))
         dg.W_face = LinearAlgebra.diagm(dg.w_flux)
         dg.J_face = LinearAlgebra.diagm(ones(length(dg.r_flux)) * jacobian ^ (1/dim)) # 1D jacobian on the face of the element.
-        dg.C_m = dg.delta_x/2.0 * [1 0; 0 1]  # Assuming a cartesian element and a reference element (-1,1)
+        dg.C_m = dg.delta_x/cell_length * [1 0; 0 1]  # Assuming a cartesian element
     end
 
     # for skew-symmetric stiffness operator form
@@ -476,6 +466,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     end
     display("FR K")
     display(dg.K) # Verified against PHiLiP for 1D and 2D using C from PHiLiP
+    display("Mass")
+    display(dg.M) # Verified against PHiLiP for 1D and 2D using C from PHiLiP
 
 
     dg.M_inv = inv(dg.M) # unmodified mass matrix.
