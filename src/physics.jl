@@ -614,7 +614,7 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
         if cmp(param.pde_type,  "euler1D")==0
             if param.include_source
 
-                u0 = calculate_euler_exact_solution(-1, x, y, dg.N_soln, dg) .+ 0.1
+                u0 = calculate_euler_exact_solution_Gassner(-1, x, y, dg.N_soln, dg) .+ 0.1
             else
                 u0 = initial_condition_Friedrichs_4_6(x, dg.N_soln)
             end
@@ -629,7 +629,7 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
     elseif cmp(param.pde_type, "burgers2D") == 0
         u0 = exp.(-10*((x .-1).^2 .+(y .-1).^2))
     elseif cmp(param.pde_type, "euler1D") == 0
-        u0 = calculate_euler_exact_solution(0, x, y, dg.N_soln, dg)
+        u0 = calculate_euler_exact_solution_Gassner(0, x, y, dg.N_soln, dg)
     else
         #u0 = 0.2* sin.(π * x) .+ 0.01
         u0 = sin.(π * (x)) .+ 0.01
@@ -654,9 +654,10 @@ function calculate_exact_solution(x, y, Np, current_time, dg::DG, param::Physics
     elseif cmp(param.pde_type, "euler1D")==0
         if param.usespacetime
             display("Warning: exact soln not correct for space time!")
-            u_exact_allstates = calculate_euler_exact_solution(-1.0, x, y, Np, dg)
+            u_exact_allstates = calculate_euler_exact_solution_Gassner(-1.0, x, y, Np, dg)
         else
-            u_exact_allstates = calculate_euler_exact_solution(current_time, x, y, Np, dg)
+            #u_exact_allstates = calculate_euler_exact_solution_Friedrich(current_time, x, y, Np, dg)
+            u_exact_allstates = calculate_euler_exact_solution_Gassner(current_time, x, y, Np, dg)
         end
         # extract only density
         u_exact = zeros(size(x))
@@ -669,9 +670,9 @@ function calculate_exact_solution(x, y, Np, current_time, dg::DG, param::Physics
     return u_exact
 end
 
-function calculate_euler_exact_solution(t, x, y, Np, dg)
+function calculate_euler_exact_solution_Friedrich(t, x, y, Np, dg)
     # take Np as an input because we may be using an overintegrated or surface mesh.
-    # time is passed as scalar current_time for MoL
+    # time is passed as scalar current_time for Mo
     # or as t=-1 for space-time.
     # In the space-time case, the y vector will be interpreted as a time vector.
     
@@ -696,6 +697,42 @@ function calculate_euler_exact_solution(t, x, y, Np, dg)
         rho_local = 2 .+ sin.(2 * π * (x_local - time_local))
         rhov_local = 2 .+ sin.(2 * π * (x_local - time_local))
         E_local = (2 .+ sin.(2 * π * (x_local - time_local))).^2
+        # Indexing: 1:Np .+ Np*3*(ielem-1) .+ (istate-1)*Np
+        u_exact[ (1:Np) .+ Np*3*(ielem-1) .+ (1-1)*Np] = rho_local
+        u_exact[(1:Np) .+ Np*3*(ielem-1) .+ (2-1)*Np]= rhov_local
+        u_exact[(1:Np) .+ Np*3*(ielem-1) .+ (3-1)*Np]= E_local
+
+    end
+    return u_exact
+end
+
+function calculate_euler_exact_solution_Gassner(t, x, y, Np, dg)
+    # take Np as an input because we may be using an overintegrated or surface mesh.
+    # time is passed as scalar current_time for MoL
+    # or as t=-1 for space-time.
+    # In the space-time case, the y vector will be interpreted as a time vector.
+    
+    if t >=0
+        time = t* ones(size(x))
+    elseif t == -1.0
+        time = y
+    else
+        display("Time not recognized in euler exact soln")
+    end
+
+    # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
+    u_exact = zeros(length(x) * 3) #Hard-code 3 states
+    N_elem = trunc(Int, length(x)/Np) # Need to detect this as sometimes we're only in one element.
+
+    for ielem in 1:N_elem
+        node_indices = Np*(ielem-1) +1 : Np*ielem
+        x_local = x[node_indices]
+        y_local = y[node_indices]
+        time_local = time[node_indices]
+        # Initial condition per 4.4 Friedrichs
+        rho_local = 2 .+ 0.1*sin.(π * (x_local .- 2* time_local))
+        rhov_local = 2 .+ 0.1*sin.(π * (x_local .- 2 *time_local))
+        E_local = (2 .+ 0.1*sin.(π * (x_local .- 2*time_local))).^2
         # Indexing: 1:Np .+ Np*3*(ielem-1) .+ (istate-1)*Np
         u_exact[ (1:Np) .+ Np*3*(ielem-1) .+ (1-1)*Np] = rho_local
         u_exact[(1:Np) .+ Np*3*(ielem-1) .+ (2-1)*Np]= rhov_local
@@ -736,7 +773,9 @@ function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::Abstr
         # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
         Q = zeros(dg.N_soln)
         gamm1=0.4
-        for ielem in 1:dg.N_elem
+        #for ielem in 1:dg.N_elem
+        use_Friedrich = false # change to false to evaluate per Gassner
+        if use_Friedrich
             # Source per 4.5 Friedrichs
             if istate == 1
                 Q .= 0
@@ -745,7 +784,21 @@ function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::Abstr
             else
                 display("Warning! There should only be 3 states.")
             end
+        else
+            if istate == 1
+                Q .= - π * 0.1 * cos.(π * (x .- 2* time))
+            elseif istate == 2
+                gam = 1.4
+                #Q .= (-1/5 * π + 1/20 * π * (1 + 5 * gam)) .* cos.(π * (x .-2* time)) .+
+                #        π/100*gamm1 .* cos.(2*π * (x .-2* time))
+                Q .= 1/50 *π *cos.(π (x - 2 *time)).* (5 (-4 + 3 gam) .+ (-1 + gam) *sin.(π (x - 2 time)))
+            elseif istate==3
+                gam = 1.4
+                Q .= 1/20 * (-16*π + π * (9 + 15 *gam)) .* cos.(π * (x .-2* time)) .+
+                        1/100 * (3 * π * gam - 2 * π) .* cos.(2*π * (x .-2* time))
+            end
         end
+        #end
         return Q
     else
         return zeros(size(x))
@@ -771,7 +824,7 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
         return out
     elseif cmp(param.pde_type, "euler1D") == 0
         if param.include_source
-            return calculate_euler_exact_solution(0, x, y, dg.N_face, dg)
+            return calculate_euler_exact_solution_Gassner(0, x, y, dg.N_face, dg)
         else
             return initial_condition_Friedrichs_4_6(x, dg.N_face)
         end
