@@ -791,11 +791,12 @@ function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::Abstr
                 gam = 1.4
                 #Q .= (-1/5 * π + 1/20 * π * (1 + 5 * gam)) .* cos.(π * (x .-2* time)) .+
                 #        π/100*gamm1 .* cos.(2*π * (x .-2* time))
-                Q .= 1/50 *π *cos.(π (x - 2 *time)).* (5 (-4 + 3 gam) .+ (-1 + gam) *sin.(π (x - 2 time)))
+                Q .= 1/100 *π *cos.(π* (x - 2 *time)).* (5* (-9 + 7* gam) .+2* (-1 + gam) *sin.(π* (x - 2* time)))
             elseif istate==3
                 gam = 1.4
-                Q .= 1/20 * (-16*π + π * (9 + 15 *gam)) .* cos.(π * (x .-2* time)) .+
-                        1/100 * (3 * π * gam - 2 * π) .* cos.(2*π * (x .-2* time))
+                #Q .= 1/20 * (-16*π + π * (9 + 15 *gam)) .* cos.(π * (x .-2* time)) .+
+                #        1/100 * (3 * π * gam - 2 * π) .* cos.(2*π * (x .-2* time))
+                Q .= 1/100 * π * cos.(π * (x-2*time)) .* (-75 .+ 35 * gam .+ 2* (-2 + gam ) * sin.(pi * (x - 2 * time)))
             end
         end
         #end
