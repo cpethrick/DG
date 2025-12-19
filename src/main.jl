@@ -144,6 +144,7 @@ function run(param::PhysicsAndFluxParams)
 
 
     P = param.P
+    #N_elem_range = [1] #2 .^(1:param.n_times_to_solve)
     N_elem_range = 2 .^(1:param.n_times_to_solve)
     L2_err_store = zeros(length(N_elem_range))
     Linf_err_store = zeros(length(N_elem_range))
@@ -168,7 +169,7 @@ function run(param::PhysicsAndFluxParams)
 
         #Evalate convergence, print, and save to file
         Printf.@printf("P =  %d \n", P)
-        dx = 2.0./N_elem_range
+        dx = param.domain_size./N_elem_range
         Printf.@printf("n cells_per_dim    dx               L2 Error    L2  Error rate     Linf Error     Linf rate    Entropy change         Time   Time scaling\n")
         if cmp(param.convergence_table_name, "none") != 0
             fname = "result/"*param.convergence_table_name*".csv" #Note: this should be changed to something useful in the future...
