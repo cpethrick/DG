@@ -124,14 +124,15 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         L2_error, Linf_error, entropy_change = post_process(u_hat, u_hat0, dg, param) 
     else
         u_hat = spacetimeimplicitsolve(u_hat0, dg, param, cost_tracker)
-        #== uncomment to write solution to file
-       
-        write_to_file(u_hat)
-        
-        ==#
         #u_hat = u0
         L2_error, Linf_error, entropy_change = post_process(u_hat, u_hat0, dg, param) 
     end
+    if param.write_to_file
+        filename = "c_ramp_solutions/"*param.pde_type*"_N"*string(N_elem_per_dim)*"_p"*string(param.P)*"_c"*(@sprintf "%.3e" param.fluxreconstructionC)*".out"
+        print("Writing entire solution to file at "*filename)
+        write_to_file(u_hat)
+    end
+    
     display("Reminder, c is ")
     display(param.fluxreconstructionC)
 
@@ -145,7 +146,7 @@ function run(param::PhysicsAndFluxParams)
 
     P = param.P
     #N_elem_range = [1] #2 .^(1:param.n_times_to_solve)
-    N_elem_range = 2 .^(1:param.n_times_to_solve)
+    N_elem_range = 2 .^(1:param.n_times_to_solve)*2
     L2_err_store = zeros(length(N_elem_range))
     Linf_err_store = zeros(length(N_elem_range))
     entropy_change_store = zeros(length(N_elem_range))

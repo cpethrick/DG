@@ -9,8 +9,7 @@ include("set_up_dg.jl")
 include("parameters.jl")
 include("physics.jl")
 
-function write_to_file(u_hat)
-        fname = "u_hat_stored.csv"
+function write_to_file(u_hat,fname="u_hat_stored.csv")
         f = open(fname, "w")
         DelimitedFiles.writedlm(f, u_hat, ",")
         close(f)

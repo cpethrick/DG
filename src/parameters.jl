@@ -34,6 +34,7 @@ mutable struct PhysicsAndFluxParams
     debugmode::Bool
     convergence_table_name::AbstractString # none or descriptive name
     read_soln_from_file::Bool
+    write_soln_to_file::Bool
 
     # dependant params: set based on above required params.
     #set based on value of fr_c_name
@@ -67,7 +68,8 @@ mutable struct PhysicsAndFluxParams
                          do_conservation_check::Bool,
                          debugmode::Bool,
                          convergence_table_name::AbstractString,
-                         read_soln_from_file::Bool
+                         read_soln_from_file::Bool,
+                         write_soln_to_file::Bool
                         ) = new(
                                 dim::Int64,
                                 n_times_to_solve::Int64,
@@ -94,7 +96,8 @@ mutable struct PhysicsAndFluxParams
                                 do_conservation_check::Bool,
                                 debugmode::Bool,
                                 convergence_table_name::AbstractString,
-                                read_soln_from_file::Bool
+                                read_soln_from_file::Bool,
+                                write_soln_to_file::Bool,
                                )
 
 
@@ -184,6 +187,7 @@ function parse_default_parameters()
     debugmode = parse_param_Bool("debugmode", paramDF)
     convergence_table_name = parse_param_String("convergence_table_name",paramDF)
     read_soln_from_file = parse_param_Bool("read_soln_from_file", paramDF)
+    write_soln_to_file = parse_param_Bool("write_soln_to_file", paramDF)
 
     param = PhysicsAndFluxParams(
                                  dim,
@@ -211,7 +215,8 @@ function parse_default_parameters()
                                  do_conservation_check,
                                  debugmode,
                                  convergence_table_name,
-                                 read_soln_from_file
+                                 read_soln_from_file,
+                                 write_soln_to_file
                                 )
     set_FR_value(param)
 
@@ -306,6 +311,9 @@ function parse_parameters(fname::String)
         end
         if "read_soln_from_file" in newparamDF.name
             default_params.read_soln_from_file = parse_param_Bool("read_soln_from_file", newparamDF)
+        end
+        if "write_soln_to_file" in newparamDF.name
+            default_params.write_soln_to_file = parse_param_Bool("write_soln_to_file", newparamDF)
         end
     end
 

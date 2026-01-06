@@ -27,12 +27,12 @@ function c_ramp_test(paramfile::String="default_parameters.csv")
     # Run as: `c_ramp_test("c_ramp/spacetime_linear_advection_P3.csv")`
     #
     #
-    special_c_values = true # run c values cDG, cHu, cSD
+    special_c_values = false # run c values cDG, cHu, cSD
     param = parse_parameters(paramfile)
     param.fr_c_name = "user-defined"
 
     fname = paramfile[1:end-4]*"_result.csv"
-    fr_c_ramp_values = exp10.(range(-7.0, 4.0, length=31))
+    fr_c_ramp_values = exp10.(range(-7.0, 2.0, length=11))
     fr_c_names = []
     if special_c_values
         fr_c_ramp_values = [0, 0, 0]
