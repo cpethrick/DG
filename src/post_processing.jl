@@ -204,7 +204,7 @@ function post_process(u_hat, u_hat0, dg::DG, param::PhysicsAndFluxParams)
     return post_process(u_hat, 0.0, u_hat0, dg::DG, param::PhysicsAndFluxParams)
 end
 
-function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::PhysicsAndFluxParams)
+function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::PhysicsAndFluxParams, return_overint_vecs=false)
     dim = dg.dim
     Np_overint_per_dim = dg.N_soln_per_dim+10
     Np_overint = (Np_overint_per_dim)^dim
@@ -303,5 +303,9 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
 
    display_plots(x_overint_1D,x_overint, y_overint,u0_overint_1D, u_calc_final_overint_1D, u_exact_overint_1D, u0_overint,u_calc_final_overint,u_exact_overint, dg, param)
 
-    return L2_error, Linf_error, entropy_change#, solution
+   if return_overint_vecs
+       return x_overint_1D,x_overint, y_overint,u0_overint_1D, u_calc_final_overint_1D, u_exact_overint_1D, u0_overint,u_calc_final_overint,u_exact_overint
+   else
+        return L2_error, Linf_error, entropy_change#, solution
+    end
 end

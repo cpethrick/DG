@@ -11,9 +11,10 @@ mutable struct PhysicsAndFluxParams
     dim::Int64
     n_times_to_solve::Int64
     P::Int64
+    N_elem_per_dim_coarse::Int64 # number of elements for the coarsest grid
     domain_size::Float64
     numerical_flux_type::AbstractString
-    pde_type::AbstractString
+    pde_type::AbstractString # linear_adv_1D or burgers<1|2>D or euler1D
     usespacetime::Bool
     spacetime_decouple_slabs::Bool
     spacetime_solver_type::AbstractString #pseudotime or JFNK
@@ -46,6 +47,7 @@ mutable struct PhysicsAndFluxParams
                          dim::Int64,
                          n_times_to_solve::Int64,
                          P::Int64,
+                         N_elem_per_dim_coarse::Int64,
                          domain_size::Float64,
                          numerical_flux_type::AbstractString,
                          pde_type::AbstractString,
@@ -74,6 +76,7 @@ mutable struct PhysicsAndFluxParams
                                 dim::Int64,
                                 n_times_to_solve::Int64,
                                 P::Int64,
+                                N_elem_per_dim_coarse::Int64,
                                 domain_size::Float64,
                                 numerical_flux_type::AbstractString,
                                 pde_type::AbstractString,
@@ -164,6 +167,7 @@ function parse_default_parameters()
     dim = parse_param_Int64("dim", paramDF)
     n_times_to_solve = parse_param_Int64("n_times_to_solve", paramDF)
     P = parse_param_Int64("P", paramDF)
+    N_elem_per_dim_coarse = parse_param_Int64("N_elem_per_dim_coarse", paramDF)
     domain_size = parse_param_Float64("domain_size", paramDF)
     numerical_flux_type = parse_param_String("numerical_flux_type", paramDF)
     pde_type = parse_param_String("pde_type", paramDF)
@@ -193,6 +197,7 @@ function parse_default_parameters()
                                  dim,
                                  n_times_to_solve, 
                                  P,
+                                 N_elem_per_dim_coarse,
                                  domain_size,
                                  numerical_flux_type, 
                                  pde_type, 
@@ -240,6 +245,9 @@ function parse_parameters(fname::String)
         end
         if "P" in newparamDF.name
             default_params.P = parse_param_Int64("P", newparamDF)
+        end
+        if "N_elem_per_dim_coarse" in newparamDF.name
+            default_params.N_elem_per_dim_coarse = parse_param_Int64("N_elem_per_dim_coarse", newparamDF)
         end
         if "domain_size" in newparamDF.name
             default_params.domain_size = parse_param_Float64("domain_size", newparamDF)
