@@ -3,6 +3,7 @@ import DelimitedFiles
 import PyPlot
 using LaTeXStrings
 include("parameters.jl")
+include("post_processing.jl")
 
 
 function return_dg_object(N_elem_per_dim, paramfile::String="default_parameters.csv")
@@ -132,6 +133,164 @@ function reference_element_figure()
 
     PyPlot.savefig("reference_element.pdf", bbox_inches="tight")
 
+end
 
 
+function compare_MoL_spacetime_figure()
+
+    paramfile::AbstractString="default_parameters.csv"
+    param = parse_parameters(paramfile)
+    param.dim = 1
+    param.N_elem_per_dim_coarse=2
+    param.P = 3
+    param.usespacetime = false
+    param.volumenodes = "GLL"
+    param.basisnodes = "GLL"
+    param.fluxnodes = "GL"
+    param.fluxnodes_overintegration = 0
+    param.pde_type = "linear_adv_1D"
+    param.alpha_split=1
+    param.include_source=false
+    param.advection_speed=0.3
+
+    dg_MoL = init_DG(param.P, param.dim, 2, 1, [0.0,2], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime)
+
+    u0 = calculate_initial_solution(dg_MoL, param)
+    u_hat0 = zeros(dg_MoL.N_soln_dof_global)
+    u_local_state = zeros(dg_MoL.N_soln)
+    for ielem = 1:dg_MoL.N_elem
+        for istate = 1:dg_MoL.N_state
+            for inode = 1:dg_MoL.N_vol
+                u_local_state[inode] = u0[dg_MoL.StIDGIDtoGSID[istate,dg_MoL.EIDLIDtoGID_vol[ielem,inode]]]
+            end
+            u_hat_local_state = dg_MoL.Pi_soln*u_local_state
+            u_hat0[dg_MoL.StIDGIDtoGSID[istate,dg_MoL.EIDLIDtoGID_basis[ielem,:]]] = u_hat_local_state
+        end
+    end
+
+    CFL = 0.3
+    #xmin = minimum(abs.(x[1,:] .- x[2,:]))
+    #dt = abs(CFL / a * xmin /2)
+    dt = CFL * (dg_MoL.delta_x / dg_MoL.N_soln_per_dim)
+    Nsteps::Int64 = ceil(param.finaltime/dt)
+    dt = param.finaltime/Nsteps
+    if param.debugmode == true
+        Nsteps = 1
+    end
+    display("Beginning time loop")
+    (u_hat_MoL,current_time) = physicaltimesolve(u_hat0, dt, Nsteps, dg_MoL, param)
+    display("Done time loop")
+
+    (x_overint_1D,x_overint, y_overint,u0_overint_1D, u_calc_final_overint_1D, 
+       u_exact_overint_1D, u0_overint,u_calc_final_overint,u_exact_overint) = post_process(u_hat_MoL, current_time, u_hat0, dg_MoL, param, true)
+
+    ########################## plot MoL: grid + initial solution + final solution.
+
+    # Plot settings from python codes
+    PyPlot.rc("legend", frameon=false, fontsize="medium")
+    #PyPlot.rc('font', family='sans-serif', size=12)
+    PyPlot.rc("text", usetex=true)
+    PyPlot.rc("font", size=8)
+    PyPlot.rc("font", family = "serif")
+
+    PyPlot.figure("Method of Lines - Grid", figsize=(4,1))
+    PyPlot.clf()
+    ax = PyPlot.gca()
+    ax.set_xticks(dg_MoL.VX, minor=false)
+    ax.xaxis.grid(true, which="major", color="k")
+    ax.set_axisbelow(false)
+    PyPlot.axhline(0, 0,2, color="k", linewidth=1.5)
+    PyPlot.yticks([])
+    PyPlot.plot(dg_MoL.x, dg_MoL.y, "o", color="darkolivegreen", label="volume nodes")
+    pltname = string("grid_MoL",".pdf")
+    PyPlot.savefig(pltname)
+
+    (fig, axs) = PyPlot.subplots(2,1,figsize=(4,4))
+    PyPlot.sca(axs[1])
+    ax = axs[1]
+    ax.set_xticks(dg_MoL.VX, minor=false)
+    ax.xaxis.grid(true, which="major", color="k")
+    ax.set_axisbelow(false)
+    PyPlot.axhline(0, 0,2, color="k", linewidth=1.5)
+    PyPlot.plot(dg_MoL.x, dg_MoL.y, "o", color="darkolivegreen", label="volume nodes")
+    PyPlot.yticks([])
+    PyPlot.plot(x_overint, u_calc_final_overint)
+    ax = axs[2]
+    PyPlot.sca(axs[2])
+    ax.set_xticks(dg_MoL.VX, minor=false)
+    ax.xaxis.grid(true, which="major", color="k")
+    ax.set_axisbelow(false)
+    PyPlot.axhline(0, 0,2, color="k", linewidth=1.5)
+    PyPlot.plot(dg_MoL.x, dg_MoL.y, "o", color="darkolivegreen", label="volume nodes")
+    PyPlot.yticks([])
+    PyPlot.plot(x_overint, u0_overint)
+    pltname = "soln_MoL.pdf"
+    PyPlot.savefig(pltname)
+
+
+    ###################################
+    param.dim = 2
+    param.usespacetime = true
+    param.spacetime_solver_type="JFNK"
+
+    dg_ST = init_DG(param.P, param.dim, 2, 1, [0,2.0], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime)
+
+    u0 = calculate_initial_solution(dg_ST, param)
+    u_hat0 = zeros(dg_ST.N_soln_dof_global)
+    u_local_state = zeros(dg_ST.N_soln)
+    for ielem = 1:dg_ST.N_elem
+        for istate = 1:dg_ST.N_state
+            for inode = 1:dg_ST.N_vol
+                u_local_state[inode] = u0[dg_ST.StIDGIDtoGSID[istate,dg_ST.EIDLIDtoGID_vol[ielem,inode]]]
+            end
+            u_hat_local_state = dg_ST.Pi_soln*u_local_state
+            u_hat0[dg_ST.StIDGIDtoGSID[istate,dg_ST.EIDLIDtoGID_basis[ielem,:]]] = u_hat_local_state
+        end
+    end
+
+    cost_tracker = init_CostTracking()
+    u_hat_ST = spacetimeimplicitsolve(u_hat0, dg_ST, param, cost_tracker)
+
+    (x_overint_1D,x_overint, y_overint,u0_overint_1D, u_calc_final_overint_1D, 
+     u_exact_overint_1D, u0_overint,u_calc_final_overint,u_exact_overint) =   post_process(u_hat_ST, 0.0, u_hat0, dg_ST, param, true)
+
+
+    ########################## plot ST: grid + initial solution + final solution.
+
+    # Plot settings from python codes
+    PyPlot.rc("legend", frameon=false, fontsize="medium")
+    #PyPlot.rc('font', family='sans-serif', size=12)
+    PyPlot.rc("text", usetex=true)
+    PyPlot.rc("font", size=8)
+    PyPlot.rc("font", family = "serif")
+
+    PyPlot.figure("Spacetime - Grid", figsize=(4,2.5))
+    PyPlot.clf()
+    ax = PyPlot.gca()
+    ax.set_xticks(dg_MoL.VX, minor=false)
+    ax.set_yticks(dg_MoL.VX, minor=false)
+    ax.xaxis.grid(true, which="major", color="k")
+    ax.yaxis.grid(true, which="major", color="k")
+    ax.set_axisbelow(false)
+    PyPlot.axhline(0, 0,2, color="k", linewidth=1.5)
+    PyPlot.axhline(2, 0,2, color="k", linewidth=1.5)
+    PyPlot.axvline(0, 0,2, color="k", linewidth=1.5)
+    PyPlot.axvline(2, 0,2, color="k", linewidth=1.5)
+    PyPlot.plot(dg_ST.x, dg_ST.y, "o", color="darkolivegreen", label="volume nodes")
+    PyPlot.xlim([0,2])
+    PyPlot.ylim([0,2])
+    pltname = string("grid_ST",".pdf")
+    PyPlot.savefig(pltname)
+
+    PyPlot.figure("Spacetime - Solution", figsize=(4,2.5))
+    PyPlot.clf()
+    ax = PyPlot.gca()
+    ax.set_xticks(dg_MoL.VX, minor=false)
+    ax.set_yticks(dg_MoL.VX, minor=false)
+    ax.xaxis.grid(true, which="major", color="k")
+    ax.yaxis.grid(true, which="major", color="k")
+    ax.set_axisbelow(false)
+    PyPlot.tricontourf(x_overint, y_overint, u_calc_final_overint, 20)
+    pltname = "soln_ST.pdf"
+    PyPlot.savefig(pltname)
 end
