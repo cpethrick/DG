@@ -612,10 +612,12 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
     if param.usespacetime
         #u0 = cos.(π * (x))
         if cmp(param.pde_type,  "euler1D")==0
-            if param.include_source
 
+            if cmp(param.solution_initialization, "smooth_gassner")==0
                 u0 = calculate_euler_exact_solution_Gassner(-1, x, y, dg.N_soln, dg) .+ 0.1
-            else
+            elseif cmp(param.solution_initialization, "smooth_friedrich")==0
+                u0 = calculate_euler_exact_solution_Friedrich(-1, x, y, dg.N_soln, dg) .+ 0.1
+            elseif cmp(param.solution_initialization, "disc")==0
                 u0 = initial_condition_Friedrichs_4_6(x, dg.N_soln)
             end
         else
@@ -629,10 +631,14 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
     elseif cmp(param.pde_type, "burgers2D") == 0
         u0 = exp.(-10*((x .-1).^2 .+(y .-1).^2))
     elseif cmp(param.pde_type, "euler1D") == 0
-        u0 = calculate_euler_exact_solution_Gassner(0, x, y, dg.N_soln, dg)
+        if cmp(param.solution_initialization, "smooth_gassner")==0
+            u0 = calculate_euler_exact_solution_Gassner(0, x, y, dg.N_soln, dg)
+        elseif cmp(param.solution_initialization, "smooth_friedrich")==0
+            u0 = calculate_euler_exact_solution_Friedrich(0, x, y, dg.N_soln, dg)
+        end
     else
         #u0 = 0.2* sin.(π * x) .+ 0.01
-        u0 = sin.(π * (x)) .+ 0.01
+        u0 = 2*sin.(π * (x)) .+ 1.01
     end
     return u0
 end
@@ -648,16 +654,22 @@ function calculate_exact_solution(x, y, Np, current_time, dg::DG, param::Physics
     elseif cmp(param.pde_type, "burgers2D")==0
         u_exact = cos.(π*(x.+y.-sqrt(2)*current_time))
     elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == false
-        u_exact = sin.(π * (x.- param.advection_speed * current_time)) .+ 0.01
+        u_exact = 2* sin.(π * (x.- param.advection_speed * current_time)) .+ 1.01
     elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == true 
         u_exact = 2*sin.(π * (x - param.advection_speed * y)) .+ 1.01
     elseif cmp(param.pde_type, "euler1D")==0
         if param.usespacetime
-            display("Warning: exact soln not correct for space time!")
-            u_exact_allstates = calculate_euler_exact_solution_Gassner(-1.0, x, y, Np, dg)
+            if cmp(param.solution_initialization, "smooth_gassner")==0
+                u_exact_allstates = calculate_euler_exact_solution_Gassner(-1.0, x, y, Np, dg)
+            elseif ( cmp(param.solution_initialization, "smooth_friedrich")==0)
+                u_exact_allstates = calculate_euler_exact_solution_Friedrich(-1.0, x, y, Np, dg)
+            end
         else
-            #u_exact_allstates = calculate_euler_exact_solution_Friedrich(current_time, x, y, Np, dg)
-            u_exact_allstates = calculate_euler_exact_solution_Gassner(current_time, x, y, Np, dg)
+            if cmp(param.solution_initialization, "smooth_gassner")==0
+                u_exact_allstates = calculate_euler_exact_solution_Gassner(current_time, x, y, Np, dg)
+            elseif ( cmp(param.solution_initialization, "smooth_friedrich")==0)
+                u_exact_allstates = calculate_euler_exact_solution_Friedrich(current_time, x, y, Np, dg)
+            end
         end
         # extract only density
         u_exact = zeros(size(x))
@@ -824,9 +836,11 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
         end
         return out
     elseif cmp(param.pde_type, "euler1D") == 0
-        if param.include_source
+        if cmp(param.solution_initialization,"smooth_gassner")==0
             return calculate_euler_exact_solution_Gassner(0, x, y, dg.N_face, dg)
-        else
+        elseif cmp(param.solution_initialization, "smooth_friedrich")==0
+            return calculate_euler_exact_solution_Friedrich(0, x, y, dg.N_face, dg)
+        elseif cmp(param.solution_initialization, "disc")==0
             return initial_condition_Friedrichs_4_6(x, dg.N_face)
         end
 

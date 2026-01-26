@@ -36,6 +36,7 @@ mutable struct PhysicsAndFluxParams
     convergence_table_name::AbstractString # none or descriptive name
     read_soln_from_file::Bool
     write_soln_to_file::Bool
+    solution_initialization::AbstractString # default (decided by source/no-source), smooth_gassner, smooth_friedrich or disc (latter two only implemented for Euler)
 
     # dependant params: set based on above required params.
     #set based on value of fr_c_name
@@ -71,7 +72,8 @@ mutable struct PhysicsAndFluxParams
                          debugmode::Bool,
                          convergence_table_name::AbstractString,
                          read_soln_from_file::Bool,
-                         write_soln_to_file::Bool
+                         write_soln_to_file::Bool,
+                         solution_initialization::AbstractString
                         ) = new(
                                 dim::Int64,
                                 n_times_to_solve::Int64,
@@ -101,6 +103,7 @@ mutable struct PhysicsAndFluxParams
                                 convergence_table_name::AbstractString,
                                 read_soln_from_file::Bool,
                                 write_soln_to_file::Bool,
+                                solution_initialization::AbstractString
                                )
 
 
@@ -139,6 +142,29 @@ function set_FR_value(param::PhysicsAndFluxParams)
 
     display("Value of C is:")
     display(param.fluxreconstructionC)
+
+end
+
+
+function set_solution_initialization(param::PhysicsAndFluxParams)
+    pde = param.pde_type
+    display(pde)
+    if cmp(pde, "euler1D") == 0 
+        # parse default based on source
+        if cmp(param.solution_initialization, "default")==0 && (param.include_source == true)
+            param.solution_initialization = "smooth_gassner"
+        elseif cmp(param.solution_initialization, "default")==0 && (param.include_source == false)
+            param.solution_initialization = "disc"
+        end
+
+        # check that we use an admissible initialization
+        if cmp(param.solution_initialization,"smooth_friedrich")!=0 &&
+            cmp(param.solution_initialization,"disc")!=0 &&
+            cmp(param.solution_initialization,"smooth_gassner")!=0
+            display("Warning! Initialization for Euler not recognized!")
+        end
+        display("Using initialization "*param.solution_initialization)
+    end
 
 end
 
@@ -192,6 +218,7 @@ function parse_default_parameters()
     convergence_table_name = parse_param_String("convergence_table_name",paramDF)
     read_soln_from_file = parse_param_Bool("read_soln_from_file", paramDF)
     write_soln_to_file = parse_param_Bool("write_soln_to_file", paramDF)
+    solution_initialization= parse_param_String("solution_initialization", paramDF)
 
     param = PhysicsAndFluxParams(
                                  dim,
@@ -221,9 +248,11 @@ function parse_default_parameters()
                                  debugmode,
                                  convergence_table_name,
                                  read_soln_from_file,
-                                 write_soln_to_file
+                                 write_soln_to_file,
+                                 solution_initialization
                                 )
     set_FR_value(param)
+    set_solution_initialization(param)
 
     return param
 end
@@ -323,9 +352,13 @@ function parse_parameters(fname::String)
         if "write_soln_to_file" in newparamDF.name
             default_params.write_soln_to_file = parse_param_Bool("write_soln_to_file", newparamDF)
         end
+        if "solution_initialization" in newparamDF.name
+            default_params.solution_initialization= parse_param_String("solution_initialization", newparamDF)
+        end
     end
 
     display_param_warnings(default_params)
+    set_solution_initialization(default_params)
 
     return default_params
 end
