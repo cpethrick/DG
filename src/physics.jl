@@ -663,12 +663,16 @@ function calculate_exact_solution(x, y, Np, current_time, dg::DG, param::Physics
                 u_exact_allstates = calculate_euler_exact_solution_Gassner(-1.0, x, y, Np, dg)
             elseif ( cmp(param.solution_initialization, "smooth_friedrich")==0)
                 u_exact_allstates = calculate_euler_exact_solution_Friedrich(-1.0, x, y, Np, dg)
+            else
+                u_exact_allstates = 0*calculate_euler_exact_solution_Friedrich(-1.0, x, y, Np, dg)
             end
         else
             if cmp(param.solution_initialization, "smooth_gassner")==0
                 u_exact_allstates = calculate_euler_exact_solution_Gassner(current_time, x, y, Np, dg)
             elseif ( cmp(param.solution_initialization, "smooth_friedrich")==0)
                 u_exact_allstates = calculate_euler_exact_solution_Friedrich(current_time, x, y, Np, dg)
+            else
+                u_exact_allstates = 0*calculate_euler_exact_solution_Friedrich(current_time, x, y, Np, dg)
             end
         end
         # extract only density
@@ -741,7 +745,6 @@ function calculate_euler_exact_solution_Gassner(t, x, y, Np, dg)
         x_local = x[node_indices]
         y_local = y[node_indices]
         time_local = time[node_indices]
-        # Initial condition per 4.4 Friedrichs
         rho_local = 2 .+ 0.1*sin.(π * (x_local .- 2* time_local))
         rhov_local = 2 .+ 0.1*sin.(π * (x_local .- 2 *time_local))
         E_local = (2 .+ 0.1*sin.(π * (x_local .- 2*time_local))).^2
@@ -786,8 +789,7 @@ function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::Abstr
         Q = zeros(dg.N_soln)
         gamm1=0.4
         #for ielem in 1:dg.N_elem
-        use_Friedrich = false # change to false to evaluate per Gassner
-        if use_Friedrich
+        if cmp(param.solution_initialization, "smooth_friedrich")==0
             # Source per 4.5 Friedrichs
             if istate == 1
                 Q .= 0
@@ -796,22 +798,22 @@ function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::Abstr
             else
                 display("Warning! There should only be 3 states.")
             end
-        else
+        elseif cmp(param.solution_initialization, "smooth_gassner")==0
             if istate == 1
+                #Q .= -π * 0.1 * cos.(π * (x .- 2* time))
                 Q .= - π * 0.1 * cos.(π * (x .- 2* time))
             elseif istate == 2
                 gam = 1.4
-                #Q .= (-1/5 * π + 1/20 * π * (1 + 5 * gam)) .* cos.(π * (x .-2* time)) .+
-                #        π/100*gamm1 .* cos.(2*π * (x .-2* time))
+                #Q .= -((-1/5 * π + 1/20 * π * (1 + 5 * gam)) .* cos.(π * (x .-2* time)) .+
+                #       π/100*gamm1 .* cos.(2*π * (x .-2* time)))
                 Q .= 1/100 *π *cos.(π* (x - 2 *time)).* (5* (-9 + 7* gam) .+2* (-1 + gam) *sin.(π* (x - 2* time)))
             elseif istate==3
                 gam = 1.4
-                #Q .= 1/20 * (-16*π + π * (9 + 15 *gam)) .* cos.(π * (x .-2* time)) .+
-                #        1/100 * (3 * π * gam - 2 * π) .* cos.(2*π * (x .-2* time))
+                #Q .= -(1/20 * (-16*π + π * (9 + 15 *gam)) .* cos.(π * (x .-2* time)) .+
+                 #      1/100 * (3 * π * gam - 2 * π) .* cos.(2*π * (x .-2* time)))
                 Q .= 1/100 * π * cos.(π * (x-2*time)) .* (-75 .+ 35 * gam .+ 2* (-2 + gam ) * sin.(pi * (x - 2 * time)))
             end
         end
-        #end
         return Q
     else
         return zeros(size(x))
