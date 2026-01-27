@@ -24,16 +24,16 @@ function return_dg_object(N_elem_per_dim, paramfile::String="default_parameters.
     return init_DG(param.P, param.dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime)
 end
 
-function c_ramp_test(paramfile::String="default_parameters.csv")
+function c_ramp_test(paramfile::String="default_parameters.csv", special_c_values=false)
     # Run as: `c_ramp_test("c_ramp/spacetime_linear_advection_P3.csv")`
     #
     #
-    special_c_values = false # run c values cDG, cHu, cSD
+    #special_c_values = false # run c values cDG, cHu, cSD
     param = parse_parameters(paramfile)
     param.fr_c_name = "user-defined"
 
     fname = paramfile[1:end-4]*"_result.csv"
-    fr_c_ramp_values = exp10.(range(-7.0, 2.0, length=11))
+    fr_c_ramp_values = exp10.(range(-7.0, 4.0, length=31))
     fr_c_names = []
     if special_c_values
         fr_c_ramp_values = [0, 0, 0]
@@ -61,7 +61,7 @@ function c_ramp_test(paramfile::String="default_parameters.csv")
         (err_L2_big, err_Linf_big, entropy_ch_big, cost_tracker) = setup_and_solve(N_big, param.P, param)
         L2_OOA = log(err_L2_small/err_L2_big) / log(2.0)
         f = open(fname, "a")
-        DelimitedFiles.writedlm(f, [fr_c_val,L2_OOA,cost_tracker.n_assemble_residual]', ",")
+        DelimitedFiles.writedlm(f, [fr_c_val,L2_OOA,cost_tracker.n_assemble_residual,entropy_ch_big,entropy_ch_small]', ",")
         close(f)
     end
 
@@ -190,8 +190,13 @@ function compare_MoL_spacetime_figure()
     PyPlot.rc("legend", frameon=false, fontsize="medium")
     #PyPlot.rc('font', family='sans-serif', size=12)
     PyPlot.rc("text", usetex=true)
-    PyPlot.rc("font", size=8)
-    PyPlot.rc("font", family = "serif")
+    PyPlot.rc("font", size=12)
+    PyPlot.rc("font", family = "sans-serif")
+
+    # define colours
+    myred = "#ED1B2F"
+    myblue = "#1896cb"
+    mygrey = "#b9b4b3"
 
     PyPlot.figure("Method of Lines - Grid", figsize=(4,1))
     PyPlot.clf()
@@ -205,27 +210,30 @@ function compare_MoL_spacetime_figure()
     pltname = string("grid_MoL",".pdf")
     PyPlot.savefig(pltname)
 
-    (fig, axs) = PyPlot.subplots(2,1,figsize=(4,4))
+    (fig, axs) = PyPlot.subplots(2,1,figsize=(3,3))
     PyPlot.sca(axs[1])
     ax = axs[1]
     ax.set_xticks(dg_MoL.VX, minor=false)
     ax.xaxis.grid(true, which="major", color="k")
     ax.set_axisbelow(false)
     PyPlot.axhline(0, 0,2, color="k", linewidth=1.5)
-    PyPlot.plot(dg_MoL.x, dg_MoL.y, "o", color="darkolivegreen", label="volume nodes")
+    PyPlot.plot(dg_MoL.x, dg_MoL.y, "o", color=myblue, label="volume nodes")
     PyPlot.yticks([])
-    PyPlot.plot(x_overint, u_calc_final_overint)
+    PyPlot.plot(x_overint, u_calc_final_overint, color=myred)
+    PyPlot.ylabel(L"$t=t_f$")
     ax = axs[2]
     PyPlot.sca(axs[2])
     ax.set_xticks(dg_MoL.VX, minor=false)
     ax.xaxis.grid(true, which="major", color="k")
     ax.set_axisbelow(false)
     PyPlot.axhline(0, 0,2, color="k", linewidth=1.5)
-    PyPlot.plot(dg_MoL.x, dg_MoL.y, "o", color="darkolivegreen", label="volume nodes")
+    PyPlot.plot(dg_MoL.x, dg_MoL.y, "o", color=myblue, label="volume nodes")
     PyPlot.yticks([])
-    PyPlot.plot(x_overint, u0_overint)
+    PyPlot.plot(x_overint, u0_overint, color=myred)
     pltname = "soln_MoL.pdf"
-    PyPlot.savefig(pltname)
+    PyPlot.ylabel(L"$t=0$")
+    PyPlot.xlabel("Spatial dimension")
+    PyPlot.savefig(pltname, bbox_inches="tight")
 
 
     ###################################
@@ -261,11 +269,11 @@ function compare_MoL_spacetime_figure()
     PyPlot.rc("legend", frameon=false, fontsize="medium")
     #PyPlot.rc('font', family='sans-serif', size=12)
     PyPlot.rc("text", usetex=true)
-    PyPlot.rc("font", size=8)
-    PyPlot.rc("font", family = "serif")
+    PyPlot.rc("font", size=12)
+    PyPlot.rc("font", family = "sans-serif")
 
-    PyPlot.figure("Spacetime - Grid", figsize=(4,2.5))
-    PyPlot.clf()
+
+    PyPlot.figure("Spacetime - Grid", figsize=(3,3), dpi=300)
     ax = PyPlot.gca()
     ax.set_xticks(dg_MoL.VX, minor=false)
     ax.set_yticks(dg_MoL.VX, minor=false)
@@ -276,14 +284,15 @@ function compare_MoL_spacetime_figure()
     PyPlot.axhline(2, 0,2, color="k", linewidth=1.5)
     PyPlot.axvline(0, 0,2, color="k", linewidth=1.5)
     PyPlot.axvline(2, 0,2, color="k", linewidth=1.5)
-    PyPlot.plot(dg_ST.x, dg_ST.y, "o", color="darkolivegreen", label="volume nodes")
+    PyPlot.plot(dg_ST.x, dg_ST.y, "o", color=myblue, label="volume nodes")
     PyPlot.xlim([0,2])
     PyPlot.ylim([0,2])
+    PyPlot.xlabel("Spatial dimension")
+    PyPlot.ylabel("Temporal dimension")
     pltname = string("grid_ST",".pdf")
-    PyPlot.savefig(pltname)
+    PyPlot.savefig(pltname, bbox_inches="tight", dpi=300)
 
-    PyPlot.figure("Spacetime - Solution", figsize=(4,2.5))
-    PyPlot.clf()
+    PyPlot.figure("Spacetime - Solution", figsize=(3,3), dpi=300)
     ax = PyPlot.gca()
     ax.set_xticks(dg_MoL.VX, minor=false)
     ax.set_yticks(dg_MoL.VX, minor=false)
@@ -291,6 +300,10 @@ function compare_MoL_spacetime_figure()
     ax.yaxis.grid(true, which="major", color="k")
     ax.set_axisbelow(false)
     PyPlot.tricontourf(x_overint, y_overint, u_calc_final_overint, 20)
+    PyPlot.xlim([0,2])
+    PyPlot.ylim([0,2])
+    PyPlot.xlabel("Spatial dimension")
+    PyPlot.ylabel("Temporal dimension")
     pltname = "soln_ST.pdf"
-    PyPlot.savefig(pltname)
+    PyPlot.savefig(pltname, bbox_inches="tight", dpi=300)
 end
