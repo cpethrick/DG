@@ -15,6 +15,10 @@ function write_to_file(u_hat,fname="u_hat_stored.csv")
         close(f)
 end
 
+function make_1D_K_face(param::PhysicsAndFluxParams)
+	# for now, do nothing
+end
+
 function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxParams)
 
     dim = dg.dim
