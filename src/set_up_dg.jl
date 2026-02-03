@@ -59,7 +59,7 @@ mutable struct DG
     w_soln::Vector{Float64}
     r_basis::Vector{Float64}
     w_basis::Vector{Float64}
-    r_flux::Vector{Float64}
+    r_flux::Vector{Float64} #face nodes are 1D flux nodes.
     w_flux::Vector{Float64}
     #chi are basis functions for the solution.
     chi_soln::AbstractMatrix{Float64}
