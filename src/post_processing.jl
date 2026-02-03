@@ -15,18 +15,21 @@ function write_to_file(u_hat,fname="u_hat_stored.csv")
         close(f)
 end
 
-function make_1D_K_face(dg::DG, param::PhysicsAndFluxParams)
+function make_1D_MpK_face(dg::DG, param::PhysicsAndFluxParams)
     phi_face_1D = vandermonde1D(dg.r_flux,dg.r_flux)
     d_phi_face_d_xi_1D = gradvandermonde1D(dg.r_flux,dg.r_flux)
-    W_1D = dg.W_f
-    J_1D = dg.J_f
+    W_1D = dg.W_face
+    J_1D = dg.J_face
     M_1D = phi_face_1D' * W_1D * J_1D * phi_face_1D
-    #display(M_1D) # ok
-    D_xi_1D_P = (inv(phi_face_1D' * W_1D * phi_face_1D) * (phi_face_1D' * W_1D * d_phi_face_d_xi_1D))^P
+    display("M_1D")
+    display(M_1D) # ok
+    D_xi_1D_P = (inv(phi_face_1D' * W_1D * phi_face_1D) * (phi_face_1D' * W_1D * d_phi_face_d_xi_1D))^dg.P
 
-    K_1D = fluxreconstructionC * (D_xi_1D_P)' * M_1D * D_xi_1D_P
+    K_1D = param.fluxreconstructionC * (D_xi_1D_P)' * M_1D * D_xi_1D_P
+    display("K_1D")
+    display(K_1D)
 
-    return K_1D
+    return M_1D+K_1D
 end
 
 function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxParams)
@@ -77,12 +80,13 @@ function integrate_entropy_on_temporal_face(u_face, dg::DG, param::PhysicsAndFlu
 
     if cmp(param.pde_type, "burgers1D")==0
         # We can use 1D M+K to integrate.
-        #
+        MpK_1D = make_1D_MpK_face(dg,param)
+        entropy_integration = 0.5 * u_face' * (MpK_1D) * u_face
     else
         # Integrate in L2.
 
-        s_vec = get_numerical_entropy_function(u_face_Dirichlet,param)
-        entropy_integration += s_vec' * dg.W_face * dg.J_face * ones(size(s_vec))
+        s_vec = get_numerical_entropy_function(u_face,param)
+        entropy_integration = s_vec' * dg.W_face * dg.J_face * ones(size(s_vec))
     end
 
     return entropy_integration
