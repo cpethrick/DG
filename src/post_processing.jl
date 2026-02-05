@@ -21,13 +21,9 @@ function make_1D_MpK_face(dg::DG, param::PhysicsAndFluxParams)
     W_1D = dg.W_face
     J_1D = dg.J_face
     M_1D = phi_face_1D' * W_1D * J_1D * phi_face_1D
-    display("M_1D")
-    display(M_1D) # ok
     D_xi_1D_P = (inv(phi_face_1D' * W_1D * phi_face_1D) * (phi_face_1D' * W_1D * d_phi_face_d_xi_1D))^dg.P
 
     K_1D = param.fluxreconstructionC * (D_xi_1D_P)' * M_1D * D_xi_1D_P
-    display("K_1D")
-    display(K_1D)
 
     return M_1D+K_1D
 end
@@ -92,7 +88,21 @@ function integrate_entropy_on_temporal_face(u_face, dg::DG, param::PhysicsAndFlu
     return entropy_integration
 end
 
+function calculate_projection_error_local_burgers(u_face_interior, u_face_Dirichlet, ielem, dg::DG, param::PhysicsAndFluxParams)
+    MpK = make_1D_MpK_face(dg,param)
+    phi_face_interior = 0.5 * u_face_interior' * MpK * u_face_interior
+    phi_face_Dirichlet = 0.5*u_face_Dirichlet' * MpK * u_face_Dirichlet
+    phi_jump = phi_face_interior - phi_face_Dirichlet
+    
+    vjumpTtimesu = ( u_face_interior' * MpK * u_face_Dirichlet - u_face_Dirichlet' * MpK * u_face_Dirichlet  )
+
+    return phi_jump - vjumpTtimesu 
+end
 function calculate_projection_error_local(u_face_interior, u_face_Dirichlet, ielem, dg::DG, param::PhysicsAndFluxParams)
+
+    if cmp(param.pde_type,"burgers1D")==0
+        return calculate_projection_error_local_burgers(u_face_interior, u_face_Dirichlet, ielem, dg::DG, param::PhysicsAndFluxParams)
+    end
 
     # get entropy potential and entropy variables at the face (interior soln)
     phi_face_interior = get_entropy_potential(u_face_interior, param)
