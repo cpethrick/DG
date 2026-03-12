@@ -133,10 +133,6 @@ function get_entropy_potential(solution, param::PhysicsAndFluxParams)
     elseif cmp(param.pde_type, "euler1D")==0
         N_state = 3
         N_nodes = trunc(Int, length(solution)/N_state)
-        entropy_variables = zeros(size(solution))
-
-        gamm1 = 0.4
-        gam = 1.4
         
         rho = solution[1:N_nodes]
         return rho
@@ -825,7 +821,9 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
     if param.include_source && cmp(param.pde_type, "burgers1D")==0
         return  cos.(π * (x-y))
     elseif cmp(param.pde_type, "burgers1D")==0
-        #return 0.2*sin.(π * (x .- 0.314159265359878323))
+        #return (0.2 * cos.(π * (x - y)))
+        return 0.2*sin.(π * (x .- 0.314159265359878323))
+        #== Discontinuous IC
         out = 0.2* ones(size(x))
         first1 = true # double-valued at 1.0 if using GLL, so force it to set 0 on left side
         for i in 1:length(x)
@@ -837,6 +835,7 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
             end
         end
         return out
+        ==#
     elseif cmp(param.pde_type, "euler1D") == 0
         if cmp(param.solution_initialization,"smooth_gassner")==0
             return calculate_euler_exact_solution_Gassner(0, x, y, dg.N_face, dg)
