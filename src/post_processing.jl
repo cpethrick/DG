@@ -141,22 +141,16 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
             u_face_Dirichlet = calculate_solution_on_Dirichlet_boundary(x_local, y_local, dg,param)
             u_face_interior = project(dg.chi_face[:,:,3],  u_hat_local,true,dg,param)
 
-            #s_vec = get_numerical_entropy_function(u_face_Dirichlet,param)
-            #entropy_integration_at_surfaces[1,1] += s_vec' * dg.W_face * dg.J_face * ones(size(s_vec))
             entropy_integration_at_surfaces[1,1] += integrate_entropy_on_temporal_face(u_face_Dirichlet, dg, param)
             projection_error += calculate_projection_error_local(u_face_interior,u_face_Dirichlet, ielem, dg,param)#(phi_jump - vjumpTtimesu)' * dg.W_face * dg.J_face * ones(size(phi_jump))
         else
             # face on bottom of element
             u_face_bottom_interior = project(dg.chi_face[:,:,3],  u_hat_local,true,dg,param)
-            #s_vec = get_numerical_entropy_function(u_face_bottom_interior,param)
-            #entropy_integration_at_surfaces[1,itslab] += s_vec' * dg.W_face * dg.J_face * ones(size(s_vec))
             entropy_integration_at_surfaces[1,itslab]+= integrate_entropy_on_temporal_face(u_face_bottom_interior,dg,param)
         end
 
         u_face_top = project(dg.chi_face[:,:,4], u_hat_local, true, dg, param)
         entropy_integration_at_surfaces[2,itslab]+= integrate_entropy_on_temporal_face(u_face_top,dg,param)
-        #s_vec = get_numerical_entropy_function(u_face_top,param)
-        #entropy_integration_at_surfaces[2,itslab] += s_vec' * dg.W_face * dg.J_face * ones(size(s_vec))
     
     end
 
