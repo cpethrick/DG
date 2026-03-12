@@ -11,7 +11,7 @@ alpha_split,1.0
 advection_speed,0.6
 volumenodes,GLL
 basisnodes,GLL
-fluxnodes,GLL
+fluxnodes,GL
 fr_c_name,cDG
-convergence_table_name,OOA_lin_adv_p4_cDG
+convergence_table_name,OOA_lin_adv_p4_cDG_GLLGL
 do_conservation_check,true

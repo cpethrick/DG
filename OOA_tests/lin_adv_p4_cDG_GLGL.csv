@@ -9,9 +9,9 @@ spacetime_solver_type,JFNK
 include_source,false
 alpha_split,1.0
 advection_speed,0.6
-volumenodes,GLL
-basisnodes,GLL
-fluxnodes,GLL
+volumenodes,GL
+basisnodes,GL
+fluxnodes,GL
 fr_c_name,cDG
-convergence_table_name,OOA_lin_adv_p4_cDG
+convergence_table_name,OOA_lin_adv_p4_cDG_GLGL
 do_conservation_check,true
