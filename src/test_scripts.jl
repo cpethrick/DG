@@ -24,7 +24,7 @@ function return_dg_object(N_elem_per_dim, paramfile::String="default_parameters.
     return init_DG(param.P, param.dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime)
 end
 
-function c_ramp_test(paramfile::String="default_parameters.csv", special_c_values=false)
+function c_ramp_test(paramfile::String="default_parameters.csv", special_c_values=false, stability_ramp=false)
     # Run as: `c_ramp_test("c_ramp/spacetime_linear_advection_P3.csv")`
     #
     #
@@ -33,6 +33,7 @@ function c_ramp_test(paramfile::String="default_parameters.csv", special_c_value
     param.fr_c_name = "user-defined"
 
     fname = paramfile[1:end-4]*"_result.csv"
+    #fr_c_ramp_values = exp10.(range(-5.0, 0.0, length=6))
     fr_c_ramp_values = exp10.(range(-7.0, 4.0, length=31))
     fr_c_names = []
     if special_c_values
@@ -43,8 +44,12 @@ function c_ramp_test(paramfile::String="default_parameters.csv", special_c_value
    
     #can append special values here (cHU, cSD)
 
-    N_small = 16
+    N_small = 16 
     N_big = N_small * 2
+
+    if stability_ramp == true
+        N_small = 8
+    end
 
     f = open(fname, "w")
     DelimitedFiles.writedlm(f, ["c_value" "OOA" "number_iterations"], ",")
@@ -57,9 +62,14 @@ function c_ramp_test(paramfile::String="default_parameters.csv", special_c_value
         end
         set_FR_value(param)
         fr_c_val = param.fluxreconstructionC
-        (err_L2_small, err_Linf_small, entropy_ch_small,_) = setup_and_solve(N_small, param.P, param)
-        (err_L2_big, err_Linf_big, entropy_ch_big, cost_tracker) = setup_and_solve(N_big, param.P, param)
-        L2_OOA = log(err_L2_small/err_L2_big) / log(2.0)
+        (err_L2_small, err_Linf_small, entropy_ch_small,cost_tracker) = setup_and_solve(N_small, param.P, param)
+        if stability_ramp==false
+            (err_L2_big, err_Linf_big, entropy_ch_big, cost_tracker) = setup_and_solve(N_big, param.P, param)
+            L2_OOA = log(err_L2_small/err_L2_big) / log(2.0)
+        else
+            L2_OOA = false
+            entropy_ch_big = 0
+        end
         f = open(fname, "a")
         DelimitedFiles.writedlm(f, [fr_c_val,L2_OOA,cost_tracker.n_assemble_residual,entropy_ch_big,entropy_ch_small]', ",")
         close(f)
