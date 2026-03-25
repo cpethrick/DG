@@ -48,7 +48,7 @@ function c_ramp_test(paramfile::String="default_parameters.csv", special_c_value
     N_big = N_small * 2
 
     if stability_ramp == true
-        N_small = 8
+        N_small = 4
     end
 
     f = open(fname, "w")
@@ -120,11 +120,11 @@ function reference_element_figure()
     PyPlot.xlabel(L"$\xi$, spatial coordinate")
     PyPlot.plot(dg.x, dg.y, "o", color="#ED1B2F", label=L"$\bar{\xi}_{\mathrm{soln}}$, solution nodes", markersize=5)
     x_flux,y_flux = build_coords_vectors(dg.r_flux, dg)  
-    PyPlot.plot(x_flux, y_flux, "o", color="#b9b4b3", label=L"$\bar{\xi}_{\mathrm{flux}}$, flux nodes", markersize=4)
+    PyPlot.plot(x_flux, y_flux, "o", color="#b9b4b3", label=L"$\bar{\xi}_{\mathrm{q}}$, flux nodes", markersize=4)
 
     x_face = vcat(-1*ones(size(dg.r_flux)), ones(size(dg.r_flux)), dg.r_flux, dg.r_flux)
     y_face = vcat(dg.r_flux, dg.r_flux,-1*ones(size(dg.r_flux)), ones(size(dg.r_flux)))
-    PyPlot.plot(x_face, y_face, "o", color="#1896cb", label=L"$\bar{\xi}_{\mathrm{face}}$, face nodes", markersize=3)
+    PyPlot.plot(x_face, y_face, "o", color="#1896cb", label=L"$\bar{\xi}_{\mathrm{f}}$, face nodes", markersize=3)
 
     box = ax.get_position()
     #shrink plot
