@@ -406,7 +406,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     
     # Mass and stiffness matrices as defined Eq. 9.5 Cicchino 2022
     # All defined on a single element.
-    dg.M = dg.chi_soln' * dg.W_soln * dg.J_soln * dg.chi_soln ## Have verified this against PHiLiP. Here, unmodified mass matrix.
+    dg.M = dg.chi_flux' * dg.W_flux * dg.J_soln* dg.chi_flux # J_soln is the same as J_flux (assumin N_overint=0)
     dg.S_xi = dg.chi_flux' * dg.W_flux * dg.d_phi_flux_d_xi
     dg.S_noncons_xi = dg.W_flux * d_chi_flux_d_xi
     if dim==2
@@ -416,9 +416,12 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     M_nojac_soln = dg.chi_soln' * dg.W_soln * dg.chi_soln
     dg.Pi_soln = inv(M_nojac_soln)*dg.chi_soln'*dg.W_soln
     dg.K = zeros(size(dg.M))
+    M_nojac_flux = dg.phi_flux' * dg.W_flux * dg.phi_flux
+    dg.Pi_flux = inv(M_nojac_flux)*dg.phi_flux'*dg.W_flux
     if dim==1 && fluxreconstructionC != 0.0
-        d_chi_soln_d_xi = gradvandermonde1D(dg.r_soln,dg.r_basis)
-        D_xi = inv(M_nojac_soln) * dg.chi_soln' * dg.W_soln * d_chi_soln_d_xi
+        M_nojac_flux = dg.chi_flux' * dg.W_flux * dg.chi_flux # redefine to use soln basis
+        d_chi_flux_d_xi = gradvandermonde1D(dg.r_flux,dg.r_basis)
+        D_xi = inv(M_nojac_flux) * dg.chi_flux' * dg.W_flux * d_chi_flux_d_xi
         dg.K = fluxreconstructionC * ( (D_xi)^P )' * dg.M * ( (D_xi)^P ) ## Verified for 1D.
     elseif dim==2 && fluxreconstructionC != 0.0
         #==== This version uses tensor products
@@ -444,10 +447,11 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
 
         Following code calculates per Cicchino 2022 curvilinear eq. 28-29. Does the same thing as above code.
         ==# 
-        d_chi_soln_d_xi = gradvandermonde2D(1, dg.r_soln, dg.r_basis, dg)
-        d_chi_soln_d_eta = gradvandermonde2D(2, dg.r_soln, dg.r_basis, dg)
-        D_xi = inv(M_nojac_soln)*dg.chi_soln' * dg.W_soln * d_chi_soln_d_xi
-        D_eta = inv(M_nojac_soln)*dg.chi_soln' * dg.W_soln * d_chi_soln_d_eta
+        M_nojac_flux = dg.chi_flux' * dg.W_flux * dg.chi_flux # redefine to use soln basis
+        d_chi_flux_d_xi = gradvandermonde2D(1, dg.r_flux, dg.r_basis, dg)
+        d_chi_flux_d_eta = gradvandermonde2D(2, dg.r_flux, dg.r_basis, dg)
+        D_xi = inv(M_nojac_flux)*dg.chi_flux' * dg.W_flux * d_chi_flux_d_xi
+        D_eta = inv(M_nojac_flux)*dg.chi_flux' * dg.W_flux * d_chi_flux_d_eta
         dg.K = 0*dg.M #initialize with size of M
         if usespacetime
             # K only in space
@@ -476,8 +480,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     display(dg.MpK)
     dg.MpK_inv = inv(dg.MpK)
 
-    M_nojac_flux = dg.phi_flux' * dg.W_flux * dg.phi_flux
-    dg.Pi_flux = inv(M_nojac_flux)*dg.phi_flux'*dg.W_flux
 
     Q_dimension = dg.N_flux+dg.N_faces*dg.N_face # N_flux points in soln, Nfp on each face. Store ndim matrices.
     dg.QtildemQtildeT = zeros(Q_dimension,Q_dimension,dim) 
