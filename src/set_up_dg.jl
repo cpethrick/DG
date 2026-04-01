@@ -7,7 +7,7 @@ mutable struct DG
     N_state::Int # Number of states in the PDE
     domain_x_limits::Vector{Float64} # x-limits of rectangular domain
 
-    #Category 2:defined from Category 1.
+    # Category 2:defined from Category 1.
     N_elem::Int
     N_soln_per_dim::Int # Number of points per direction per cell
     N_soln::Int # Total number of points per cell = N_soln^dim 
@@ -25,14 +25,15 @@ mutable struct DG
     x::Vector{Float64} # physical x coords, index are global ID.
     y::Vector{Float64} # physical y coords, index are global ID.
     
-    GIDtoLID::Vector{Int} #Index is global ID, values are local IDs
+    # Maps
+    #GIDtoLID::Vector{Int} #Index is global ID, values are local IDs
     EIDLIDtoGID_basis::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
                              # dimension is element ID. values are global ID.
     EIDLIDtoGID_vol::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
                              # dimension is element ID. values are global ID.
     #LIDtoLFID::Vector{Int} # Index is local ID, value is local face ID
     #                       # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
-    LFIDtoLID::AbstractMatrix{Int} # Index is local face ID, values are LID corresponding to that face
+    #LFIDtoLID::AbstractMatrix{Int} # Index is local face ID, values are LID corresponding to that face
     LFIDtoNormal::AbstractMatrix{Int} # Normal of LFID,
                                       # first column is x, second column is y
     #EIDLFIDtoGIDofexterior::AbstractMatrix{Int} # Linker to exterior value at a face.
@@ -183,7 +184,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
 
     
     # Index is global ID, values are local IDs
-    dg.GIDtoLID = mod.(0:(dg.N_soln*dg.N_elem.-1),dg.N_soln).+1
+    #dg.GIDtoLID = mod.(0:(dg.N_soln*dg.N_elem.-1),dg.N_soln).+1
     
     # Index of first dimension is element ID, index of second dimension is element ID
     # values are global ID
@@ -194,14 +195,16 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
     if dim == 1
         dg.LFIDtoNormal = reshape([-1; 1], 2, 1) # normal of left face is 1, normal of right face is 1.
-        dg.LFIDtoLID = reshape([1,dg.N_soln_per_dim], 2,1)
+        #dg.LFIDtoLID = reshape([1,dg.N_soln_per_dim], 2,1)
     elseif dim == 2
         dg.LFIDtoNormal = [-1 0; 1 0; 0 -1; 0 1] #first col. is x, second col. is y
+        #==
         dg.LFIDtoLID = [(0:dg.N_soln_per_dim-1)' *dg.N_soln_per_dim.+1 ;
                         (1:dg.N_soln_per_dim)' *dg.N_soln_per_dim;
                         (1:dg.N_soln_per_dim)';
                         (1:dg.N_soln_per_dim)' .+ (dg.N_soln-dg.N_soln_per_dim)
                        ]
+                       ==#
     end
 
     if dim == 1
