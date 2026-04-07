@@ -169,6 +169,7 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
     display(entropy_final - entropy_initial)
     if true
         fname = string(dg.N_elem_per_dim)* "x"* string(dg.N_elem_per_dim)* "entropy_preservation_check.csv"
+        fname = string(dg.N_elem_per_dim) *"x" * string(dg.N_elem_per_dim)* "entropy_check.csv"
         f = open(fname, "w")
         DelimitedFiles.writedlm(f, [-1 projection_error 0.0], ",")
         DelimitedFiles.writedlm(f, [dg.VX[1:end] [entropy_integration_at_surfaces[1,:]' NaN]' [NaN entropy_integration_at_surfaces[2,:]']'], ",")
