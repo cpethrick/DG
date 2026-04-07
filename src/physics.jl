@@ -541,7 +541,7 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
         f += 0.5 .* (u.*u) # nodal flux
     end
 
-    return f
+    return f # physical, converted to reference in calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFluxParams)
 
 end
 

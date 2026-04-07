@@ -48,7 +48,7 @@ function c_ramp_test(paramfile::String="default_parameters.csv", special_c_value
     N_big = N_small * 2
 
     if stability_ramp == true
-        N_small = 4
+        N_small = 8
     end
 
     f = open(fname, "w")
