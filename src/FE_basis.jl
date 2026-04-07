@@ -27,6 +27,30 @@ function vandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
         V[:,j] .= lagrangep(r_volume, r_basis, j)
     end
     return V
+
+end
+function tensor_product_vandermonde2D(r_basis_x::AbstractVector, r_basis_y::AbstractVector, r_volume_x::AbstractVector, r_volume_y::AbstractVector, V1Dx::AbstractMatrix, V1Dy::AbstractMatrix)
+    #Helper function to find the tensor product 2D vandermonde matrix from 1D vandermonde matrices in each direction. 
+    #This function allows different basis and volume nodes in the two directions. V1Dx and V1Dy are assumed to be consistent with the 
+    #supplied basis/volume quadrature. This should allow for uneven integration nodes. 
+
+    V2D = zeros(Float64, (length(r_volume_x)*length(r_volume_y), length(r_basis_x)*length(r_basis_y)))
+    i_LID_V = 1
+    for iy_V = 1:length(r_volume_y)
+        for ix_V = 1:length(r_volume_x)
+            i_LID_B = 1
+            for iy_B = 1:length(r_basis_y)
+                for ix_B = 1:length(r_basis_x)
+                    V2D[i_LID_V, i_LID_B] = V1Dx[ix_V, ix_B] * V1Dy[iy_V, iy_B]
+                    i_LID_B+=1
+                end
+            end
+            i_LID_V += 1
+        end
+    end
+
+    return V2D
+
 end
 
 function tensor_product_vandermonde2D(r_basis::AbstractVector, r_volume_x::AbstractVector, r_volume_y::AbstractVector, V1Dx::AbstractMatrix, V1Dy::AbstractMatrix)
