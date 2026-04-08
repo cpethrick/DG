@@ -529,7 +529,7 @@ end
 
 
 function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
-    f = zeros(dg.N_flux)
+    f = zeros(dg.N_quad)
 
     if direction == 2 && param.usespacetime
         f .+= u
@@ -583,7 +583,7 @@ function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFl
         # in 1D, C_m = 1 so we don't need this step
         f = transform_physical_to_reference(f, direction, dg)
     end
-    f_hat = dg.Pi_flux * f
+    f_hat = dg.Pi_quad * f
 
     return f_hat#,f_f
 end

@@ -16,8 +16,8 @@ function write_to_file(u_hat,fname="u_hat_stored.csv")
 end
 
 function make_1D_MpK_face(dg::DG, param::PhysicsAndFluxParams)
-    phi_face_1D = vandermonde1D(dg.r_flux,dg.r_flux)
-    d_phi_face_d_xi_1D = gradvandermonde1D(dg.r_flux,dg.r_flux)
+    phi_face_1D = vandermonde1D(dg.r_quad,dg.r_quad)
+    d_phi_face_d_xi_1D = gradvandermonde1D(dg.r_quad,dg.r_quad)
     W_1D = dg.W_face
     J_1D = dg.J_face
     M_1D = phi_face_1D' * W_1D * J_1D * phi_face_1D
@@ -46,7 +46,7 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
                 #u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
 
                 # Find initial energy from the Dirichlet BC on lower face
-                x_local = dg.VX[ielem] .+ 0.5* (dg.r_flux.+1) * dg.delta_x
+                x_local = dg.VX[ielem] .+ 0.5* (dg.r_quad.+1) * dg.delta_x
                 y_local = zeros(size(x_local)) # leave zero as this is the lower face
                 u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
 
@@ -136,7 +136,7 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
             # face on bottom (t=0)
             
             # get initial condition
-            x_local = dg.VX[ielem] .+ 0.5* (dg.r_flux.+1) * dg.delta_x
+            x_local = dg.VX[ielem] .+ 0.5* (dg.r_quad.+1) * dg.delta_x
             y_local = zeros(size(x_local)) # leave zero as this is the lower face
             u_face_Dirichlet = calculate_solution_on_Dirichlet_boundary(x_local, y_local, dg,param)
             u_face_interior = project(dg.chi_face[:,:,3],  u_hat_local,true,dg,param)

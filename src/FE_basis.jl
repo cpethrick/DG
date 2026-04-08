@@ -78,8 +78,16 @@ function tensor_product_vandermonde2D(r_basis::AbstractVector, r_volume_x::Abstr
 end
 
 function vandermonde2D(r_volume::AbstractVector, r_basis::AbstractVector, dg::DG)
+    # Make 2D VdM matrix from even nodes in each direction
     V1D = vandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
     return tensor_product_vandermonde2D(r_basis, r_volume, r_volume, V1D, V1D)
+end
+
+function vandermonde2D(r_volume_x::AbstractVector, r_basis_x::AbstractVector, r_volume_y::AbstractVector, r_basis_y::AbstractVector, dg::DG)
+    # Make VdM matrix from uneven nodes in x and y
+    V1Dx = vandermonde1D(r_volume_x::AbstractVector, r_basis_x::AbstractVector)
+    V1Dy = vandermonde1D(r_volume_y::AbstractVector, r_basis_y::AbstractVector)
+    return tensor_product_vandermonde2D(r_basis_x, r_basis_y, r_volume_x, r_volume_y, V1Dx, V1Dy)
 end
 
 function gradlagrangep(r_volume,r_basis,j)
@@ -119,6 +127,7 @@ end
 
 
 function gradvandermonde2D(direction::Int, r_volume::AbstractVector, r_basis::AbstractVector, dg::DG)
+    # grad of VdM in directin 1(x) or 2(y) from even nodes
 
     DVr1D = gradvandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
     V1D = vandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
@@ -127,6 +136,20 @@ function gradvandermonde2D(direction::Int, r_volume::AbstractVector, r_basis::Ab
         return tensor_product_vandermonde2D(r_basis, r_volume, r_volume, DVr1D, V1D)
     else
         return tensor_product_vandermonde2D(r_basis, r_volume, r_volume, V1D, DVr1D)
+    end
+end
+function gradvandermonde2D(direction::Int, r_volume_x::AbstractVector, r_basis_x::AbstractVector, r_volume_y::AbstractVector, r_basis_y::AbstractVector, dg::DG)
+    # grad of VdM in direction 1(x) or 2(y) from UNeven nodes
+
+
+    if direction == 1
+        DVr1D_x = gradvandermonde1D(r_volume_x::AbstractVector, r_basis_x::AbstractVector)
+        V1D_y = vandermonde1D(r_volume_y::AbstractVector, r_basis_y::AbstractVector)
+        return tensor_product_vandermonde2D(r_basis_x, r_basis_y, r_volume_x, r_volume_y, DVr1D_x, V1D_y)
+    else
+        V1D_x = vandermonde1D(r_volume_x::AbstractVector, r_basis_x::AbstractVector)
+        DVr1D_y = gradvandermonde1D(r_volume_y::AbstractVector, r_basis_y::AbstractVector)
+        return tensor_product_vandermonde2D(r_basis_x, r_basis_y, r_volume_x, r_volume_y, V1D_x, DVr1D_y)
     end
 end
 
