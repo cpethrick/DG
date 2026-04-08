@@ -16,8 +16,8 @@ mutable struct DG
     N_quad_per_dim::Int # Number of points per direction per cell
     N_quad::Int # Total number of points per cell = N_quad^dim 
     N_quad_dof::Int # Total number of DOFs per cell = N_quad*N_state #UNSURE IF THIS IS USED. 
-    N_vol_per_dim::Int # WARNING: NOT FULLY IMPLEMENTED! Number of points per direction per cell. Used for unever # of basis and soln points.
-    N_vol::Int # Total number of points per cell = N_quad^dim 
+    #N_vol_per_dim::Int # WARNING: NOT FULLY IMPLEMENTED! Number of points per direction per cell. Used for unever # of basis and soln points.
+    #N_vol::Int # Total number of points per cell = N_quad^dim 
     N_faces::Int
     N_face::Int # points on each face. I assume that the face nodes are 1F flux nodes.
     VX::Vector{Float64} # Array of points defining the extremes of each element along one dimension
@@ -29,7 +29,7 @@ mutable struct DG
     #GIDtoLID::Vector{Int} #Index is global ID, values are local IDs
     EIDLIDtoGID_basis::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
                              # dimension is element ID. values are global ID.
-    EIDLIDtoGID_vol::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
+    EIDLIDtoGID_soln::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
                              # dimension is element ID. values are global ID.
     #LIDtoLFID::Vector{Int} # Index is local ID, value is local face ID
     #                       # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
@@ -152,13 +152,16 @@ end
 
 # Outer constructor for DG object. Might be good to move to inner constructor at some point.
 function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_limits::Vector{Float64},
-        solnnodes::String, basisnodes::String, fluxnodes::String, fluxnodes_overintegration::Int, fluxreconstructionC::Float64,
+        solnnodes::String, basisnodes::String, quadnodes::String, quadnodes_overintegration::Int, fluxreconstructionC::Float64,
         usespacetime::Bool)
-    
+    # TO DO : add time overintegration to list of arguments. 
+
+    y_dir_nodes = "GLL" # hard-code for now.
+
     #initialize incomplete DG struct
     dg = DG(P, dim, N_elem_per_dim, N_state, domain_x_limits)
     dg.N_soln_per_dim = P+1
-    dg.N_quad_per_dim = dg.N_soln_per_dim + fluxnodes_overintegration
+    dg.N_quad_per_dim = dg.N_soln_per_dim + quadnodes_overintegration
 
     # Flag to set reference cell from 0 to 1, matching PHiLiP.
     reference_cell_01 = false
@@ -179,8 +182,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
 
     dg.N_soln_dof = dg.N_soln * dg.N_state
     dg.N_soln_dof_global = dg.N_soln_dof * dg.N_elem
-    dg.N_vol_per_dim = dg.N_soln_per_dim # for testing, assume overintegrate by 1.
-    dg.N_vol = dg.N_vol_per_dim^dim # for testing, assume overintegrate by 1.
+    #dg.N_vol_per_dim = dg.N_soln_per_dim # for testing, assume overintegrate by 1.
+    #dg.N_vol = dg.N_vol_per_dim^dim # for testing, assume overintegrate by 1.
 
     
     # Index is global ID, values are local IDs
@@ -189,7 +192,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     # Index of first dimension is element ID, index of second dimension is element ID
     # values are global ID
     dg.EIDLIDtoGID_basis = reshape(1:dg.N_soln*dg.N_elem, (dg.N_soln,dg.N_elem))' #note transpose
-    dg.EIDLIDtoGID_vol = reshape(1:dg.N_vol*dg.N_elem, (dg.N_vol,dg.N_elem))' #note transpose
+    dg.EIDLIDtoGID_soln = reshape(1:dg.N_soln*dg.N_elem, (dg.N_soln,dg.N_elem))' #note transpose
 
     # Index is local ID, value is local face ID
     # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
@@ -302,10 +305,10 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     # Solution nodes (integration nodes)
     if cmp(solnnodes, "GLL") == 0 
         display("GLL Volume nodes.")
-        dg.r_soln,dg.w_soln = FastGaussQuadrature.gausslobatto(dg.N_vol_per_dim)
+        dg.r_soln,dg.w_soln = FastGaussQuadrature.gausslobatto(dg.N_soln_per_dim)
     elseif cmp(solnnodes, "GL") == 0
         display("GL Volume nodes.")
-        dg.r_soln,dg.w_soln = FastGaussQuadrature.gaussjacobi(dg.N_vol_per_dim, 0.0,0.0)
+        dg.r_soln,dg.w_soln = FastGaussQuadrature.gaussjacobi(dg.N_soln_per_dim, 0.0,0.0)
     else
         display("Illegal soln node choice!")
     end
@@ -331,18 +334,18 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     
     # Flux nodes (shape functions, interpolation nodes)
     # Assume collocated flux basis nodes.
-    if cmp(fluxnodes, "GLL") == 0 
+    if cmp(quadnodes, "GLL") == 0 
         display("GLL flux nodes.")
-        dg.r_quad,dg.w_quad=FastGaussQuadrature.gausslobatto(dg.N_soln_per_dim+fluxnodes_overintegration)
-    elseif cmp(fluxnodes, "GL") == 0
+        dg.r_quad,dg.w_quad=FastGaussQuadrature.gausslobatto(dg.N_soln_per_dim+quadnodes_overintegration)
+    elseif cmp(quadnodes, "GL") == 0
         display("GL flux nodes.")
-        dg.r_quad,dg.w_quad=FastGaussQuadrature.gaussjacobi(dg.N_soln_per_dim+fluxnodes_overintegration,0.0,0.0)
+        dg.r_quad,dg.w_quad=FastGaussQuadrature.gaussjacobi(dg.N_soln_per_dim+quadnodes_overintegration,0.0,0.0)
     else
         display("Illegal flux node choice!")
     end
-    if fluxnodes_overintegration>0
+    if quadnodes_overintegration>0
         display("Overintegrating the flux by")
-        display(fluxnodes_overintegration)
+        display(quadnodes_overintegration)
     end
     if reference_cell_01
         dg.r_quad = dg.r_quad * 0.5 .+ 0.5

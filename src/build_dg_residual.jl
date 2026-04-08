@@ -88,9 +88,9 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
         elseif elem == 0 
             # elemID of 0 corresponds to Dirichlet boundary (weak imposition).
             # Find x and y coords of the face and pass to a physics function
-            #for inode = 1:dg.N_vol_per_dim
+            #for inode = 1:dg.N_soln_per_dim
                 # The node numbering used in this code allows us
-                # to choose the first N_vol_per_dim x-points
+                # to choose the first N_soln_per_dim x-points
                 # to get a vector of x-coords on the face.
              #   x_local[inode] = dg.x[dg.EIDLIDtoGID_vol[ielem,inode]]
                 # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
@@ -250,11 +250,11 @@ function assemble_local_state_residual(ielem,istate, u_hat, t, dg::DG, param::Ph
 
 
     if param.include_source
-        x_local = zeros(Float64, dg.N_vol)
-        y_local = zeros(Float64, dg.N_vol)
-        for inode = 1:dg.N_vol
-            x_local[inode] = dg.x[dg.EIDLIDtoGID_vol[ielem,inode]]
-            y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
+        x_local = zeros(Float64, dg.N_soln)
+        y_local = zeros(Float64, dg.N_soln)
+        for inode = 1:dg.N_soln
+            x_local[inode] = dg.x[dg.EIDLIDtoGID_soln[ielem,inode]]
+            y_local[inode] = dg.y[dg.EIDLIDtoGID_soln[ielem,inode]]
         end
         rhs_local_state+=dg.Pi_soln*calculate_source_terms(istate,x_local,y_local,t, dg, param)
     end

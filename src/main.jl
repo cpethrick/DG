@@ -91,8 +91,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     u_local_state = zeros(dg.N_soln)
     for ielem = 1:dg.N_elem
         for istate = 1:dg.N_state
-            for inode = 1:dg.N_vol
-                u_local_state[inode] = u0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_vol[ielem,inode]]]
+            for inode = 1:dg.N_soln
+                u_local_state[inode] = u0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_soln[ielem,inode]]]
             end
             u_hat_local_state = dg.Pi_soln*u_local_state
             u_hat0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_basis[ielem,:]]] = u_hat_local_state

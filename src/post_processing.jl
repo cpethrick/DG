@@ -43,7 +43,7 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
             # for spacetime, we want to consider initial as t=0 (bottom surface of the computational domain) and final as t=t_f (top surface)
             if ielem < dg.N_elem_per_dim+1
                 # face on bottom
-                #u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
+                #u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_soln+1:(ielem)*dg.N_soln]
 
                 # Find initial energy from the Dirichlet BC on lower face
                 x_local = dg.VX[ielem] .+ 0.5* (dg.r_quad.+1) * dg.delta_x
@@ -114,8 +114,8 @@ function calculate_projection_error_local(u_face_interior, u_face_Dirichlet, iel
     v_jump = v_face_interior - v_face_Dirichlet
 
     vjumpTtimesu = zeros(size(phi_face_Dirichlet))
-    for inode = 1:dg.N_vol_per_dim
-        node_indices = dg.N_vol_per_dim*(1:dg.N_state) .- dg.N_vol_per_dim .+ inode
+    for inode = 1:dg.N_soln_per_dim
+        node_indices = dg.N_soln_per_dim*(1:dg.N_state) .- dg.N_soln_per_dim .+ inode
         vjumpTtimesu[inode] += (v_jump[node_indices])' * u_face_Dirichlet[node_indices]
     end
 
@@ -264,7 +264,7 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
     u_exact_overint = calculate_exact_solution(x_overint, y_overint,Np_overint, current_time, dg, param) 
     u_calc_final_overint = zeros(size(x_overint))
     u0_overint = zeros(size(x_overint))
-    u_calc_final = zeros(dg.N_vol*dg.N_elem)
+    u_calc_final = zeros(dg.N_soln*dg.N_elem)
     for ielem = 1:dg.N_elem
         #Extract only first state here
         u_hat_local = zeros(length(dg.r_basis)^dim) 
@@ -277,7 +277,7 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
         end
         u_calc_final_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u_hat_local
         u0_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u0_hat_local
-        u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol] .= dg.chi_soln* u_hat_local
+        u_calc_final[(ielem-1)*dg.N_soln+1:(ielem)*dg.N_soln] .= dg.chi_soln* u_hat_local
     end
     u_diff = u_calc_final_overint .- u_exact_overint
 
