@@ -299,4 +299,5 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-main()
+#main()
+reference_element_figure()

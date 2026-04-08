@@ -89,8 +89,8 @@ function reference_element_figure()
     param.dim = 2
     param.P = 3
     param.usespacetime = true
-    param.volumenodes = "GLL"
-    param.basisnodes = "GLL"
+    param.volumenodes = "GL"
+    param.basisnodes = "GL"
     param.fluxnodes = "GL"
     param.fluxnodes_overintegration = 0
 
@@ -119,11 +119,12 @@ function reference_element_figure()
     PyPlot.ylabel(L"$\tau$, temporal coordinate")
     PyPlot.xlabel(L"$\xi$, spatial coordinate")
     PyPlot.plot(dg.x, dg.y, "o", color="#ED1B2F", label=L"$\bar{\xi}_{\mathrm{soln}}$, solution nodes", markersize=5)
-    x_quad,y_quad = build_coords_vectors(dg.r_quad, dg)  
+    x_quad,y_quad = build_coords_vectors_2D(dg.r_quad, dg.r_quad_y, dg) 
+    #x_quad,y_quad = build_coords_vectors(dg.r_quad, dg)  
     PyPlot.plot(x_quad, y_quad, "o", color="#b9b4b3", label=L"$\bar{\xi}_{\mathrm{q}}$, flux nodes", markersize=4)
 
-    x_face = vcat(-1*ones(size(dg.r_quad)), ones(size(dg.r_quad)), dg.r_quad, dg.r_quad)
-    y_face = vcat(dg.r_quad, dg.r_quad,-1*ones(size(dg.r_quad)), ones(size(dg.r_quad)))
+    x_face = vcat(-1*ones(size(dg.r_quad_y)), ones(size(dg.r_quad_y)), dg.r_quad, dg.r_quad)
+    y_face = vcat(dg.r_quad_y, dg.r_quad_y,-1*ones(size(dg.r_quad)), ones(size(dg.r_quad)))
     PyPlot.plot(x_face, y_face, "o", color="#1896cb", label=L"$\bar{\xi}_{\mathrm{f}}$, face nodes", markersize=3)
 
     box = ax.get_position()

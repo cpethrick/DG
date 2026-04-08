@@ -9,17 +9,20 @@ mutable struct DG
 
     # Category 2:defined from Category 1.
     N_elem::Int
-    N_soln_per_dim::Int # Number of points per direction per cell
+    N_soln_per_dim::Int # Number of points per direction per cell; assumes x-direction
+    N_soln_y::Int # number of points in the y direction per cell
     N_soln::Int # Total number of points per cell = N_soln^dim 
     N_soln_dof::Int # Total number of DOFs per cell = N_soln*N_state
     N_soln_dof_global::Int # Global number of DOFs, i.e. length of the solution vector
-    N_quad_per_dim::Int # Number of points per direction per cell
+    N_quad_per_dim::Int # Number of points per direction per cell; assumes y-direction
+    N_quad_y::Int # Number of points in y direction per cell
     N_quad::Int # Total number of points per cell = N_quad^dim 
     N_quad_dof::Int # Total number of DOFs per cell = N_quad*N_state #UNSURE IF THIS IS USED. 
     #N_vol_per_dim::Int # WARNING: NOT FULLY IMPLEMENTED! Number of points per direction per cell. Used for unever # of basis and soln points.
     #N_vol::Int # Total number of points per cell = N_quad^dim 
     N_faces::Int
-    N_face::Int # points on each face. I assume that the face nodes are 1F flux nodes.
+    N_face::Int # points on each face parallel to x-axis. I assume that the face nodes are 1D flux nodes.
+    N_face_y::Int # points on each face parallel to y-axis. I assume that the face nodes are 1D flux nodes.
     VX::Vector{Float64} # Array of points defining the extremes of each element along one dimension
     delta_x::Float64 # length of evenly-spaced Cartesian elements
     x::Vector{Float64} # physical x coords, index are global ID.
@@ -56,12 +59,20 @@ mutable struct DG
     #LIDtoLXIDLYID::AbstractMatrix{Int} # local x, y (length N_soln_per_dim) to local ID (length N_soln)
 
 
+    # 1D quadratures and weights in x-direction
     r_soln::Vector{Float64}
     w_soln::Vector{Float64}
     r_basis::Vector{Float64}
     w_basis::Vector{Float64}
     r_quad::Vector{Float64} #face nodes are 1D flux nodes.
     w_quad::Vector{Float64}
+    # 1D quadratures and weights in y-direction
+    r_soln_y::Vector{Float64}
+    w_soln_y::Vector{Float64}
+    r_basis_y::Vector{Float64}
+    w_basis_y::Vector{Float64}
+    r_quad_y::Vector{Float64} #face nodes are 1D flux nodes.
+    w_quad_y::Vector{Float64}
     #chi are basis functions for the solution.
     chi_soln::AbstractMatrix{Float64}
     chi_quad::AbstractMatrix{Float64}
@@ -115,56 +126,67 @@ mutable struct DG
 end
 
 
-function build_coords_vectors(ref_vec_1D, dg::DG)
+function build_coords_vectors_1D(ref_vec_1D, dg::DG)
 
     x = zeros(dg.N_elem*(length(ref_vec_1D)^dg.dim))
     y = zeros(dg.N_elem*(length(ref_vec_1D)^dg.dim))
     Np=length(ref_vec_1D)^dg.dim
     Np_per_dim=length(ref_vec_1D)
-    if dg.dim == 1
-        for ielem = 1:dg.N_elem
-            x_local = dg.VX[ielem] .+ 0.5* (ref_vec_1D .+1) * dg.delta_x
-            x[(ielem - 1) * Np+1:ielem*Np] .= x_local
-        end
-    elseif dg.dim == 2
-         for ielem = 1:dg.N_elem
-            x_index = mod(ielem-1,dg.N_elem_per_dim)+1
-            x_local_1D = dg.VX[x_index] .+ 0.5* (ref_vec_1D .+1) * dg.delta_x
-            x_local = zeros(Np)
-            for inode = 1:Np_per_dim
-                #slightly gross indexing because we don't want to use LXIDLYIDtoLID for generality of ref_vec_1D.
-                x_local[vec((1:Np_per_dim)' .+ (inode-1)*Np_per_dim)] .= x_local_1D
-            end
-            
-            y_index = Int(ceil(ielem/dg.N_elem_per_dim))
-            y_local_1D = dg.VX[y_index] .+ 0.5* (ref_vec_1D .+1) * dg.delta_x
-            y_local = zeros(size(x_local))
-            for inode = 1:Np_per_dim
-                y_local[(1:Np_per_dim).*Np_per_dim.-(Np_per_dim-inode)] .= y_local_1D
-            end
-
-            x[(ielem - 1) * Np+1:ielem*Np] .= x_local
-            y[(ielem - 1) * Np+1:ielem*Np] .= y_local
-         end
+    for ielem = 1:dg.N_elem
+        x_local = dg.VX[ielem] .+ 0.5* (ref_vec_1D .+1) * dg.delta_x
+        x[(ielem - 1) * Np+1:ielem*Np] .= x_local
     end
     return (x,y)
 end
 
+function build_coords_vectors_2D(ref_vec_x, ref_vec_y, dg::DG)
+    
+    x = zeros(dg.N_elem*length(ref_vec_x)*length(ref_vec_y))
+    y = zeros(length(x))
+    Np=length(ref_vec_x)*length(ref_vec_y)
+    Np_x_dim=length(ref_vec_x)
+    Np_y_dim=length(ref_vec_y)
+    for ielem = 1:dg.N_elem
+        x_index = mod(ielem-1,dg.N_elem_per_dim)+1
+        x_local_1D = dg.VX[x_index] .+ 0.5* (ref_vec_x .+1) * dg.delta_x
+        x_local = zeros(Np)
+        for irow = 1:Np_y_dim
+           #slightly gross indexing because we don't want to use LXIDLYIDtoLID for generality of ref_vec_1D.
+           x_local[vec((1:Np_x_dim)' .+ (irow-1)*Np_x_dim)] .= x_local_1D
+        end
+
+        y_index = Int(ceil(ielem/dg.N_elem_per_dim))
+        y_local_1D = dg.VX[y_index] .+ 0.5* (ref_vec_y .+1) * dg.delta_x
+        y_local = zeros(size(x_local))
+        for icol = 1:Np_x_dim
+           y_local[(1:Np_y_dim).*Np_x_dim.-(Np_x_dim-icol)] .= y_local_1D
+        end
+
+        x[(ielem - 1) * Np+1:ielem*Np] .= x_local
+        y[(ielem - 1) * Np+1:ielem*Np] .= y_local
+    end
+    return (x,y)
+end
 # Outer constructor for DG object. Might be good to move to inner constructor at some point.
 function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_limits::Vector{Float64},
         solnnodes::String, basisnodes::String, quadnodes::String, quadnodes_overintegration::Int, fluxreconstructionC::Float64,
         usespacetime::Bool)
     # TO DO : add time overintegration to list of arguments. 
 
-    y_dir_nodes = "GLL" # hard-code for now.
+    y_dir_overintegration=-1
 
     #initialize incomplete DG struct
     dg = DG(P, dim, N_elem_per_dim, N_state, domain_x_limits)
-    dg.N_soln_per_dim = P+1
+    dg.N_soln_per_dim = P+1 #in x dim
+    dg.N_soln_y = dg.N_soln_per_dim+y_dir_overintegration
     dg.N_quad_per_dim = dg.N_soln_per_dim + quadnodes_overintegration
+    dg.N_quad_y = dg.N_quad_per_dim+y_dir_overintegration
 
     # Flag to set reference cell from 0 to 1, matching PHiLiP.
     reference_cell_01 = false
+    if reference_cell_01 
+        display("WARNING!! 2D will break because y-dim assumes (-1,1) reference cell!!")
+    end
 
     if dim == 1
         dg.N_soln = dg.N_soln_per_dim
@@ -174,9 +196,10 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         dg.N_elem = N_elem_per_dim
     elseif dim == 2
         dg.N_faces = 4
-        dg.N_soln = dg.N_soln_per_dim^dim
-        dg.N_quad = dg.N_quad_per_dim^dim
+        dg.N_soln = dg.N_soln_per_dim*dg.N_soln_y
+        dg.N_quad = dg.N_quad_per_dim*dg.N_quad_y
         dg.N_face = dg.N_quad_per_dim
+        dg.N_face_y = dg.N_quad_y
         dg.N_elem = N_elem_per_dim^dim
     end
 
@@ -306,9 +329,11 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     if cmp(solnnodes, "GLL") == 0 
         display("GLL Volume nodes.")
         dg.r_soln,dg.w_soln = FastGaussQuadrature.gausslobatto(dg.N_soln_per_dim)
+        dg.r_soln_y,dg.w_soln_y = FastGaussQuadrature.gausslobatto(dg.N_soln_y)
     elseif cmp(solnnodes, "GL") == 0
         display("GL Volume nodes.")
         dg.r_soln,dg.w_soln = FastGaussQuadrature.gaussjacobi(dg.N_soln_per_dim, 0.0,0.0)
+        dg.r_soln_y,dg.w_soln_y = FastGaussQuadrature.gaussjacobi(dg.N_soln_y, 0.0,0.0)
     else
         display("Illegal soln node choice!")
     end
@@ -321,9 +346,11 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     if cmp(basisnodes, "GLL") == 0 
         display("GLL basis nodes.")
         dg.r_basis,dg.w_basis=FastGaussQuadrature.gausslobatto(dg.N_soln_per_dim)
+        dg.r_basis_y,dg.w_basis_y=FastGaussQuadrature.gausslobatto(dg.N_soln_y)
     elseif cmp(basisnodes, "GL") == 0
         display("GL basis nodes.")
         dg.r_basis,dg.w_basis=FastGaussQuadrature.gaussjacobi(dg.N_soln_per_dim,0.0,0.0)
+        dg.r_basis_y,dg.w_basis_y=FastGaussQuadrature.gaussjacobi(dg.N_soln_y,0.0,0.0)
     else
         display("Illegal basis node choice!")
     end
@@ -336,10 +363,12 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     # Assume collocated flux basis nodes.
     if cmp(quadnodes, "GLL") == 0 
         display("GLL flux nodes.")
-        dg.r_quad,dg.w_quad=FastGaussQuadrature.gausslobatto(dg.N_soln_per_dim+quadnodes_overintegration)
+        dg.r_quad,dg.w_quad=FastGaussQuadrature.gausslobatto(dg.N_quad_per_dim)
+        dg.r_quad_y,dg.w_quad_y=FastGaussQuadrature.gausslobatto(dg.N_quad_y)
     elseif cmp(quadnodes, "GL") == 0
         display("GL flux nodes.")
-        dg.r_quad,dg.w_quad=FastGaussQuadrature.gaussjacobi(dg.N_soln_per_dim+quadnodes_overintegration,0.0,0.0)
+        dg.r_quad,dg.w_quad=FastGaussQuadrature.gaussjacobi(dg.N_quad_per_dim,0.0,0.0)
+        dg.r_quad_y,dg.w_quad_y=FastGaussQuadrature.gaussjacobi(dg.N_quad_y,0.0,0.0)
     else
         display("Illegal flux node choice!")
     end
@@ -364,7 +393,11 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     jacobian = (dg.delta_x/cell_length)^dim #reference element is 2 units long
     dg.J_soln = LinearAlgebra.diagm(ones(length(dg.r_soln)^dim)*jacobian)
 
-    (dg.x, dg.y) = build_coords_vectors(dg.r_soln, dg) 
+    if dim==1
+        (dg.x, dg.y) = build_coords_vectors_1D(dg.r_soln, dg) 
+    elseif dim==2
+        (dg.x, dg.y) = build_coords_vectors_2D(dg.r_soln, dg.r_soln_y, dg) 
+    end
     # Define Vandermonde matrices
     if dim == 1
         dg.chi_soln = vandermonde1D(dg.r_soln,dg.r_basis)
@@ -487,7 +520,12 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     dg.MpK_inv = inv(dg.MpK)
 
 
-    Q_dimension = dg.N_quad+dg.N_faces*dg.N_face # N_quad points in soln, Nfp on each face. Store ndim matrices.
+    if dim==1
+        Q_dimension = dg.N_quad+dg.N_faces*dg.N_face # N_quad points in soln, Nfp on each face. Store ndim matrices.
+    elseif dim==2
+        Q_dimension = dg.N_quad + 2*dg.N_face + 2*dg.N_face_y
+    end
+    #==
     dg.QtildemQtildeT = zeros(Q_dimension,Q_dimension,dim) 
     # soln
     dg.QtildemQtildeT[1:dg.N_quad, 1:dg.N_quad,1] .= dg.W_quad * dg.d_phi_quad_d_xi- dg.d_phi_quad_d_xi' * dg.W_quad
@@ -523,8 +561,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     dg.L_xi1 = dg.MpK_inv * dg.chi_face[:,:,1]' * dg.W_face * dg.LFIDtoNormal[1,1]
     dg.L_xi2 = dg.MpK_inv * dg.chi_face[:,:,2]' * dg.W_face * dg.LFIDtoNormal[2,1]
     dg.D_xi = dg.MpK_inv * dg.chi_soln' * dg.W_soln * dg.d_phi_quad_d_xi
-
+==#
     return dg
-
 end
 
