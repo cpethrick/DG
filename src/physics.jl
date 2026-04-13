@@ -270,7 +270,9 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
             alpha = 0 #upwind
             #alpha = 1 #central
             #if direction ==1 
-                f_numerical = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face[direction]) * (uM_face.-uP_face) # lin. adv, upwind/central
+            f_numerical = 0.5 * a* (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face[direction]) * (uM_face.-uP_face) # lin. adv, upwind/central
+            #else
+            #    f_numerical = 0*uM_face
             #end # numerical flux only in x-direction.
         elseif cmp(param.pde_type,"burgers2D")==0 || (cmp(param.pde_type,"burgers1D")==0 && direction == 1)
             f_numerical  = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) # split
@@ -541,9 +543,9 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
     if direction == 2 && param.usespacetime
         f .+= u
     elseif cmp(param.pde_type,"linear_adv_1D")==0
-        if direction == 1
+        #if direction == 1
             f .+= param.advection_speed .* u # nodal flux for lin. adv.
-        end
+        #end
     elseif cmp(param.pde_type,"burgers2D")==0 || (cmp(param.pde_type,"burgers1D")==0 && direction == 1)
         f += 0.5 .* (u.*u) # nodal flux
     end
@@ -641,7 +643,7 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
         end
     else
         #u0 = 0.2* sin.(π * x) .+ 0.01
-        u0 = 2*sin.(π * (x)) .+ 1.01
+        u0 = 2*sin.(π * (x+y)) .+ 1.01
     end
     return u0
 end
@@ -657,7 +659,7 @@ function calculate_exact_solution(x, y, Np, current_time, dg::DG, param::Physics
     elseif cmp(param.pde_type, "burgers2D")==0
         u_exact = cos.(π*(x.+y.-sqrt(2)*current_time))
     elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == false
-        u_exact = 2* sin.(π * (x.- param.advection_speed * current_time)) .+ 1.01
+        u_exact = 2* sin.(π * (x+y.-dg.dim*param.advection_speed * current_time)) .+ 1.01 # dg.dim because we assume same advection speed in both dimension
     elseif cmp(param.pde_type, "linear_adv_1D")==0 && param.usespacetime == true 
         u_exact = 2*sin.(π * (x - param.advection_speed * y)) .+ 1.01
     elseif cmp(param.pde_type, "euler1D")==0

@@ -182,7 +182,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         usespacetime::Bool)
     # TO DO : add time overintegration to list of arguments. 
 
-    y_dir_overintegration=-1
+    y_dir_overintegration=1
 
     #initialize incomplete DG struct
     dg = DG(P, dim, N_elem_per_dim, N_state, domain_x_limits)
