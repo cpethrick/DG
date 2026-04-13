@@ -229,8 +229,14 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
     #             the problem physics
     # bc_type = 0 indicates a Dirichlet boundary for time dimension, returning the exterior value
     # bc_type = -1 indicates an outflow (transmissive) boundary for time dimension, returning the interior value 
-    f_numerical=zeros(dg.N_face)
+    #f_numerical=zeros(dg.N_face)
 
+
+    #==
+    display("Numerical flux BC:")
+    display(bc_type)
+    display(direction)
+    ==#
     if bc_type > 0
         # assign boundary according to problem physics.
 
@@ -252,6 +258,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
                     # face is bottom. Use the information from the external element
                     # which corresponds to the past
                     f_numerical = uP_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
+                    display("here")
                 elseif n_face[direction] == 1
                     # face is bottom. Use internal solution
                     # which corresonds to the past
@@ -262,9 +269,9 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
             a = param.advection_speed
             alpha = 0 #upwind
             #alpha = 1 #central
-            if direction ==1 
+            #if direction ==1 
                 f_numerical = 0.5 * a * (uM_face .+ uP_face) .+ a * (1-alpha) / 2.0 * (n_face[direction]) * (uM_face.-uP_face) # lin. adv, upwind/central
-            end # numerical flux only in x-direction.
+            #end # numerical flux only in x-direction.
         elseif cmp(param.pde_type,"burgers2D")==0 || (cmp(param.pde_type,"burgers1D")==0 && direction == 1)
             f_numerical  = 1.0/6.0 * (uM_face .* uM_face + uM_face .* uP_face + uP_face .* uP_face) # split
             if cmp(param.numerical_flux_type, "split_with_LxF")==0

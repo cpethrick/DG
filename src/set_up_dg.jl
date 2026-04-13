@@ -76,20 +76,20 @@ mutable struct DG
     #chi are basis functions for the solution.
     chi_soln::AbstractMatrix{Float64}
     chi_quad::AbstractMatrix{Float64}
-    chi_face::AbstractArray{Float64}
+    chi_face::Dict{Int64,AbstractArray{Float64}}
     chi_vf::AbstractMatrix{Float64} # stacked matrices for skew-symmetric form
     #phi are basis functions for the flux.
     phi_quad::AbstractMatrix{Float64}
-    phi_face::AbstractArray{Float64}
+    phi_face::Dict{Int64,AbstractArray{Float64}}
     d_phi_quad_d_xi::AbstractMatrix{Float64}
     d_phi_quad_d_eta::AbstractMatrix{Float64}
     C_m::AbstractMatrix{Float64}
     
     W_soln::AbstractMatrix{Float64}
-    W_face::AbstractMatrix{Float64}
+    W_face::Dict{Int64,AbstractMatrix{Float64}}
     W_quad::AbstractMatrix{Float64}
-    J_soln::AbstractMatrix{Float64}
-    J_face::AbstractMatrix{Float64}
+    J_soln::Float64
+    J_face::Float64
     M::AbstractMatrix{Float64}
     MpK::AbstractMatrix{Float64}
     M_inv::AbstractMatrix{Float64}
@@ -123,6 +123,15 @@ mutable struct DG
                                                N_state::Int,
                                                domain_x_limits::Vector{Float64})
 
+end
+
+function build_coords_vectors(ref_vec_1D, dg::DG)
+
+    if dg.dim==1
+        return build_coords_vectors_1D(ref_vec_1D, dg::DG)
+    elseif dg.dim==2
+        return build_coords_vectors_2D(ref_vec_1D, ref_vec_1D, dg::DG)
+    end
 end
 
 
@@ -391,13 +400,18 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         cell_length = 1.0
     end
     jacobian = (dg.delta_x/cell_length)^dim #reference element is 2 units long
-    dg.J_soln = LinearAlgebra.diagm(ones(length(dg.r_soln)^dim)*jacobian)
+    dg.J_soln = jacobian
 
     if dim==1
         (dg.x, dg.y) = build_coords_vectors_1D(dg.r_soln, dg) 
     elseif dim==2
         (dg.x, dg.y) = build_coords_vectors_2D(dg.r_soln, dg.r_soln_y, dg) 
     end
+
+    ##### Verified unbalanced nodes to here by plotting reference figure.
+
+
+
     # Define Vandermonde matrices
     if dim == 1
         dg.chi_soln = vandermonde1D(dg.r_soln,dg.r_basis)
@@ -418,34 +432,45 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
 
         dg.W_soln = LinearAlgebra.diagm(dg.w_soln) # diagonal matrix holding quadrature weights
         dg.W_quad = LinearAlgebra.diagm(dg.w_quad) # diagonal matrix holding quadrature weights
-        dg.W_face = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
+        dg.W_face = Dict{Int64, AbstractArray{Float64}}()
+        dg.W_face[1] = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
+        dg.W_face[2] = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
         dg.C_m = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
     elseif dim == 2
-        dg.chi_soln = vandermonde2D(dg.r_soln,dg.r_basis, dg)
-        dg.chi_quad = vandermonde2D(dg.r_quad,dg.r_basis, dg)
-        dg.phi_quad = vandermonde2D(dg.r_quad,dg.r_quad,dg)
-        dg.d_phi_quad_d_xi = gradvandermonde2D(1, dg.r_quad,dg.r_quad, dg)
-        dg.d_phi_quad_d_eta = gradvandermonde2D(2, dg.r_quad,dg.r_quad, dg)
-        d_chi_quad_d_xi = gradvandermonde2D(1, dg.r_quad,dg.r_basis, dg)
-        d_chi_quad_d_eta = gradvandermonde2D(2, dg.r_quad,dg.r_basis, dg)
-        dg.chi_face = assembleFaceVandermonde2D(dg.r_basis,dg.r_quad,dg) #face nodes are 1D flux nodes
-        dg.phi_face = assembleFaceVandermonde2D(dg.r_quad,dg.r_quad,dg)
-        dg.W_soln = LinearAlgebra.diagm(vec(dg.w_soln*dg.w_soln'))
-        dg.W_quad = LinearAlgebra.diagm(vec(dg.w_quad*dg.w_quad'))
-        dg.W_face = LinearAlgebra.diagm(dg.w_quad)
-        dg.J_face = LinearAlgebra.diagm(ones(length(dg.r_quad)) * jacobian ^ (1/dim)) # 1D jacobian on the face of the element.
+        dg.chi_soln = vandermonde2D(dg.r_soln,dg.r_basis,dg.r_soln_y,dg.r_basis_y, dg)
+        dg.chi_quad = vandermonde2D(dg.r_quad,dg.r_basis,dg.r_quad_y,dg.r_basis_y, dg)
+        dg.phi_quad = vandermonde2D(dg.r_quad,dg.r_quad, dg.r_quad_y,dg.r_quad_y,dg)
+        dg.d_phi_quad_d_xi = gradvandermonde2D(1, dg.r_quad,dg.r_quad, dg.r_quad_y,dg.r_quad_y,dg)
+        dg.d_phi_quad_d_eta = gradvandermonde2D(2, dg.r_quad,dg.r_quad,dg.r_quad_y,dg.r_quad_y,dg)
+        d_chi_quad_d_xi = gradvandermonde2D(1, dg.r_quad,dg.r_basis,dg.r_quad_y,dg.r_basis_y, dg)
+        d_chi_quad_d_eta = gradvandermonde2D(2, dg.r_quad,dg.r_basis,dg.r_quad_y,dg.r_basis_y, dg)
+        if reference_cell_01
+            display("Note that -1 1 cell is hardcoded in assembleFaceVandermonde2D")
+        end
+        dg.chi_face = assembleFaceVandermonde2D(dg.r_basis, dg.r_quad, dg.r_basis_y, dg.r_quad_y,dg) #face nodes are 1D flux nodes
+        dg.phi_face = assembleFaceVandermonde2D(dg.r_quad, dg.r_quad, dg.r_quad_y, dg.r_quad_y,dg) #face nodes are 1D flux nodes
+        ##### Check here if stuff doesn't work
+        dg.W_soln = LinearAlgebra.diagm(vec(dg.w_soln*dg.w_soln_y'))
+        dg.W_quad = LinearAlgebra.diagm(vec(dg.w_quad*dg.w_quad_y'))
+        dg.W_face = Dict{Int64, AbstractArray{Float64}}()
+        dg.W_face[1] = LinearAlgebra.diagm(dg.w_quad_y)
+        dg.W_face[2] = LinearAlgebra.diagm(dg.w_quad_y)
+        dg.W_face[3] = LinearAlgebra.diagm(dg.w_quad)
+        dg.W_face[4] = LinearAlgebra.diagm(dg.w_quad)
+        dg.J_face = jacobian ^ (1/dim) # 1D jacobian on the face of the element.
         dg.C_m = dg.delta_x/cell_length * [1 0; 0 1]  # Assuming a cartesian element
     end
 
+    ############################################HERE
     # for skew-symmetric stiffness operator form
     dg.chi_vf = dg.chi_quad'
     for iface=1:dg.N_faces
-        dg.chi_vf = [dg.chi_vf dg.chi_face[:,:,iface]' ]
+        dg.chi_vf = [dg.chi_vf dg.chi_face[iface]' ]
     end
     
     # Mass and stiffness matrices as defined Eq. 9.5 Cicchino 2022
     # All defined on a single element.
-    dg.M = dg.chi_quad' * dg.W_quad * dg.J_soln* dg.chi_quad # J_soln is the same as J_quad (assumin N_overint=0)
+    dg.M = dg.J_soln * dg.chi_quad' * dg.W_quad * dg.chi_quad # J_soln is the same as J_quad (assumin N_overint=0)
     dg.S_xi = dg.chi_quad' * dg.W_quad * dg.d_phi_quad_d_xi
     dg.S_noncons_xi = dg.W_quad * d_chi_quad_d_xi
     if dim==2
@@ -520,32 +545,45 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     dg.MpK_inv = inv(dg.MpK)
 
 
+    
     if dim==1
-        Q_dimension = dg.N_quad+dg.N_faces*dg.N_face # N_quad points in soln, Nfp on each face. Store ndim matrices.
+        N_face_all = dg.N_faces*dg.N_face
     elseif dim==2
-        Q_dimension = dg.N_quad + 2*dg.N_face + 2*dg.N_face_y
+        N_face_all = 2*dg.N_face + 2*dg.N_face_y
     end
-    #==
+    Q_dimension = dg.N_quad+N_face_all
+
     dg.QtildemQtildeT = zeros(Q_dimension,Q_dimension,dim) 
-    # soln
+    # volume quadrature
     dg.QtildemQtildeT[1:dg.N_quad, 1:dg.N_quad,1] .= dg.W_quad * dg.d_phi_quad_d_xi- dg.d_phi_quad_d_xi' * dg.W_quad
     if dim==2
         dg.QtildemQtildeT[1:dg.N_quad, 1:dg.N_quad,2] .= dg.W_quad * dg.d_phi_quad_d_eta- dg.d_phi_quad_d_eta' * dg.W_quad
     end
 
     # face - only assemble top-right matrix
-    for iface = 1:dg.N_faces
-        dg.QtildemQtildeT[1:dg.N_quad,(dg.N_quad+1+dg.N_face*(iface-1)):(dg.N_quad+dg.N_face*iface),1] .+= dg.phi_face[:,:,iface]' * dg.W_face * dg.LFIDtoNormal[iface,1] # 1st direction of normal
-    end
-    if dim==2
+    if dim==1
+         for iface = 1:dg.N_faces
+            dg.QtildemQtildeT[1:dg.N_quad,(dg.N_quad+1+dg.N_face*(iface-1)):(dg.N_quad+dg.N_face*iface),1] .+= dg.phi_face[iface]' * dg.W_face[iface] * dg.LFIDtoNormal[iface,1] # 1st direction of normal
+        end
+    elseif dim==2
+        N_face_count = [dg.N_face_y, dg.N_face_y, dg.N_face, dg.N_face]
+        starting_ind = dg.N_quad+1
         for iface = 1:dg.N_faces
-            dg.QtildemQtildeT[1:dg.N_quad,(dg.N_quad+1+dg.N_face*(iface-1)):(dg.N_quad+dg.N_face*iface),2] .+= dg.phi_face[:,:,iface]' * dg.W_face * dg.LFIDtoNormal[iface,2] # 2nd direction of normal
+            ending_ind = starting_ind + N_face_count[iface]-1
+            dg.QtildemQtildeT[1:dg.N_quad,
+                              starting_ind:ending_ind,
+                              1] .+= dg.phi_face[iface]' * dg.W_face[iface] * dg.LFIDtoNormal[iface,1] # 1st direction of normal
+            dg.QtildemQtildeT[1:dg.N_quad,
+                              starting_ind:ending_ind,
+                              2] .+= dg.phi_face[iface]' * dg.W_face[iface] * dg.LFIDtoNormal[iface,2] # 2nd direction of normal
+            starting_ind += N_face_count[iface]
         end
     end
     # then assign skew-symmetric matrix
     for idim = 1:dim
         dg.QtildemQtildeT[dg.N_quad+1:end, 1:dg.N_quad, idim] .=  -1.0 * dg.QtildemQtildeT[1:dg.N_quad,dg.N_quad+1:end,idim]'
     end
+    display(dg.QtildemQtildeT)
 
     #display("Skew-symmetric stiffness operator:")
     #display(dg.QtildemQtildeT)
@@ -554,14 +592,14 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     #The following are not used in calculation, but are constructed consistent with defns in the paper
 
     if dim==2 && usespacetime
-        dg.L_tau3 = dg.M_inv * dg.chi_face[:,:,3]' * dg.W_face * dg.LFIDtoNormal[3,2]
-        dg.L_tau4 = dg.M_inv * dg.chi_face[:,:,4]' * dg.W_face * dg.LFIDtoNormal[4,2]
+        dg.L_tau3 = dg.M_inv * dg.chi_face[3]' * dg.W_face[3] * dg.LFIDtoNormal[3,2]
+        dg.L_tau4 = dg.M_inv * dg.chi_face[4]' * dg.W_face[4] * dg.LFIDtoNormal[4,2]
         dg.D_tau = dg.M_inv * dg.chi_soln' * dg.W_soln * dg.d_phi_quad_d_eta
     end
-    dg.L_xi1 = dg.MpK_inv * dg.chi_face[:,:,1]' * dg.W_face * dg.LFIDtoNormal[1,1]
-    dg.L_xi2 = dg.MpK_inv * dg.chi_face[:,:,2]' * dg.W_face * dg.LFIDtoNormal[2,1]
+    dg.L_xi1 = dg.MpK_inv * dg.chi_face[1]' * dg.W_face[1] * dg.LFIDtoNormal[1,1]
+    dg.L_xi2 = dg.MpK_inv * dg.chi_face[2]' * dg.W_face[2] * dg.LFIDtoNormal[2,1]
     dg.D_xi = dg.MpK_inv * dg.chi_soln' * dg.W_soln * dg.d_phi_quad_d_xi
-==#
+
     return dg
 end
 

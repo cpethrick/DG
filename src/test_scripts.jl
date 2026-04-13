@@ -89,8 +89,8 @@ function reference_element_figure()
     param.dim = 2
     param.P = 3
     param.usespacetime = true
-    param.volumenodes = "GL"
-    param.basisnodes = "GL"
+    param.volumenodes = "GLL"
+    param.basisnodes = "GLL"
     param.fluxnodes = "GL"
     param.fluxnodes_overintegration = 0
 

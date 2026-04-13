@@ -257,6 +257,7 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
         J_overint = LinearAlgebra.diagm(ones(size(r_overint))*dg.J_soln[1]) #assume constant jacobian
     elseif dim==2
         chi_overint = vandermonde2D(r_overint, dg.r_basis, dg)
+        chi_overint = vandermonde2D(r_overint, dg.r_basis, r_overint, dg.r_basis_y, dg)
         W_overint = LinearAlgebra.diagm(vec(w_overint*w_overint'))
         J_overint = LinearAlgebra.diagm(ones(length(r_overint)^dim)*dg.J_soln[1]) #assume constant jacobian
     end
@@ -267,7 +268,7 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
     u_calc_final = zeros(dg.N_soln*dg.N_elem)
     for ielem = 1:dg.N_elem
         #Extract only first state here
-        u_hat_local = zeros(length(dg.r_basis)^dim) 
+        u_hat_local = zeros(dg.N_soln)
         u0_hat_local = zeros(size(u_hat_local)) 
         for inode = 1:dg.N_soln
             # only istate = 1, which is velocity for lin adv or burgers

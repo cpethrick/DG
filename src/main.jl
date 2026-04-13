@@ -299,5 +299,5 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-#main()
-reference_element_figure()
+main("2D_linear_advection_OOA.csv")
+#reference_element_figure()

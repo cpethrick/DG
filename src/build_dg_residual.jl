@@ -39,15 +39,28 @@ end
 function calculate_face_term(iface,istate, f_hat, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
     f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction,1,dg, param) #pass s.t. numerical flux chosen by problem physics.
 
-    face_flux::AbstractVector{Float64} = dg.phi_face[:,:,iface] * f_hat
+    face_flux::AbstractVector{Float64} = dg.phi_face[iface] * f_hat
     use_split::Bool = param.alpha_split < 1 && (direction == 1 || (direction == 2 && !param.usespacetime))
     if use_split
         face_flux*=param.alpha_split
-        face_flux_nonconservative = calculate_face_terms_nonconservative(dg.chi_face[:,:,iface], u_hat, direction, dg, param)
+        face_flux_nonconservative = calculate_face_terms_nonconservative(dg.chi_face[iface], u_hat, direction, dg, param)
         face_flux .+= (1-param.alpha_split) * face_flux_nonconservative
     end
 
-    face_term = dg.chi_face[:,:,iface]' * dg.W_face * dg.LFIDtoNormal[iface, direction] * (f_numerical .- face_flux)
+    #==
+    display("iface" )
+    display(iface)
+    display("input face vals")
+    display(uM)
+    display(uP)
+    display(dg.chi_face[iface]')
+    display(dg.W_face[iface])
+    display(dg.LFIDtoNormal[iface, direction])
+    display(f_numerical)
+    display(face_flux)
+    ==#
+
+    face_term = dg.chi_face[iface]' * dg.W_face[iface] * dg.LFIDtoNormal[iface, direction] * (f_numerical .- face_flux)
 
     return face_term
 end
@@ -58,7 +71,7 @@ function calculate_face_numerical_flux_term(ielem, istate, iface, u_hat, uM, uP,
     # EIDofexterior is used to detect the type of numerical flux to apply.
     EID_of_exterior = dg.EIDLFIDtoEIDofexterior[ielem,iface]
     f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction, EID_of_exterior, dg, param)
-    face_term = dg.chi_face[:,:,iface]' * dg.W_face * dg.LFIDtoNormal[iface, direction] * (f_numerical)
+    face_term = dg.chi_face[iface]' * dg.W_face[iface] * dg.LFIDtoNormal[iface, direction] * (f_numerical)
 
     return face_term
 end
@@ -68,7 +81,7 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
 
     if find_interior_values
         # interpolate to face
-        u_face = project(dg.chi_face[:,:,iface], u_hat_local, param.use_skew_symmetric_stiffness_operator, dg, param)
+        u_face = project(dg.chi_face[iface], u_hat_local, param.use_skew_symmetric_stiffness_operator, dg, param)
     else
         # Select the appropriate elem to find values from
         elem = dg.EIDLFIDtoEIDofexterior[ielem,iface]
@@ -84,7 +97,7 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
                 end
             end
             # interpolate to face
-            u_face = project(dg.chi_face[:,:,face], u_hat_local_exterior_elem, param.use_skew_symmetric_stiffness_operator, dg, param)
+            u_face = project(dg.chi_face[face], u_hat_local_exterior_elem, param.use_skew_symmetric_stiffness_operator, dg, param)
         elseif elem == 0 
             # elemID of 0 corresponds to Dirichlet boundary (weak imposition).
             # Find x and y coords of the face and pass to a physics function
@@ -98,7 +111,7 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
             #end
             if ielem > dg.N_elem_per_dim
                 #assign u_face as interior value
-                u_face = project(dg.chi_face[:,:,iface], u_hat_local, param.use_skew_symmetric_stiffness_operator, dg, param)
+                u_face = project(dg.chi_face[iface], u_hat_local, param.use_skew_symmetric_stiffness_operator, dg, param)
             else
                 #x_local = zeros(Float64, dg.N_face)
                 y_local = zeros(Float64, dg.N_face)
@@ -181,7 +194,7 @@ function calculate_volume_terms_skew_symm(istate,u_hat_local, direction, dg::DG,
         u_vf[1:dg.N_quad, istate] = u_tilde_volume[(1:dg.N_quad) .+ (istate-1) * dg.N_quad]
     end
     for iface = 1:dg.N_faces
-        u_tilde_face =  entropy_project(dg.chi_face[:,:,iface], u_hat_local, dg, param)
+        u_tilde_face =  entropy_project(dg.chi_face[iface], u_hat_local, dg, param)
         for istate = 1:dg.N_state
             u_vf[(1:dg.N_face) .+ dg.N_quad .+ (iface-1)*dg.N_face, istate] = u_tilde_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
         end
