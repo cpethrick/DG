@@ -20,6 +20,7 @@ volumenodes,GL
 basisnodes,GL
 fluxnodes,GL
 fluxnodes_overintegration,0
+y_dir_overintegration,0
 fr_c_name,cDG
 fr_c_userdefined,0.0
 do_conservation_check,false

@@ -15,10 +15,17 @@ function write_to_file(u_hat,fname="u_hat_stored.csv")
         close(f)
 end
 
-function make_1D_MpK_face(dg::DG, param::PhysicsAndFluxParams)
-    phi_face_1D = vandermonde1D(dg.r_flux,dg.r_flux)
-    d_phi_face_d_xi_1D = gradvandermonde1D(dg.r_flux,dg.r_flux)
-    W_1D = dg.W_face
+function make_1D_MpK_face(iface, dg::DG, param::PhysicsAndFluxParams)
+    if dg.dim==1
+        display("This probably will break in 1D")
+    elseif iface < 3
+        r_quad = dg.r_quad_y
+    else
+        r_quad = dg.r_quad
+    end
+    phi_face_1D = vandermonde1D(r_quad,r_quad)
+    d_phi_face_d_xi_1D = gradvandermonde1D(r_quad,r_quad)
+    W_1D = dg.W_face[iface]
     J_1D = dg.J_face
     M_1D = phi_face_1D' * W_1D * J_1D * phi_face_1D
     D_xi_1D_P = (inv(phi_face_1D' * W_1D * phi_face_1D) * (phi_face_1D' * W_1D * d_phi_face_d_xi_1D))^dg.P
@@ -43,20 +50,20 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
             # for spacetime, we want to consider initial as t=0 (bottom surface of the computational domain) and final as t=t_f (top surface)
             if ielem < dg.N_elem_per_dim+1
                 # face on bottom
-                #u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol]
+                #u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_soln+1:(ielem)*dg.N_soln]
 
                 # Find initial energy from the Dirichlet BC on lower face
-                x_local = dg.VX[ielem] .+ 0.5* (dg.r_flux.+1) * dg.delta_x
+                x_local = dg.VX[ielem] .+ 0.5* (dg.r_quad.+1) * dg.delta_x
                 y_local = zeros(size(x_local)) # leave zero as this is the lower face
                 u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
 
-                integrated_state_initial += ones_hat' * dg.MpK * dg.M_inv * dg.chi_face[:,:,3]' *dg.J_face* dg.W_face * u_face
+                integrated_state_initial += ones_hat' * dg.MpK * dg.M_inv * dg.chi_face[3]' *dg.J_face* dg.W_face[3] * u_face
 
             elseif ielem > dg.N_elem_per_dim^dim - dg.N_elem_per_dim
                 # face on top
                 # The next line does u_face =  chi_face[4] * u_hat but in a separate function for generality with N_state>1.
-                u_face = project(dg.chi_face[:,:,4], u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], true, dg, param)
-                integrated_state_final += ones_hat' * dg.MpK * dg.M_inv * dg.chi_face[:,:,4]' * dg.J_face * dg.W_face * u_face
+                u_face = project(dg.chi_face[4], u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], true, dg, param)
+                integrated_state_final += ones_hat' * dg.MpK * dg.M_inv * dg.chi_face[4]' * dg.J_face * dg.W_face[4] * u_face
             end
         end
     end
@@ -72,24 +79,24 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
     return conservation
 end
 
-function integrate_entropy_on_temporal_face(u_face, dg::DG, param::PhysicsAndFluxParams)
+function integrate_entropy_on_temporal_face(u_face, iface, dg::DG, param::PhysicsAndFluxParams)
 
     if cmp(param.pde_type, "burgers1D")==0
         # We can use 1D M+K to integrate.
-        MpK_1D = make_1D_MpK_face(dg,param)
+        MpK_1D = make_1D_MpK_face(iface,dg,param)
         entropy_integration = 0.5 * u_face' * (MpK_1D) * u_face
     else
         # Integrate in L2.
 
         s_vec = get_numerical_entropy_function(u_face,param)
-        entropy_integration = s_vec' * dg.W_face * dg.J_face * ones(size(s_vec))
+        entropy_integration = s_vec' * dg.W_face[iface] * dg.J_face * ones(size(s_vec))
     end
 
     return entropy_integration
 end
 
-function calculate_projection_error_local_burgers(u_face_interior, u_face_Dirichlet, ielem, dg::DG, param::PhysicsAndFluxParams)
-    MpK = make_1D_MpK_face(dg,param)
+function calculate_projection_error_local_burgers(u_face_interior, u_face_Dirichlet, iface, dg::DG, param::PhysicsAndFluxParams)
+    MpK = make_1D_MpK_face(iface,dg,param)
     phi_face_interior = 0.5 * u_face_interior' * MpK * u_face_interior
     phi_face_Dirichlet = 0.5*u_face_Dirichlet' * MpK * u_face_Dirichlet
     phi_jump = phi_face_interior - phi_face_Dirichlet
@@ -98,10 +105,10 @@ function calculate_projection_error_local_burgers(u_face_interior, u_face_Dirich
 
     return phi_jump - vjumpTtimesu 
 end
-function calculate_projection_error_local(u_face_interior, u_face_Dirichlet, ielem, dg::DG, param::PhysicsAndFluxParams)
+function calculate_projection_error_local(u_face_interior, u_face_Dirichlet, iface, dg::DG, param::PhysicsAndFluxParams)
 
     if cmp(param.pde_type,"burgers1D")==0
-        return calculate_projection_error_local_burgers(u_face_interior, u_face_Dirichlet, ielem, dg::DG, param::PhysicsAndFluxParams)
+        return calculate_projection_error_local_burgers(u_face_interior, u_face_Dirichlet, iface, dg::DG, param::PhysicsAndFluxParams)
     end
 
     # get entropy potential and entropy variables at the face (interior soln)
@@ -114,12 +121,12 @@ function calculate_projection_error_local(u_face_interior, u_face_Dirichlet, iel
     v_jump = v_face_interior - v_face_Dirichlet
 
     vjumpTtimesu = zeros(size(phi_face_Dirichlet))
-    for inode = 1:dg.N_vol_per_dim
-        node_indices = dg.N_vol_per_dim*(1:dg.N_state) .- dg.N_vol_per_dim .+ inode
+    for inode = 1:dg.N_soln_per_dim
+        node_indices = dg.N_soln_per_dim*(1:dg.N_state) .- dg.N_soln_per_dim .+ inode
         vjumpTtimesu[inode] += (v_jump[node_indices])' * u_face_Dirichlet[node_indices]
     end
 
-    return (phi_jump - vjumpTtimesu)' * dg.W_face * dg.J_face * ones(size(phi_jump))
+    return (phi_jump - vjumpTtimesu)' * dg.W_face[iface] * dg.J_face * ones(size(phi_jump))
 end
 
 function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::PhysicsAndFluxParams)
@@ -136,21 +143,21 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
             # face on bottom (t=0)
             
             # get initial condition
-            x_local = dg.VX[ielem] .+ 0.5* (dg.r_flux.+1) * dg.delta_x
+            x_local = dg.VX[ielem] .+ 0.5* (dg.r_quad.+1) * dg.delta_x
             y_local = zeros(size(x_local)) # leave zero as this is the lower face
             u_face_Dirichlet = calculate_solution_on_Dirichlet_boundary(x_local, y_local, dg,param)
-            u_face_interior = project(dg.chi_face[:,:,3],  u_hat_local,true,dg,param)
+            u_face_interior = project(dg.chi_face[3],  u_hat_local,true,dg,param)
 
-            entropy_integration_at_surfaces[1,1] += integrate_entropy_on_temporal_face(u_face_Dirichlet, dg, param)
-            projection_error += calculate_projection_error_local(u_face_interior,u_face_Dirichlet, ielem, dg,param)#(phi_jump - vjumpTtimesu)' * dg.W_face * dg.J_face * ones(size(phi_jump))
+            entropy_integration_at_surfaces[1,1] += integrate_entropy_on_temporal_face(u_face_Dirichlet,3, dg, param)
+            projection_error += calculate_projection_error_local(u_face_interior,u_face_Dirichlet, 3, dg,param)#(phi_jump - vjumpTtimesu)' * dg.W_face * dg.J_face * ones(size(phi_jump))
         else
             # face on bottom of element
-            u_face_bottom_interior = project(dg.chi_face[:,:,3],  u_hat_local,true,dg,param)
-            entropy_integration_at_surfaces[1,itslab]+= integrate_entropy_on_temporal_face(u_face_bottom_interior,dg,param)
+            u_face_bottom_interior = project(dg.chi_face[3],  u_hat_local,true,dg,param)
+            entropy_integration_at_surfaces[1,itslab]+= integrate_entropy_on_temporal_face(u_face_bottom_interior,3, dg,param)
         end
 
-        u_face_top = project(dg.chi_face[:,:,4], u_hat_local, true, dg, param)
-        entropy_integration_at_surfaces[2,itslab]+= integrate_entropy_on_temporal_face(u_face_top,dg,param)
+        u_face_top = project(dg.chi_face[4], u_hat_local, true, dg, param)
+        entropy_integration_at_surfaces[2,itslab]+= integrate_entropy_on_temporal_face(u_face_top,4, dg,param)
     
     end
 
@@ -257,6 +264,7 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
         J_overint = LinearAlgebra.diagm(ones(size(r_overint))*dg.J_soln[1]) #assume constant jacobian
     elseif dim==2
         chi_overint = vandermonde2D(r_overint, dg.r_basis, dg)
+        chi_overint = vandermonde2D(r_overint, dg.r_basis, r_overint, dg.r_basis_y, dg)
         W_overint = LinearAlgebra.diagm(vec(w_overint*w_overint'))
         J_overint = LinearAlgebra.diagm(ones(length(r_overint)^dim)*dg.J_soln[1]) #assume constant jacobian
     end
@@ -264,10 +272,10 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
     u_exact_overint = calculate_exact_solution(x_overint, y_overint,Np_overint, current_time, dg, param) 
     u_calc_final_overint = zeros(size(x_overint))
     u0_overint = zeros(size(x_overint))
-    u_calc_final = zeros(dg.N_vol*dg.N_elem)
+    u_calc_final = zeros(dg.N_soln*dg.N_elem)
     for ielem = 1:dg.N_elem
         #Extract only first state here
-        u_hat_local = zeros(length(dg.r_basis)^dim) 
+        u_hat_local = zeros(dg.N_soln)
         u0_hat_local = zeros(size(u_hat_local)) 
         for inode = 1:dg.N_soln
             # only istate = 1, which is velocity for lin adv or burgers
@@ -277,7 +285,7 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
         end
         u_calc_final_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u_hat_local
         u0_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u0_hat_local
-        u_calc_final[(ielem-1)*dg.N_vol+1:(ielem)*dg.N_vol] .= dg.chi_soln* u_hat_local
+        u_calc_final[(ielem-1)*dg.N_soln+1:(ielem)*dg.N_soln] .= dg.chi_soln* u_hat_local
     end
     u_diff = u_calc_final_overint .- u_exact_overint
 

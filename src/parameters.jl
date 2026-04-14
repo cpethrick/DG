@@ -29,6 +29,7 @@ mutable struct PhysicsAndFluxParams
     basisnodes::String #"GLL" or "GL"
     fluxnodes::String # "GLL" or "GL"
     fluxnodes_overintegration::Int64
+    y_dir_overintegration::Int64 # 0 if same p, positive if overintegrating, negative if underintegrating
     fr_c_name::String # cDG, cPlus, cHU, cSD, c-, 1000, user-defined, case-insensitive
     fr_c_userdefined::Float64
     do_conservation_check::Bool # Controls how well-converged the solution is
@@ -66,6 +67,7 @@ mutable struct PhysicsAndFluxParams
                          basisnodes::AbstractString, #"GLL" or "GL"
                          fluxnodes::AbstractString, #"GLL" or "GL"
                          fluxnodes_overintegration::Int64,
+                         y_dir_overintegration::Int64,
                          fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
                          fr_c_userdefined::Float64,
                          do_conservation_check::Bool,
@@ -96,6 +98,7 @@ mutable struct PhysicsAndFluxParams
                                 basisnodes::AbstractString, #"GLL" or "GL"
                                 fluxnodes::AbstractString, #"GLL" or "GL"
                                 fluxnodes_overintegration::Int64,
+                                y_dir_overintegration::Int64,
                                 fr_c_name::AbstractString, # cDG, cPlus, cHU, cSD, c-, 1000, user-defined
                                 fr_c_userdefined::Float64,
                                 do_conservation_check::Bool,
@@ -211,6 +214,7 @@ function parse_default_parameters()
     basisnodes = parse_param_String("basisnodes", paramDF)
     fluxnodes = parse_param_String("fluxnodes", paramDF)
     fluxnodes_overintegration = parse_param_Int64("fluxnodes_overintegration", paramDF)
+    y_dir_overintegration = parse_param_Int64("y_dir_overintegration", paramDF)
     fr_c_name = parse_param_String("fr_c_name",paramDF)
     fr_c_userdefined = parse_param_Float64("fr_c_userdefined",paramDF)
     do_conservation_check = parse_param_Bool("do_conservation_check",paramDF)
@@ -242,6 +246,7 @@ function parse_default_parameters()
                                  basisnodes, 
                                  fluxnodes,
                                  fluxnodes_overintegration,
+                                 y_dir_overintegration,
                                  fr_c_name, 
                                  fr_c_userdefined,
                                  do_conservation_check,
@@ -329,6 +334,9 @@ function parse_parameters(fname::String)
         if "fluxnodes_overintegration" in newparamDF.name
             default_params.fluxnodes_overintegration = parse_param_Int64("fluxnodes_overintegration", newparamDF)
         end
+        if "y_dir_overintegration" in newparamDF.name
+            default_params.y_dir_overintegration = parse_param_Int64("y_dir_overintegration", newparamDF)
+        end
         if "fr_c_userdefined" in newparamDF.name
             #need to define fr_c_userdefined BEFORE fr_c_name
             default_params.fr_c_userdefined= parse_param_Float64("fr_c_userdefined", newparamDF)
@@ -381,6 +389,9 @@ function display_param_warnings(param::PhysicsAndFluxParams)
         display("****WARNING: Solving in debug mode. This will NOT result in a converged solution.****")
     end
 
+    if param.P - param.y_dir_overintegration < 1
+        display("****WARNING: illegal combination of P and y_dir_overintegration !")
+    end
 
 
 

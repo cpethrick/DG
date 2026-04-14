@@ -39,15 +39,28 @@ end
 function calculate_face_term(iface,istate, f_hat, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
     f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction,1,dg, param) #pass s.t. numerical flux chosen by problem physics.
 
-    face_flux::AbstractVector{Float64} = dg.phi_face[:,:,iface] * f_hat
+    face_flux::AbstractVector{Float64} = dg.phi_face[iface] * f_hat
     use_split::Bool = param.alpha_split < 1 && (direction == 1 || (direction == 2 && !param.usespacetime))
     if use_split
         face_flux*=param.alpha_split
-        face_flux_nonconservative = calculate_face_terms_nonconservative(dg.chi_face[:,:,iface], u_hat, direction, dg, param)
+        face_flux_nonconservative = calculate_face_terms_nonconservative(dg.chi_face[iface], u_hat, direction, dg, param)
         face_flux .+= (1-param.alpha_split) * face_flux_nonconservative
     end
 
-    face_term = dg.chi_face[:,:,iface]' * dg.W_face * dg.LFIDtoNormal[iface, direction] * (f_numerical .- face_flux)
+    #==
+    display("iface" )
+    display(iface)
+    display("input face vals")
+    display(uM)
+    display(uP)
+    display(dg.chi_face[iface]')
+    display(dg.W_face[iface])
+    display(dg.LFIDtoNormal[iface, direction])
+    display(f_numerical)
+    display(face_flux)
+    ==#
+
+    face_term = dg.chi_face[iface]' * dg.W_face[iface] * dg.LFIDtoNormal[iface, direction] * (f_numerical .- face_flux)
 
     return face_term
 end
@@ -58,7 +71,7 @@ function calculate_face_numerical_flux_term(ielem, istate, iface, u_hat, uM, uP,
     # EIDofexterior is used to detect the type of numerical flux to apply.
     EID_of_exterior = dg.EIDLFIDtoEIDofexterior[ielem,iface]
     f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction, EID_of_exterior, dg, param)
-    face_term = dg.chi_face[:,:,iface]' * dg.W_face * dg.LFIDtoNormal[iface, direction] * (f_numerical)
+    face_term = dg.chi_face[iface]' * dg.W_face[iface] * dg.LFIDtoNormal[iface, direction] * (f_numerical)
 
     return face_term
 end
@@ -68,7 +81,7 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
 
     if find_interior_values
         # interpolate to face
-        u_face = project(dg.chi_face[:,:,iface], u_hat_local, param.use_skew_symmetric_stiffness_operator, dg, param)
+        u_face = project(dg.chi_face[iface], u_hat_local, param.use_skew_symmetric_stiffness_operator, dg, param)
     else
         # Select the appropriate elem to find values from
         elem = dg.EIDLFIDtoEIDofexterior[ielem,iface]
@@ -84,13 +97,13 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
                 end
             end
             # interpolate to face
-            u_face = project(dg.chi_face[:,:,face], u_hat_local_exterior_elem, param.use_skew_symmetric_stiffness_operator, dg, param)
+            u_face = project(dg.chi_face[face], u_hat_local_exterior_elem, param.use_skew_symmetric_stiffness_operator, dg, param)
         elseif elem == 0 
             # elemID of 0 corresponds to Dirichlet boundary (weak imposition).
             # Find x and y coords of the face and pass to a physics function
-            #for inode = 1:dg.N_vol_per_dim
+            #for inode = 1:dg.N_soln_per_dim
                 # The node numbering used in this code allows us
-                # to choose the first N_vol_per_dim x-points
+                # to choose the first N_soln_per_dim x-points
                 # to get a vector of x-coords on the face.
              #   x_local[inode] = dg.x[dg.EIDLIDtoGID_vol[ielem,inode]]
                 # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
@@ -98,11 +111,11 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
             #end
             if ielem > dg.N_elem_per_dim
                 #assign u_face as interior value
-                u_face = project(dg.chi_face[:,:,iface], u_hat_local, param.use_skew_symmetric_stiffness_operator, dg, param)
+                u_face = project(dg.chi_face[iface], u_hat_local, param.use_skew_symmetric_stiffness_operator, dg, param)
             else
                 #x_local = zeros(Float64, dg.N_face)
                 y_local = zeros(Float64, dg.N_face)
-                x_local = dg.VX[ielem] .+ 0.5* (dg.r_flux.+1) * dg.delta_x
+                x_local = dg.VX[ielem] .+ 0.5* (dg.r_quad.+1) * dg.delta_x
                 # The Dirichlet boundary doesn't depend on the y-coord, so leave it as zero.
                 u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local, dg, param)
             end
@@ -131,12 +144,12 @@ end
 function calculate_volume_terms_nonconservative(u, u_hat, direction, dg::DG, param::PhysicsAndFluxParams)
     if direction == 1 && occursin("burgers",param.pde_type) #both 1D and 2D burg
         # dimensions might be wrong here
-        volume_term_physical = dg.chi_flux' * ((u) .* (dg.S_noncons_xi * u_hat))                                                                                                                              
+        volume_term_physical = dg.chi_quad' * ((u) .* (dg.S_noncons_xi * u_hat))                                                                                                                              
     elseif direction == 2 && cmp(param.pde_type, "burgers2D") == 0
-        volume_term_physical = dg.chi_flux' * ((u) .* (dg.S_noncons_eta * u_hat))
+        volume_term_physical = dg.chi_quad' * ((u) .* (dg.S_noncons_eta * u_hat))
     else
         display("Warning: Nonconservative version only defined for Burgers!!")
-        volume_term_physical = 0 * dg.chi_flux' * ((u) .* (dg.S_noncons_xi * u_hat)) #expensive way to get the right size
+        volume_term_physical = 0 * dg.chi_quad' * ((u) .* (dg.S_noncons_xi * u_hat)) #expensive way to get the right size
     end 
     return transform_physical_to_reference(volume_term_physical, direction, dg) 
 end
@@ -145,14 +158,14 @@ function calculate_dim_cellwise_residual(ielem, istate, u_hat,u_hat_local,direct
 
     rhs_local_state = zeros(Float64, dg.N_soln)
     
-    u_local_fluxnodes = project(dg.chi_flux, u_hat_local, false, dg, param) 
+    u_local_quadnodes = project(dg.chi_quad, u_hat_local, false, dg, param) 
 
-    f_hat_local_state = calculate_flux(u_local_fluxnodes,direction,istate, dg, param)
+    f_hat_local_state = calculate_flux(u_local_quadnodes,direction,istate, dg, param)
 
     volume_terms_dim = calculate_volume_terms(f_hat_local_state,direction, dg)
     use_split::Bool = param.alpha_split < 1 && (direction== 1 || (direction== 2 && !param.usespacetime))
     if use_split
-        volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local_fluxnodes, u_hat_local,direction, dg, param)
+        volume_terms_nonconservative = calculate_volume_terms_nonconservative(u_local_quadnodes, u_hat_local,direction, dg, param)
         volume_terms_dim = param.alpha_split * volume_terms_dim + (1-param.alpha_split) * volume_terms_nonconservative
     end
     rhs_local_state += volume_terms_dim
@@ -174,21 +187,35 @@ function calculate_volume_terms_skew_symm(istate,u_hat_local, direction, dg::DG,
 
     #u_local is only on volume nodes. Need to append u on face nodes.
     
-    u_vf = zeros(dg.N_flux+dg.N_faces*dg.N_face, dg.N_state) # columns are states.
-
-    u_tilde_volume = entropy_project(dg.chi_flux, u_hat_local, dg, param)
-    for istate = 1:dg.N_state
-        u_vf[1:dg.N_flux, istate] = u_tilde_volume[(1:dg.N_flux) .+ (istate-1) * dg.N_flux]
+    if dg.dim==1
+        u_vf = zeros(dg.N_quad+dg.N_faces*dg.N_face, dg.N_state) # columns are states.
+    else
+        u_vf = zeros(dg.N_quad+2*dg.N_face+2*dg.N_face_y, dg.N_state)
     end
+
+    u_tilde_volume = entropy_project(dg.chi_quad, u_hat_local, dg, param)
+    for istate = 1:dg.N_state
+        u_vf[1:dg.N_quad, istate] = u_tilde_volume[(1:dg.N_quad) .+ (istate-1) * dg.N_quad]
+    end
+    face_ind_start=0
     for iface = 1:dg.N_faces
-        u_tilde_face =  entropy_project(dg.chi_face[:,:,iface], u_hat_local, dg, param)
-        for istate = 1:dg.N_state
-            u_vf[(1:dg.N_face) .+ dg.N_flux .+ (iface-1)*dg.N_face, istate] = u_tilde_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
+        u_tilde_face =  entropy_project(dg.chi_face[iface], u_hat_local, dg, param)
+        if dg.dim==1
+            N_face=1
+            display("Check that nothing got messsed dup for 1D")
+        elseif iface < 3
+            N_face = dg.N_face_y
+        else
+            N_face = dg.N_face
         end
+        for istate = 1:dg.N_state
+            u_vf[(1:N_face) .+ dg.N_quad .+ face_ind_start, istate] = u_tilde_face[(1:N_face) .+ (istate-1) * N_face]
+        end
+        face_ind_start += N_face
     end
 
     
-    reference_two_point_flux = zeros(dg.N_flux+dg.N_faces*dg.N_face,dg.N_flux+dg.N_faces*dg.N_face)
+    reference_two_point_flux = zeros(dg.N_quad+dg.N_faces*dg.N_face,dg.N_quad+dg.N_faces*dg.N_face)
     # Efficiency note: Some terms of QtildemQtildeT are zero, so those shouldn' be computed.
     # Can also take advantage of symmetry.
     for i =1:size(u_vf)[1]
@@ -250,11 +277,11 @@ function assemble_local_state_residual(ielem,istate, u_hat, t, dg::DG, param::Ph
 
 
     if param.include_source
-        x_local = zeros(Float64, dg.N_vol)
-        y_local = zeros(Float64, dg.N_vol)
-        for inode = 1:dg.N_vol
-            x_local[inode] = dg.x[dg.EIDLIDtoGID_vol[ielem,inode]]
-            y_local[inode] = dg.y[dg.EIDLIDtoGID_vol[ielem,inode]]
+        x_local = zeros(Float64, dg.N_soln)
+        y_local = zeros(Float64, dg.N_soln)
+        for inode = 1:dg.N_soln
+            x_local[inode] = dg.x[dg.EIDLIDtoGID_soln[ielem,inode]]
+            y_local[inode] = dg.y[dg.EIDLIDtoGID_soln[ielem,inode]]
         end
         rhs_local_state+=dg.Pi_soln*calculate_source_terms(istate,x_local,y_local,t, dg, param)
     end

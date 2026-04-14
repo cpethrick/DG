@@ -27,6 +27,30 @@ function vandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
         V[:,j] .= lagrangep(r_volume, r_basis, j)
     end
     return V
+
+end
+function tensor_product_vandermonde2D(r_basis_x::AbstractVector, r_basis_y::AbstractVector, r_volume_x::AbstractVector, r_volume_y::AbstractVector, V1Dx::AbstractMatrix, V1Dy::AbstractMatrix)
+    #Helper function to find the tensor product 2D vandermonde matrix from 1D vandermonde matrices in each direction. 
+    #This function allows different basis and volume nodes in the two directions. V1Dx and V1Dy are assumed to be consistent with the 
+    #supplied basis/volume quadrature. This should allow for uneven integration nodes. 
+
+    V2D = zeros(Float64, (length(r_volume_x)*length(r_volume_y), length(r_basis_x)*length(r_basis_y)))
+    i_LID_V = 1
+    for iy_V = 1:length(r_volume_y)
+        for ix_V = 1:length(r_volume_x)
+            i_LID_B = 1
+            for iy_B = 1:length(r_basis_y)
+                for ix_B = 1:length(r_basis_x)
+                    V2D[i_LID_V, i_LID_B] = V1Dx[ix_V, ix_B] * V1Dy[iy_V, iy_B]
+                    i_LID_B+=1
+                end
+            end
+            i_LID_V += 1
+        end
+    end
+
+    return V2D
+
 end
 
 function tensor_product_vandermonde2D(r_basis::AbstractVector, r_volume_x::AbstractVector, r_volume_y::AbstractVector, V1Dx::AbstractMatrix, V1Dy::AbstractMatrix)
@@ -54,8 +78,16 @@ function tensor_product_vandermonde2D(r_basis::AbstractVector, r_volume_x::Abstr
 end
 
 function vandermonde2D(r_volume::AbstractVector, r_basis::AbstractVector, dg::DG)
+    # Make 2D VdM matrix from even nodes in each direction
     V1D = vandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
     return tensor_product_vandermonde2D(r_basis, r_volume, r_volume, V1D, V1D)
+end
+
+function vandermonde2D(r_volume_x::AbstractVector, r_basis_x::AbstractVector, r_volume_y::AbstractVector, r_basis_y::AbstractVector, dg::DG)
+    # Make VdM matrix from uneven nodes in x and y
+    V1Dx = vandermonde1D(r_volume_x::AbstractVector, r_basis_x::AbstractVector)
+    V1Dy = vandermonde1D(r_volume_y::AbstractVector, r_basis_y::AbstractVector)
+    return tensor_product_vandermonde2D(r_basis_x, r_basis_y, r_volume_x, r_volume_y, V1Dx, V1Dy)
 end
 
 function gradlagrangep(r_volume,r_basis,j)
@@ -95,6 +127,7 @@ end
 
 
 function gradvandermonde2D(direction::Int, r_volume::AbstractVector, r_basis::AbstractVector, dg::DG)
+    # grad of VdM in directin 1(x) or 2(y) from even nodes
 
     DVr1D = gradvandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
     V1D = vandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
@@ -105,17 +138,31 @@ function gradvandermonde2D(direction::Int, r_volume::AbstractVector, r_basis::Ab
         return tensor_product_vandermonde2D(r_basis, r_volume, r_volume, V1D, DVr1D)
     end
 end
+function gradvandermonde2D(direction::Int, r_volume_x::AbstractVector, r_basis_x::AbstractVector, r_volume_y::AbstractVector, r_basis_y::AbstractVector, dg::DG)
+    # grad of VdM in direction 1(x) or 2(y) from UNeven nodes
+
+
+    if direction == 1
+        DVr1D_x = gradvandermonde1D(r_volume_x::AbstractVector, r_basis_x::AbstractVector)
+        V1D_y = vandermonde1D(r_volume_y::AbstractVector, r_basis_y::AbstractVector)
+        return tensor_product_vandermonde2D(r_basis_x, r_basis_y, r_volume_x, r_volume_y, DVr1D_x, V1D_y)
+    else
+        V1D_x = vandermonde1D(r_volume_x::AbstractVector, r_basis_x::AbstractVector)
+        DVr1D_y = gradvandermonde1D(r_volume_y::AbstractVector, r_basis_y::AbstractVector)
+        return tensor_product_vandermonde2D(r_basis_x, r_basis_y, r_volume_x, r_volume_y, V1D_x, DVr1D_y)
+    end
+end
 
 function assembleFaceVandermonde1D(r_f_L::Float64, r_f_R::Float64, r_basis::AbstractVector)
-    V_f = zeros(Float64, (1,length(r_basis), 2)) #third dimension is face ID
-    V_f[:,:,1] .= vandermonde1D([r_f_L], r_basis)
-    V_f[:,:,2] .= vandermonde1D([r_f_R], r_basis)
+    V_f = Dict{Int64, AbstractArray{Float64}}()
+    V_f[1] = vandermonde1D([r_f_L], r_basis)
+    V_f[2] = vandermonde1D([r_f_R], r_basis)
     return V_f
 end
 
 function assembleFaceVandermonde2D(r_basis::AbstractVector, r_volume::AbstractVector, dg::DG)
     
-    V_f = zeros(Float64, (length(r_volume),length(r_basis)^dg.dim, 4)) #third dimension is face ID
+    V_f = Dict{Int64, AbstractArray{Float64}}()
     # stores vandermonde matrices evaluated at -1 and 1
     V_f_1D = assembleFaceVandermonde1D(-1.0, 1.0, r_basis)
     # stores a 1D vandermonde matrix at volume integration points
@@ -145,7 +192,47 @@ function assembleFaceVandermonde2D(r_basis::AbstractVector, r_volume::AbstractVe
             V_y = V_f_1D[:,:,2] #1 face
             V_x = V_v_1D
         end
-        V_f[:,:,iface] .= tensor_product_vandermonde2D(r_basis, r_face_x, r_face_y, V_x, V_y)
+        V_f[iface] = tensor_product_vandermonde2D(r_basis, r_face_x, r_face_y, V_x, V_y)
+    end
+    return V_f
+end
+function assembleFaceVandermonde2D(r_basis_x::AbstractVector, r_volume_x::AbstractVector, r_basis_y::AbstractVector, r_volume_y::AbstractVector,dg::DG)
+    
+    V_f = Dict{Int64, AbstractArray{Float64}}()
+    # stores vandermonde matrices evaluated at -1 and 1
+    V_f_x = assembleFaceVandermonde1D(-1.0, 1.0, r_basis_x)
+    # stores vandermonde matrices evaluated at -1 and 1
+    V_f_y = assembleFaceVandermonde1D(-1.0, 1.0, r_basis_y)
+    # stores a 1D vandermonde matrix at x volume integration points
+    V_v_x = vandermonde1D(r_volume_x::AbstractVector, r_basis_x::AbstractVector)
+    # stores a 1D vandermonde matrix at y volume integration points
+    V_v_y = vandermonde1D(r_volume_y::AbstractVector, r_basis_y::AbstractVector)
+    
+    #This implementation assumes that face points are a subset of volume points.
+    
+    for iface = 1:dg.N_faces
+        if iface == 1
+            r_face_x = [-1.0]
+            r_face_y = r_volume_y
+            V_x = V_f_x[1] #-1 face
+            V_y = V_v_y
+        elseif iface == 2
+            r_face_x = [1.0]
+            r_face_y = r_volume_y
+            V_x = V_f_x[2] #1 face
+            V_y = V_v_y
+        elseif iface == 3
+            r_face_x = r_volume_x
+            r_face_y = [-1.0]
+            V_x = V_v_x
+            V_y = V_f_y[1] #-1 face
+        elseif iface == 4
+            r_face_x = r_volume_x
+            r_face_y = [1.0]
+            V_x = V_v_x
+            V_y = V_f_y[2] #1 face
+        end
+        V_f[iface] = tensor_product_vandermonde2D(r_basis_x, r_basis_y, r_face_x, r_face_y, V_x, V_y)
     end
     return V_f
 end

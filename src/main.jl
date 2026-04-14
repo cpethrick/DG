@@ -76,7 +76,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     else
         N_state = 1
     end
-    dg = init_DG(param.P, param.dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime)
+    dg = init_DG(param.P, param.dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime, param.y_dir_overintegration)
 
     cost_tracker = init_CostTracking()
 
@@ -91,8 +91,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     u_local_state = zeros(dg.N_soln)
     for ielem = 1:dg.N_elem
         for istate = 1:dg.N_state
-            for inode = 1:dg.N_vol
-                u_local_state[inode] = u0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_vol[ielem,inode]]]
+            for inode = 1:dg.N_soln
+                u_local_state[inode] = u0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_soln[ielem,inode]]]
             end
             u_hat_local_state = dg.Pi_soln*u_local_state
             u_hat0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_basis[ielem,:]]] = u_hat_local_state
