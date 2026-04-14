@@ -179,10 +179,7 @@ end
 # Outer constructor for DG object. Might be good to move to inner constructor at some point.
 function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_limits::Vector{Float64},
         solnnodes::String, basisnodes::String, quadnodes::String, quadnodes_overintegration::Int, fluxreconstructionC::Float64,
-        usespacetime::Bool)
-    # TO DO : add time overintegration to list of arguments. 
-
-    y_dir_overintegration=1
+        usespacetime::Bool, y_dir_overintegration::Int)
 
     #initialize incomplete DG struct
     dg = DG(P, dim, N_elem_per_dim, N_state, domain_x_limits)

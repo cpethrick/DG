@@ -187,17 +187,31 @@ function calculate_volume_terms_skew_symm(istate,u_hat_local, direction, dg::DG,
 
     #u_local is only on volume nodes. Need to append u on face nodes.
     
-    u_vf = zeros(dg.N_quad+dg.N_faces*dg.N_face, dg.N_state) # columns are states.
+    if dg.dim==1
+        u_vf = zeros(dg.N_quad+dg.N_faces*dg.N_face, dg.N_state) # columns are states.
+    else
+        u_vf = zeros(dg.N_quad+2*dg.N_face+2*dg.N_face_y, dg.N_state)
+    end
 
     u_tilde_volume = entropy_project(dg.chi_quad, u_hat_local, dg, param)
     for istate = 1:dg.N_state
         u_vf[1:dg.N_quad, istate] = u_tilde_volume[(1:dg.N_quad) .+ (istate-1) * dg.N_quad]
     end
+    face_ind_start=0
     for iface = 1:dg.N_faces
         u_tilde_face =  entropy_project(dg.chi_face[iface], u_hat_local, dg, param)
-        for istate = 1:dg.N_state
-            u_vf[(1:dg.N_face) .+ dg.N_quad .+ (iface-1)*dg.N_face, istate] = u_tilde_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
+        if dg.dim==1
+            N_face=1
+            display("Check that nothing got messsed dup for 1D")
+        elseif iface < 3
+            N_face = dg.N_face_y
+        else
+            N_face = dg.N_face
         end
+        for istate = 1:dg.N_state
+            u_vf[(1:N_face) .+ dg.N_quad .+ face_ind_start, istate] = u_tilde_face[(1:N_face) .+ (istate-1) * N_face]
+        end
+        face_ind_start += N_face
     end
 
     

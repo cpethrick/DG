@@ -76,7 +76,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     else
         N_state = 1
     end
-    dg = init_DG(param.P, param.dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime)
+    dg = init_DG(param.P, param.dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime, param.y_dir_overintegration)
 
     cost_tracker = init_CostTracking()
 
@@ -299,5 +299,6 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-main("2D_linear_advection_OOA.csv")
-#reference_element_figure()
+#main("2D_linear_advection_OOA.csv")
+#[reference_element_figure()
+main("spacetime_euler_OOA.csv")

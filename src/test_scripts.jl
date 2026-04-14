@@ -21,7 +21,7 @@ function return_dg_object(N_elem_per_dim, paramfile::String="default_parameters.
     else
         N_state = 1
     end
-    return init_DG(param.P, param.dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime)
+    return init_DG(param.P, param.dim, N_elem_per_dim, N_state, [x_Llim,x_Rlim], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime, y_dir_overintegration)
 end
 
 function c_ramp_test(paramfile::String="default_parameters.csv", special_c_values=false, stability_ramp=false)
@@ -94,7 +94,7 @@ function reference_element_figure()
     param.fluxnodes = "GL"
     param.fluxnodes_overintegration = 0
 
-    dg = init_DG(param.P, param.dim, 1, 1, [-1.0,1.0], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime)
+    dg = init_DG(param.P, param.dim, 1, 1, [-1.0,1.0], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime, param.y_dir_overintegration)
 
 
     # Plot settings from python codes
@@ -164,7 +164,7 @@ function compare_MoL_spacetime_figure()
     param.include_source=false
     param.advection_speed=0.3
 
-    dg_MoL = init_DG(param.P, param.dim, 2, 1, [0.0,2], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime)
+    dg_MoL = init_DG(param.P, param.dim, 2, 1, [0.0,2], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime, param.y_dir_overintegration)
 
     u0 = calculate_initial_solution(dg_MoL, param)
     u_hat0 = zeros(dg_MoL.N_soln_dof_global)
@@ -252,7 +252,7 @@ function compare_MoL_spacetime_figure()
     param.usespacetime = true
     param.spacetime_solver_type="JFNK"
 
-    dg_ST = init_DG(param.P, param.dim, 2, 1, [0,2.0], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime)
+    dg_ST = init_DG(param.P, param.dim, 2, 1, [0,2.0], param.volumenodes, param.basisnodes, param.fluxnodes, param.fluxnodes_overintegration, param.fluxreconstructionC, param.usespacetime, param.y_dir_overintegration)
 
     u0 = calculate_initial_solution(dg_ST, param)
     u_hat0 = zeros(dg_ST.N_soln_dof_global)

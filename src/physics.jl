@@ -229,7 +229,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
     #             the problem physics
     # bc_type = 0 indicates a Dirichlet boundary for time dimension, returning the exterior value
     # bc_type = -1 indicates an outflow (transmissive) boundary for time dimension, returning the interior value 
-    #f_numerical=zeros(dg.N_face)
+    f_numerical=zeros(round(Int,length(uM_face)/dg.N_state))
 
 
     #==
@@ -258,7 +258,6 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
                     # face is bottom. Use the information from the external element
                     # which corresponds to the past
                     f_numerical = uP_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
-                    display("here")
                 elseif n_face[direction] == 1
                     # face is bottom. Use internal solution
                     # which corresonds to the past
