@@ -405,10 +405,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         (dg.x, dg.y) = build_coords_vectors_2D(dg.r_soln, dg.r_soln_y, dg) 
     end
 
-    ##### Verified unbalanced nodes to here by plotting reference figure.
-
-
-
     # Define Vandermonde matrices
     if dim == 1
         dg.chi_soln = vandermonde1D(dg.r_soln,dg.r_basis)
@@ -458,7 +454,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         dg.C_m = dg.delta_x/cell_length * [1 0; 0 1]  # Assuming a cartesian element
     end
 
-    ############################################HERE
     # for skew-symmetric stiffness operator form
     dg.chi_vf = dg.chi_quad'
     for iface=1:dg.N_faces

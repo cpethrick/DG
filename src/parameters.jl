@@ -30,7 +30,6 @@ mutable struct PhysicsAndFluxParams
     fluxnodes::String # "GLL" or "GL"
     fluxnodes_overintegration::Int64
     y_dir_overintegration::Int64 # 0 if same p, positive if overintegrating, negative if underintegrating
-    #time_node_type::String # not sure if I need this??
     fr_c_name::String # cDG, cPlus, cHU, cSD, c-, 1000, user-defined, case-insensitive
     fr_c_userdefined::Float64
     do_conservation_check::Bool # Controls how well-converged the solution is
@@ -390,6 +389,9 @@ function display_param_warnings(param::PhysicsAndFluxParams)
         display("****WARNING: Solving in debug mode. This will NOT result in a converged solution.****")
     end
 
+    if param.P - param.y_dir_overintegration < 1
+        display("****WARNING: illegal combination of P and y_dir_overintegration !")
+    end
 
 
 

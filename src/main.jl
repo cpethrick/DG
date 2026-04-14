@@ -299,6 +299,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
     run(param)
 end
 
-#main("2D_linear_advection_OOA.csv")
-#[reference_element_figure()
-main("spacetime_euler_OOA.csv")
+main()
