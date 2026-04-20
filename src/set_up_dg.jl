@@ -1,7 +1,7 @@
 
 mutable struct DG
     # Category 1: inputs
-    P::Int #polynomial degree
+    #P::Int #polynomial degree
     dim::Int #dimension - note that dim must be 1 for now!
     N_elem_per_dim::Int
     N_state::Int # Number of states in the PDE
@@ -9,20 +9,24 @@ mutable struct DG
 
     # Category 2:defined from Category 1.
     N_elem::Int
-    N_soln_per_dim::Int # Number of points per direction per cell; assumes x-direction
-    N_soln_y::Int # number of points in the y direction per cell
-    N_soln::Int # Total number of points per cell = N_soln^dim 
-    N_soln_dof::Int # Total number of DOFs per cell = N_soln*N_state
+    EID_to_groupID::Vector{Int} #NEW
+
+
+
+    #N_soln_per_dim::Int # Number of points per direction per cell; assumes x-direction
+    #N_soln_y::Int # number of points in the y direction per cell
+    #N_soln::Int # Total number of points per cell = N_soln^dim 
+    #N_soln_dof::Int # Total number of DOFs per cell = N_soln*N_state
     N_soln_dof_global::Int # Global number of DOFs, i.e. length of the solution vector
-    N_quad_per_dim::Int # Number of points per direction per cell; assumes y-direction
-    N_quad_y::Int # Number of points in y direction per cell
-    N_quad::Int # Total number of points per cell = N_quad^dim 
-    N_quad_dof::Int # Total number of DOFs per cell = N_quad*N_state #UNSURE IF THIS IS USED. 
-    #N_vol_per_dim::Int # WARNING: NOT FULLY IMPLEMENTED! Number of points per direction per cell. Used for unever # of basis and soln points.
-    #N_vol::Int # Total number of points per cell = N_quad^dim 
+    #N_quad_per_dim::Int # Number of points per direction per cell; assumes y-direction
+    #N_quad_y::Int # Number of points in y direction per cell
+    #N_quad::Int # Total number of points per cell = N_quad^dim 
+    #N_quad_dof::Int # Total number of DOFs per cell = N_quad*N_state #UNSURE IF THIS IS USED. 
+    ##N_vol_per_dim::Int # WARNING: NOT FULLY IMPLEMENTED! Number of points per direction per cell. Used for unever # of basis and soln points.
+    ##N_vol::Int # Total number of points per cell = N_quad^dim 
     N_faces::Int
-    N_face::Int # points on each face parallel to x-axis. I assume that the face nodes are 1D flux nodes.
-    N_face_y::Int # points on each face parallel to y-axis. I assume that the face nodes are 1D flux nodes.
+    #N_face::Int # points on each face parallel to x-axis. I assume that the face nodes are 1D flux nodes.
+    #N_face_y::Int # points on each face parallel to y-axis. I assume that the face nodes are 1D flux nodes.
     VX::Vector{Float64} # Array of points defining the extremes of each element along one dimension
     delta_x::Float64 # length of evenly-spaced Cartesian elements
     x::Vector{Float64} # physical x coords, index are global ID.
@@ -30,13 +34,13 @@ mutable struct DG
     
     # Maps
     #GIDtoLID::Vector{Int} #Index is global ID, values are local IDs
-    EIDLIDtoGID_basis::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
+    #EIDLIDtoGID_basis::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
+    #                         # dimension is element ID. values are global ID.
+    #EIDLIDtoGID_soln::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
                              # dimension is element ID. values are global ID.
-    EIDLIDtoGID_soln::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
-                             # dimension is element ID. values are global ID.
-    #LIDtoLFID::Vector{Int} # Index is local ID, value is local face ID
-    #                       # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
-    #LFIDtoLID::AbstractMatrix{Int} # Index is local face ID, values are LID corresponding to that face
+    ##LIDtoLFID::Vector{Int} # Index is local ID, value is local face ID
+    ##                       # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
+    ##LFIDtoLID::AbstractMatrix{Int} # Index is local face ID, values are LID corresponding to that face
     LFIDtoNormal::AbstractMatrix{Int} # Normal of LFID,
                                       # first column is x, second column is y
     #EIDLFIDtoGIDofexterior::AbstractMatrix{Int} # Linker to exterior value at a face.
@@ -45,13 +49,15 @@ mutable struct DG
     EIDLFIDtoEIDofexterior::AbstractMatrix{Int} # Linker to exterior ELEM at a face.
                                                 # Index of first dim is element ID, index of second 
                                                 # dimension is LFID of the edge.
-    LFIDtoLFIDofexterior::Vector{Int} # which LFID of the exterior cell matches to the index LFID.
+                                                #
+    #### Will update to mortar-element style interface handling
+    #LFIDtoLFIDofexterior::Vector{Int} # which LFID of the exterior cell matches to the index LFID.
     EIDtoTSID::Vector{Int} # maps element ID (index) to time-slab ID. 
                            # Elements with the same TSID are in the same "row"
                            # and cover the same t (y) vaues.
     TSIDtoEID::AbstractMatrix{Int} # TSID is the index, columns are EID.
 
-    StIDLIDtoLSID::AbstractMatrix{Int} # StID is the state ID, 1:Nstate
+    #StIDLIDtoLSID::AbstractMatrix{Int} # StID is the state ID, 1:Nstate
                                        # LID is the ID of the node
                                        # LSID ("local storage") indicates the index in the storage vector
     StIDGIDtoGSID::AbstractMatrix{Int}
@@ -59,6 +65,46 @@ mutable struct DG
     #LIDtoLXIDLYID::AbstractMatrix{Int} # local x, y (length N_soln_per_dim) to local ID (length N_soln)
 
 
+
+    #Incomplete initializer - only assign Category 1 variables.
+    DG(
+       dim::Int, 
+       N_elem_per_dim::Int,
+       N_state::Int,
+       domain_x_limits::Vector{Float64}) = new(
+                                               dim::Int,
+                                               N_elem_per_dim::Int,
+                                               N_state::Int,
+                                               domain_x_limits::Vector{Float64})
+
+end
+
+
+mutable struct LocalElement
+    # Contains DG information which is local to a given element type.
+    # Allows for different poly-degrees or bases to be used throughout the domain.
+    
+    P::Int #polynomial degree
+    y_dir_overint::Int #NEW # Difference in polydegree in the second dimension
+    
+
+    N_soln_per_dim::Int # Number of points per direction per cell; assumes x-direction
+    N_soln_y::Int # number of points in the y direction per cell
+    N_quad_per_dim::Int # Number of points per direction per cell; assumes y-direction
+    N_quad_y::Int # Number of points in y direction per cell
+    N_quad::Int # Total number of points per cell = N_quad^dim 
+    N_quad_dof::Int # Total number of DOFs per cell = N_quad*N_state #UNSURE IF THIS IS USED. 
+    N_face::Int # points on each face parallel to x-axis. I assume that the face nodes are 1D flux nodes.
+    N_face_y::Int # points on each face parallel to y-axis. I assume that the face nodes are 1D flux nodes.
+    
+    ## Unsure whether the next two would be local or global...
+    EIDLIDtoGID_basis::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
+                             # dimension is element ID. values are global ID.
+    EIDLIDtoGID_soln::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
+    StIDLIDtoLSID::AbstractMatrix{Int} # StID is the state ID, 1:Nstate
+                                       # LID is the ID of the node
+                                       # LSID ("local storage") indicates the index in the storage vector
+    
     # 1D quadratures and weights in x-direction
     r_soln::Vector{Float64}
     w_soln::Vector{Float64}
@@ -111,18 +157,6 @@ mutable struct DG
     L_tau4::AbstractMatrix{Float64}
     D_xi::AbstractMatrix{Float64}
     D_tau::AbstractMatrix{Float64}
-
-    #Incomplete initializer - only assign Category 1 variables.
-    DG(P::Int, 
-       dim::Int, 
-       N_elem_per_dim::Int,
-       N_state::Int,
-       domain_x_limits::Vector{Float64}) = new(P::Int,
-                                               dim::Int,
-                                               N_elem_per_dim::Int,
-                                               N_state::Int,
-                                               domain_x_limits::Vector{Float64})
-
 end
 
 function build_coords_vectors(ref_vec_1D, dg::DG)
