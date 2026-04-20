@@ -1,3 +1,4 @@
+include("local_element.jl")
 
 mutable struct DG
     # Category 1: inputs
@@ -9,9 +10,9 @@ mutable struct DG
 
     # Category 2:defined from Category 1.
     N_elem::Int
-    EID_to_groupID::Vector{Int} #NEW
+    EIDtoGroupID::Vector{Int} #NEW
 
-
+    local_elem::Dict{Int, LocalElement} # keys are groupID, accesses an arbitrary number of LocalElement objects
 
     #N_soln_per_dim::Int # Number of points per direction per cell; assumes x-direction
     #N_soln_y::Int # number of points in the y direction per cell
@@ -80,84 +81,6 @@ mutable struct DG
 end
 
 
-mutable struct LocalElement
-    # Contains DG information which is local to a given element type.
-    # Allows for different poly-degrees or bases to be used throughout the domain.
-    
-    P::Int #polynomial degree
-    y_dir_overint::Int #NEW # Difference in polydegree in the second dimension
-    
-
-    N_soln_per_dim::Int # Number of points per direction per cell; assumes x-direction
-    N_soln_y::Int # number of points in the y direction per cell
-    N_quad_per_dim::Int # Number of points per direction per cell; assumes y-direction
-    N_quad_y::Int # Number of points in y direction per cell
-    N_quad::Int # Total number of points per cell = N_quad^dim 
-    N_quad_dof::Int # Total number of DOFs per cell = N_quad*N_state #UNSURE IF THIS IS USED. 
-    N_face::Int # points on each face parallel to x-axis. I assume that the face nodes are 1D flux nodes.
-    N_face_y::Int # points on each face parallel to y-axis. I assume that the face nodes are 1D flux nodes.
-    
-    ## Unsure whether the next two would be local or global...
-    EIDLIDtoGID_basis::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
-                             # dimension is element ID. values are global ID.
-    EIDLIDtoGID_soln::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
-    StIDLIDtoLSID::AbstractMatrix{Int} # StID is the state ID, 1:Nstate
-                                       # LID is the ID of the node
-                                       # LSID ("local storage") indicates the index in the storage vector
-    
-    # 1D quadratures and weights in x-direction
-    r_soln::Vector{Float64}
-    w_soln::Vector{Float64}
-    r_basis::Vector{Float64}
-    w_basis::Vector{Float64}
-    r_quad::Vector{Float64} #face nodes are 1D flux nodes.
-    w_quad::Vector{Float64}
-    # 1D quadratures and weights in y-direction
-    r_soln_y::Vector{Float64}
-    w_soln_y::Vector{Float64}
-    r_basis_y::Vector{Float64}
-    w_basis_y::Vector{Float64}
-    r_quad_y::Vector{Float64} #face nodes are 1D flux nodes.
-    w_quad_y::Vector{Float64}
-    #chi are basis functions for the solution.
-    chi_soln::AbstractMatrix{Float64}
-    chi_quad::AbstractMatrix{Float64}
-    chi_face::Dict{Int64,AbstractArray{Float64}}
-    chi_vf::AbstractMatrix{Float64} # stacked matrices for skew-symmetric form
-    #phi are basis functions for the flux.
-    phi_quad::AbstractMatrix{Float64}
-    phi_face::Dict{Int64,AbstractArray{Float64}}
-    d_phi_quad_d_xi::AbstractMatrix{Float64}
-    d_phi_quad_d_eta::AbstractMatrix{Float64}
-    C_m::AbstractMatrix{Float64}
-    
-    W_soln::AbstractMatrix{Float64}
-    W_face::Dict{Int64,AbstractMatrix{Float64}}
-    W_quad::AbstractMatrix{Float64}
-    J_soln::Float64
-    J_face::Float64
-    M::AbstractMatrix{Float64}
-    MpK::AbstractMatrix{Float64}
-    M_inv::AbstractMatrix{Float64}
-    MpK_inv::AbstractMatrix{Float64}
-    S_xi::AbstractMatrix{Float64}
-    S_eta::AbstractMatrix{Float64}
-    S_noncons_xi::AbstractMatrix{Float64}
-    S_noncons_eta::AbstractMatrix{Float64}
-    Pi_soln::AbstractMatrix{Float64}
-    Pi_quad::AbstractMatrix{Float64}
-    K::AbstractMatrix{Float64}
-    QtildemQtildeT::AbstractArray{Float64}
-
-    #The following are not currently used in the solver, but are included to 
-    #have consistent notation with the paper.
-    L_xi1::AbstractMatrix{Float64}
-    L_xi2::AbstractMatrix{Float64}
-    L_tau3::AbstractMatrix{Float64}
-    L_tau4::AbstractMatrix{Float64}
-    D_xi::AbstractMatrix{Float64}
-    D_tau::AbstractMatrix{Float64}
-end
 
 function build_coords_vectors(ref_vec_1D, dg::DG)
 
@@ -216,11 +139,26 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         usespacetime::Bool, y_dir_overintegration::Int)
 
     #initialize incomplete DG struct
-    dg = DG(P, dim, N_elem_per_dim, N_state, domain_x_limits)
-    dg.N_soln_per_dim = P+1 #in x dim
-    dg.N_soln_y = dg.N_soln_per_dim+y_dir_overintegration
-    dg.N_quad_per_dim = dg.N_soln_per_dim + quadnodes_overintegration
-    dg.N_quad_y = dg.N_quad_per_dim+y_dir_overintegration
+    dg = DG(dim, N_elem_per_dim, N_state, domain_x_limits)
+
+    if dim == 1
+        #dg.N_soln = dg.N_soln_per_dim
+        #dg.N_quad = dg.N_quad_per_dim
+        dg.N_faces = 2
+        #dg.N_face = 1
+        dg.N_elem = N_elem_per_dim
+    elseif dim == 2
+        dg.N_faces = 4
+        #dg.N_soln = dg.N_soln_per_dim*dg.N_soln_y
+        #dg.N_quad = dg.N_quad_per_dim*dg.N_quad_y
+        #dg.N_face = dg.N_quad_per_dim
+        #dg.N_face_y = dg.N_quad_y
+        dg.N_elem = N_elem_per_dim^dim
+    end
+    #dg.N_soln_per_dim = P+1 #in x dim
+    #dg.N_soln_y = dg.N_soln_per_dim+y_dir_overintegration
+    #dg.N_quad_per_dim = dg.N_soln_per_dim + quadnodes_overintegration
+    #dg.N_quad_y = dg.N_quad_per_dim+y_dir_overintegration
 
     # Flag to set reference cell from 0 to 1, matching PHiLiP.
     reference_cell_01 = false
@@ -228,25 +166,9 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         display("WARNING!! 2D will break because y-dim assumes (-1,1) reference cell!!")
     end
 
-    if dim == 1
-        dg.N_soln = dg.N_soln_per_dim
-        dg.N_quad = dg.N_quad_per_dim
-        dg.N_faces = 2
-        dg.N_face = 1
-        dg.N_elem = N_elem_per_dim
-    elseif dim == 2
-        dg.N_faces = 4
-        dg.N_soln = dg.N_soln_per_dim*dg.N_soln_y
-        dg.N_quad = dg.N_quad_per_dim*dg.N_quad_y
-        dg.N_face = dg.N_quad_per_dim
-        dg.N_face_y = dg.N_quad_y
-        dg.N_elem = N_elem_per_dim^dim
-    end
 
-    dg.N_soln_dof = dg.N_soln * dg.N_state
-    dg.N_soln_dof_global = dg.N_soln_dof * dg.N_elem
-    #dg.N_vol_per_dim = dg.N_soln_per_dim # for testing, assume overintegrate by 1.
-    #dg.N_vol = dg.N_vol_per_dim^dim # for testing, assume overintegrate by 1.
+    #dg.N_soln_dof = dg.N_soln * dg.N_state
+    #dg.N_soln_dof_global = dg.N_soln_dof * dg.N_elem
 
     
     # Index is global ID, values are local IDs
@@ -254,6 +176,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     
     # Index of first dimension is element ID, index of second dimension is element ID
     # values are global ID
+    #
+    ##### Need to think about what to do with this
     dg.EIDLIDtoGID_basis = reshape(1:dg.N_soln*dg.N_elem, (dg.N_soln,dg.N_elem))' #note transpose
     dg.EIDLIDtoGID_soln = reshape(1:dg.N_soln*dg.N_elem, (dg.N_soln,dg.N_elem))' #note transpose
 
@@ -344,6 +268,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         end
     end
 
+    #==
     dg.StIDLIDtoLSID = zeros(dg.N_state, dg.N_soln)
     ctr = 1
     for istate = 1:dg.N_state
@@ -352,7 +277,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
             ctr+=1
         end
     end
-
+==#
     dg.StIDGIDtoGSID = zeros(dg.N_state, dg.N_soln*dg.N_elem)
     ctr = 1
     for ielem = 1:dg.N_elem
@@ -362,63 +287,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
                 ctr+=1
             end
         end
-    end
-
-
-    # Solution nodes (integration nodes)
-    if cmp(solnnodes, "GLL") == 0 
-        display("GLL Volume nodes.")
-        dg.r_soln,dg.w_soln = FastGaussQuadrature.gausslobatto(dg.N_soln_per_dim)
-        dg.r_soln_y,dg.w_soln_y = FastGaussQuadrature.gausslobatto(dg.N_soln_y)
-    elseif cmp(solnnodes, "GL") == 0
-        display("GL Volume nodes.")
-        dg.r_soln,dg.w_soln = FastGaussQuadrature.gaussjacobi(dg.N_soln_per_dim, 0.0,0.0)
-        dg.r_soln_y,dg.w_soln_y = FastGaussQuadrature.gaussjacobi(dg.N_soln_y, 0.0,0.0)
-    else
-        display("Illegal soln node choice!")
-    end
-    if reference_cell_01
-        dg.r_soln= dg.r_soln * 0.5 .+ 0.5 # for changing ref element to match PHiLiP for debugging purposes
-        dg.w_soln /= 2.0
-    end
-
-    # Basis function nodes (shape functions, interpolation nodes)
-    if cmp(basisnodes, "GLL") == 0 
-        display("GLL basis nodes.")
-        dg.r_basis,dg.w_basis=FastGaussQuadrature.gausslobatto(dg.N_soln_per_dim)
-        dg.r_basis_y,dg.w_basis_y=FastGaussQuadrature.gausslobatto(dg.N_soln_y)
-    elseif cmp(basisnodes, "GL") == 0
-        display("GL basis nodes.")
-        dg.r_basis,dg.w_basis=FastGaussQuadrature.gaussjacobi(dg.N_soln_per_dim,0.0,0.0)
-        dg.r_basis_y,dg.w_basis_y=FastGaussQuadrature.gaussjacobi(dg.N_soln_y,0.0,0.0)
-    else
-        display("Illegal basis node choice!")
-    end
-    if reference_cell_01
-        dg.r_basis = dg.r_basis * 0.5 .+ 0.5
-        dg.w_basis /= 2.0
-    end
-    
-    # Flux nodes (shape functions, interpolation nodes)
-    # Assume collocated flux basis nodes.
-    if cmp(quadnodes, "GLL") == 0 
-        display("GLL flux nodes.")
-        dg.r_quad,dg.w_quad=FastGaussQuadrature.gausslobatto(dg.N_quad_per_dim)
-        dg.r_quad_y,dg.w_quad_y=FastGaussQuadrature.gausslobatto(dg.N_quad_y)
-    elseif cmp(quadnodes, "GL") == 0
-        display("GL flux nodes.")
-        dg.r_quad,dg.w_quad=FastGaussQuadrature.gaussjacobi(dg.N_quad_per_dim,0.0,0.0)
-        dg.r_quad_y,dg.w_quad_y=FastGaussQuadrature.gaussjacobi(dg.N_quad_y,0.0,0.0)
-    else
-        display("Illegal flux node choice!")
-    end
-    if quadnodes_overintegration>0
-        display("Overintegrating the flux by")
-        display(quadnodes_overintegration)
-    end
-    if reference_cell_01
-        dg.r_quad = dg.r_quad * 0.5 .+ 0.5
-        dg.w_quad /= 2.0
     end
 
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], dg.N_elem_per_dim+1) |> collect
@@ -433,198 +301,30 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     jacobian = (dg.delta_x/cell_length)^dim #reference element is 2 units long
     dg.J_soln = jacobian
 
+
+
+    ## Define group IDs
+    # For now, all same group (ones)
+    EIDtoGroupID = ones(size(dg.N_elem))
+
+    #Initialize LocalElement structs for each unique groupID
+    #For now, uses the (unique) inputs from the param file
+    display("##### Operators for local element 1 #####")
+    dg.local_elem[1] = init_LocalElement(P, dim, N_state,
+        solnnodes, basisnodes, quadnodes, quadnodes_overintegration, fluxreconstructionC,
+        usespacetime, y_dir_overintegration)
+
+
+
+    ##### Loop through all elements to build global mappings
+
+
     if dim==1
         (dg.x, dg.y) = build_coords_vectors_1D(dg.r_soln, dg) 
     elseif dim==2
         (dg.x, dg.y) = build_coords_vectors_2D(dg.r_soln, dg.r_soln_y, dg) 
     end
 
-    # Define Vandermonde matrices
-    if dim == 1
-        dg.chi_soln = vandermonde1D(dg.r_soln,dg.r_basis)
-        dg.phi_quad = vandermonde1D(dg.r_quad,dg.r_quad)
-        dg.d_phi_quad_d_xi = gradvandermonde1D(dg.r_quad,dg.r_quad)
-        d_chi_quad_d_xi = gradvandermonde1D(dg.r_quad,dg.r_basis)
-        #reference coordinates of L and R faces
-        r_f_L::Float64 = 0
-        if reference_cell_01
-            r_f_L= 0
-        else
-            r_f_L= -1
-        end
-        r_f_R::Float64 = 1
-        dg.chi_face = assembleFaceVandermonde1D(r_f_L,r_f_R,dg.r_basis)
-        dg.phi_face = assembleFaceVandermonde1D(r_f_L,r_f_R,dg.r_quad)
-        dg.chi_quad = vandermonde1D(dg.r_quad,dg.r_basis)
-
-        dg.W_soln = LinearAlgebra.diagm(dg.w_soln) # diagonal matrix holding quadrature weights
-        dg.W_quad = LinearAlgebra.diagm(dg.w_quad) # diagonal matrix holding quadrature weights
-        dg.W_face = Dict{Int64, AbstractArray{Float64}}()
-        dg.W_face[1] = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
-        dg.W_face[2] = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
-        dg.C_m = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
-    elseif dim == 2
-        dg.chi_soln = vandermonde2D(dg.r_soln,dg.r_basis,dg.r_soln_y,dg.r_basis_y, dg)
-        dg.chi_quad = vandermonde2D(dg.r_quad,dg.r_basis,dg.r_quad_y,dg.r_basis_y, dg)
-        dg.phi_quad = vandermonde2D(dg.r_quad,dg.r_quad, dg.r_quad_y,dg.r_quad_y,dg)
-        dg.d_phi_quad_d_xi = gradvandermonde2D(1, dg.r_quad,dg.r_quad, dg.r_quad_y,dg.r_quad_y,dg)
-        dg.d_phi_quad_d_eta = gradvandermonde2D(2, dg.r_quad,dg.r_quad,dg.r_quad_y,dg.r_quad_y,dg)
-        d_chi_quad_d_xi = gradvandermonde2D(1, dg.r_quad,dg.r_basis,dg.r_quad_y,dg.r_basis_y, dg)
-        d_chi_quad_d_eta = gradvandermonde2D(2, dg.r_quad,dg.r_basis,dg.r_quad_y,dg.r_basis_y, dg)
-        if reference_cell_01
-            display("Note that -1 1 cell is hardcoded in assembleFaceVandermonde2D")
-        end
-        dg.chi_face = assembleFaceVandermonde2D(dg.r_basis, dg.r_quad, dg.r_basis_y, dg.r_quad_y,dg) #face nodes are 1D flux nodes
-        dg.phi_face = assembleFaceVandermonde2D(dg.r_quad, dg.r_quad, dg.r_quad_y, dg.r_quad_y,dg) #face nodes are 1D flux nodes
-        ##### Check here if stuff doesn't work
-        dg.W_soln = LinearAlgebra.diagm(vec(dg.w_soln*dg.w_soln_y'))
-        dg.W_quad = LinearAlgebra.diagm(vec(dg.w_quad*dg.w_quad_y'))
-        dg.W_face = Dict{Int64, AbstractArray{Float64}}()
-        dg.W_face[1] = LinearAlgebra.diagm(dg.w_quad_y)
-        dg.W_face[2] = LinearAlgebra.diagm(dg.w_quad_y)
-        dg.W_face[3] = LinearAlgebra.diagm(dg.w_quad)
-        dg.W_face[4] = LinearAlgebra.diagm(dg.w_quad)
-        dg.J_face = jacobian ^ (1/dim) # 1D jacobian on the face of the element.
-        dg.C_m = dg.delta_x/cell_length * [1 0; 0 1]  # Assuming a cartesian element
-    end
-
-    # for skew-symmetric stiffness operator form
-    dg.chi_vf = dg.chi_quad'
-    for iface=1:dg.N_faces
-        dg.chi_vf = [dg.chi_vf dg.chi_face[iface]' ]
-    end
-    
-    # Mass and stiffness matrices as defined Eq. 9.5 Cicchino 2022
-    # All defined on a single element.
-    dg.M = dg.J_soln * dg.chi_quad' * dg.W_quad * dg.chi_quad # J_soln is the same as J_quad (assumin N_overint=0)
-    dg.S_xi = dg.chi_quad' * dg.W_quad * dg.d_phi_quad_d_xi
-    dg.S_noncons_xi = dg.W_quad * d_chi_quad_d_xi
-    if dim==2
-        dg.S_eta = dg.chi_quad' * dg.W_quad * dg.d_phi_quad_d_eta
-        dg.S_noncons_eta = dg.W_quad * d_chi_quad_d_eta
-    end
-    M_nojac_soln = dg.chi_soln' * dg.W_soln * dg.chi_soln
-    dg.Pi_soln = inv(M_nojac_soln)*dg.chi_soln'*dg.W_soln
-    dg.K = zeros(size(dg.M))
-    M_nojac_quad = dg.phi_quad' * dg.W_quad * dg.phi_quad
-    dg.Pi_quad = inv(M_nojac_quad)*dg.phi_quad'*dg.W_quad
-    if dim==1 && fluxreconstructionC != 0.0
-        M_nojac_quad = dg.chi_quad' * dg.W_quad * dg.chi_quad # redefine to use soln basis
-        d_chi_quad_d_xi = gradvandermonde1D(dg.r_quad,dg.r_basis)
-        D_xi = inv(M_nojac_quad) * dg.chi_quad' * dg.W_quad * d_chi_quad_d_xi
-        dg.K = fluxreconstructionC * ( (D_xi)^P )' * dg.M * ( (D_xi)^P ) ## Verified for 1D.
-    elseif dim==2 && fluxreconstructionC != 0.0
-        #==== This version uses tensor products
-        dg.K = 0*dg.M #initialize with size of M
-
-        chi_v_1D = vandermonde1D(dg.r_soln,dg.r_basis)
-        d_chi_v_d_xi_1D = gradvandermonde1D(dg.r_soln,dg.r_basis)
-        W_1D = dg.W_f
-        J_1D = dg.J_f
-        M_1D = chi_v_1D' * W_1D * J_1D * chi_v_1D
-        display(M_1D) # ok
-        D_xi_1D_P = (inv(chi_v_1D' * W_1D * chi_v_1D) * (chi_v_1D' * W_1D * d_chi_v_d_xi_1D))^P
-        display(D_xi_1D_P) # NOT okay.
-
-        K_1D = fluxreconstructionC * (D_xi_1D_P)' * M_1D * D_xi_1D_P
-        
-        FR1 = tensor_product_2D(K_1D, M_1D)
-        FR2 = tensor_product_2D(M_1D, K_1D)
-        FRcross = tensor_product_2D(K_1D, K_1D)
-
-        dg.K = FR1 + FR2 + FRcross
-
-
-        Following code calculates per Cicchino 2022 curvilinear eq. 28-29. Does the same thing as above code.
-        ==# 
-        M_nojac_quad = dg.chi_quad' * dg.W_quad * dg.chi_quad # redefine to use soln basis
-        d_chi_quad_d_xi = gradvandermonde2D(1, dg.r_quad, dg.r_basis, dg)
-        d_chi_quad_d_eta = gradvandermonde2D(2, dg.r_quad, dg.r_basis, dg)
-        D_xi = inv(M_nojac_quad)*dg.chi_quad' * dg.W_quad * d_chi_quad_d_xi
-        D_eta = inv(M_nojac_quad)*dg.chi_quad' * dg.W_quad * d_chi_quad_d_eta
-        dg.K = 0*dg.M #initialize with size of M
-        if usespacetime
-            # K only in space
-            dg.K = fluxreconstructionC * (D_xi^P)' * dg.M * D_xi^P
-        else
-            # K in space and in time
-            for s = [0,P]
-                for v = [0,P]
-                    if s+v >= P
-                        c_sv = fluxreconstructionC ^ ((s/P) + (v/P))
-                        dg.K += c_sv * (D_xi^s * D_eta^v)' * dg.M * (D_xi^s * D_eta^v)
-                    end
-                end
-            end
-        end
-    end
-    display("FR K")
-    display(dg.K) # Verified against PHiLiP for 1D and 2D using C from PHiLiP
-    display("Mass")
-    display(dg.M) # Verified against PHiLiP for 1D and 2D using C from PHiLiP
-
-
-    dg.M_inv = inv(dg.M) # unmodified mass matrix.
-    dg.MpK = dg.M + dg.K # Here, modified mass matrix.
-    display("Adjusted Mass matrix")
-    display(dg.MpK)
-    dg.MpK_inv = inv(dg.MpK)
-
-
-    
-    if dim==1
-        N_face_all = dg.N_faces*dg.N_face
-    elseif dim==2
-        N_face_all = 2*dg.N_face + 2*dg.N_face_y
-    end
-    Q_dimension = dg.N_quad+N_face_all
-
-    dg.QtildemQtildeT = zeros(Q_dimension,Q_dimension,dim) 
-    # volume quadrature
-    dg.QtildemQtildeT[1:dg.N_quad, 1:dg.N_quad,1] .= dg.W_quad * dg.d_phi_quad_d_xi- dg.d_phi_quad_d_xi' * dg.W_quad
-    if dim==2
-        dg.QtildemQtildeT[1:dg.N_quad, 1:dg.N_quad,2] .= dg.W_quad * dg.d_phi_quad_d_eta- dg.d_phi_quad_d_eta' * dg.W_quad
-    end
-
-    # face - only assemble top-right matrix
-    if dim==1
-         for iface = 1:dg.N_faces
-            dg.QtildemQtildeT[1:dg.N_quad,(dg.N_quad+1+dg.N_face*(iface-1)):(dg.N_quad+dg.N_face*iface),1] .+= dg.phi_face[iface]' * dg.W_face[iface] * dg.LFIDtoNormal[iface,1] # 1st direction of normal
-        end
-    elseif dim==2
-        N_face_count = [dg.N_face_y, dg.N_face_y, dg.N_face, dg.N_face]
-        starting_ind = dg.N_quad+1
-        for iface = 1:dg.N_faces
-            ending_ind = starting_ind + N_face_count[iface]-1
-            dg.QtildemQtildeT[1:dg.N_quad,
-                              starting_ind:ending_ind,
-                              1] .+= dg.phi_face[iface]' * dg.W_face[iface] * dg.LFIDtoNormal[iface,1] # 1st direction of normal
-            dg.QtildemQtildeT[1:dg.N_quad,
-                              starting_ind:ending_ind,
-                              2] .+= dg.phi_face[iface]' * dg.W_face[iface] * dg.LFIDtoNormal[iface,2] # 2nd direction of normal
-            starting_ind += N_face_count[iface]
-        end
-    end
-    # then assign skew-symmetric matrix
-    for idim = 1:dim
-        dg.QtildemQtildeT[dg.N_quad+1:end, 1:dg.N_quad, idim] .=  -1.0 * dg.QtildemQtildeT[1:dg.N_quad,dg.N_quad+1:end,idim]'
-    end
-    display(dg.QtildemQtildeT)
-
-    #display("Skew-symmetric stiffness operator:")
-    #display(dg.QtildemQtildeT)
-    #
-    #
-    #The following are not used in calculation, but are constructed consistent with defns in the paper
-
-    if dim==2 && usespacetime
-        dg.L_tau3 = dg.M_inv * dg.chi_face[3]' * dg.W_face[3] * dg.LFIDtoNormal[3,2]
-        dg.L_tau4 = dg.M_inv * dg.chi_face[4]' * dg.W_face[4] * dg.LFIDtoNormal[4,2]
-        dg.D_tau = dg.M_inv * dg.chi_soln' * dg.W_soln * dg.d_phi_quad_d_eta
-    end
-    dg.L_xi1 = dg.MpK_inv * dg.chi_face[1]' * dg.W_face[1] * dg.LFIDtoNormal[1,1]
-    dg.L_xi2 = dg.MpK_inv * dg.chi_face[2]' * dg.W_face[2] * dg.LFIDtoNormal[2,1]
-    dg.D_xi = dg.MpK_inv * dg.chi_soln' * dg.W_soln * dg.d_phi_quad_d_xi
 
     return dg
 end
