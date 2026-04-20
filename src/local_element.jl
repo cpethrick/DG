@@ -90,6 +90,31 @@ function init_LocalElement(P::Int, dim::Int, N_state::Int,
 
     le = LocalElem(P,
                    y_dir_overint)
+    if dim == 1
+        le.N_soln = le.N_soln_per_dim
+        le.N_quad = le.N_quad_per_dim
+        le.N_face = 1
+    elseif dim == 2
+        le.N_soln = le.N_soln_per_dim*le.N_soln_y
+        le.N_quad = le.N_quad_per_dim*le.N_quad_y
+        le.N_face = le.N_quad_per_dim
+        le.N_face_y = le.N_quad_y
+    end
+    le.N_soln_per_dim = P+1 #in x dim
+    le.N_soln_y = le.N_soln_per_dim+y_dir_overintegration
+    le.N_quad_per_dim = le.N_soln_per_dim + quadnodes_overintegration
+    le.N_quad_y = le.N_quad_per_dim+y_dir_overintegration
+    
+    le.N_soln_dof = le.N_soln * N_state
+    :
+    le.StIDLIDtoLSID = zeros(le.N_state, le.N_soln)
+    ctr = 1
+    for istate = 1:le.N_state
+        for ipoint = 1:le.N_soln
+            le.StIDLIDtoLSID[istate,ipoint]=ctr
+            ctr+=1
+        end
+    end
 
     # Flag to set reference cell from 0 to 1, matching PHiLiP.
     reference_cell_01 = false

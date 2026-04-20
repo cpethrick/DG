@@ -142,44 +142,14 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     dg = DG(dim, N_elem_per_dim, N_state, domain_x_limits)
 
     if dim == 1
-        #dg.N_soln = dg.N_soln_per_dim
-        #dg.N_quad = dg.N_quad_per_dim
         dg.N_faces = 2
-        #dg.N_face = 1
         dg.N_elem = N_elem_per_dim
     elseif dim == 2
         dg.N_faces = 4
-        #dg.N_soln = dg.N_soln_per_dim*dg.N_soln_y
-        #dg.N_quad = dg.N_quad_per_dim*dg.N_quad_y
-        #dg.N_face = dg.N_quad_per_dim
-        #dg.N_face_y = dg.N_quad_y
         dg.N_elem = N_elem_per_dim^dim
     end
-    #dg.N_soln_per_dim = P+1 #in x dim
-    #dg.N_soln_y = dg.N_soln_per_dim+y_dir_overintegration
-    #dg.N_quad_per_dim = dg.N_soln_per_dim + quadnodes_overintegration
-    #dg.N_quad_y = dg.N_quad_per_dim+y_dir_overintegration
 
-    # Flag to set reference cell from 0 to 1, matching PHiLiP.
-    reference_cell_01 = false
-    if reference_cell_01 
-        display("WARNING!! 2D will break because y-dim assumes (-1,1) reference cell!!")
-    end
-
-
-    #dg.N_soln_dof = dg.N_soln * dg.N_state
-    #dg.N_soln_dof_global = dg.N_soln_dof * dg.N_elem
-
-    
-    # Index is global ID, values are local IDs
-    #dg.GIDtoLID = mod.(0:(dg.N_soln*dg.N_elem.-1),dg.N_soln).+1
-    
-    # Index of first dimension is element ID, index of second dimension is element ID
-    # values are global ID
-    #
-    ##### Need to think about what to do with this
-    dg.EIDLIDtoGID_basis = reshape(1:dg.N_soln*dg.N_elem, (dg.N_soln,dg.N_elem))' #note transpose
-    dg.EIDLIDtoGID_soln = reshape(1:dg.N_soln*dg.N_elem, (dg.N_soln,dg.N_elem))' #note transpose
+    dg.N_soln_dof_global = dg.N_soln_dof * dg.N_elem
 
     # Index is local ID, value is local face ID
     # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
@@ -197,6 +167,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
                        ==#
     end
 
+    # Connector mappings
     if dim == 1
         dg.EIDLFIDtoEIDofexterior = [circshift(1:dg.N_elem_per_dim,1)';circshift(1:dg.N_elem_per_dim,-1)']'
     elseif dim == 2
@@ -268,26 +239,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         end
     end
 
-    #==
-    dg.StIDLIDtoLSID = zeros(dg.N_state, dg.N_soln)
-    ctr = 1
-    for istate = 1:dg.N_state
-        for ipoint = 1:dg.N_soln
-            dg.StIDLIDtoLSID[istate,ipoint]=ctr
-            ctr+=1
-        end
-    end
-==#
-    dg.StIDGIDtoGSID = zeros(dg.N_state, dg.N_soln*dg.N_elem)
-    ctr = 1
-    for ielem = 1:dg.N_elem
-        for istate = 1:dg.N_state
-            for ipoint = 1:dg.N_soln
-                dg.StIDGIDtoGSID[istate,ipoint+dg.N_soln*(ielem-1)]=ctr
-                ctr+=1
-            end
-        end
-    end
 
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], dg.N_elem_per_dim+1) |> collect
     display("Elements per dim:")
@@ -317,6 +268,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
 
 
     ##### Loop through all elements to build global mappings
+    # Incomplete
 
 
     if dim==1
@@ -325,6 +277,25 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         (dg.x, dg.y) = build_coords_vectors_2D(dg.r_soln, dg.r_soln_y, dg) 
     end
 
+    # Index is global ID, values are local IDs
+    dg.GIDtoLID = mod.(0:(dg.N_soln*dg.N_elem.-1),dg.N_soln).+1
+    # Index of first dimension is element ID, index of second dimension is element ID
+    # values are global ID
+    #
+    ##### Need to think about what to do with this
+    dg.EIDLIDtoGID_basis = reshape(1:dg.N_soln*dg.N_elem, (dg.N_soln,dg.N_elem))' #note transpose
+    dg.EIDLIDtoGID_soln = reshape(1:dg.N_soln*dg.N_elem, (dg.N_soln,dg.N_elem))' #note transpose
+    
+    dg.StIDGIDtoGSID = zeros(dg.N_state, dg.N_soln*dg.N_elem)
+    ctr = 1
+    for ielem = 1:dg.N_elem
+        for istate = 1:dg.N_state
+            for ipoint = 1:dg.N_soln
+                dg.StIDGIDtoGSID[istate,ipoint+dg.N_soln*(ielem-1)]=ctr
+                ctr+=1
+            end
+        end
+    end
 
     return dg
 end
