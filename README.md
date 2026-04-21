@@ -1,12 +1,14 @@
 # Code Description
 
-The included code implements modal discontinuous Galerkin in `julia` using minimal dependencies. The code is mainly for personal use and therefore is not comprehensively documented. 
+The included code implements modal discontinuous Galerkin in `julia` using minimal dependencies. The code is mainly for personal and research use and therefore is not comprehensively documented. 
 
 # Current features
 
 * Achieves p+1 convergence for linear advection (1D), Burgers' (1D), Burgers' (1D on a 2D grid) when using LxF upwinding.
 * Achieves machine precision energy conservation for Burgers' (1D and 2D)
 * Can use an arbitrary combination of Gauss-Legendre and Gauss-Lobatto-Legendre nodes for the basis (interpolation) and volume (integration) nodes
+* Achieves optimal convergence for 1D+1 spacetime problems using linear advection, Burgers', and Euler equations.
+* Implements split forms in Burgers' and Euler equations, achieving entropy preservation and stability in spacetime.
 
 # Installing
 
