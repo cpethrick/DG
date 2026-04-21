@@ -1,0 +1,15 @@
+name,value
+dim,1
+P,2
+N_elem_per_dim_coarse,16
+domain_size,2.0
+pde_type,linear_adv_1D
+include_source,false
+alpha_split,1.0
+debugmode,false
+fluxreconstructionC,user-defined
+finaltime,2.0
+volumenodes,GLL
+basisnodes,GLL
+fluxnodes,GLL
+advection_speed,0.6
