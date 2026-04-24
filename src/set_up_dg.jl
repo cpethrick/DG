@@ -13,7 +13,7 @@ mutable struct DG
     EIDtoGroupID::Vector{Int} #NEW
     N_unique_GroupIDs::Int
     unique_GroupIDs::Vector{Int}
-    max_N_soln_dof::Int
+    max_N_soln::Int
 
     le::Dict{Int, LocalElement} # keys are groupID, accesses an arbitrary number of LocalElement objects
 
@@ -299,18 +299,18 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
 
     # Count number of global DOFs for allocating arrasy
     if dg.N_unique_GroupIDs == 1
-        dg.N_soln_dof_global = dg.le[dg.unique_GroupIDs[1]].N_soln_dof * dg.N_elem
-        dg.max_N_soln_dof = dg.le[dg.unique_GroupIDs[1]].N_soln_dof
+        dg.N_soln_global = dg.le[dg.unique_GroupIDs[1]].N_soln_dof * dg.N_elem
+        dg.max_N_soln = dg.le[dg.unique_GroupIDs[1]].N_soln
     else
-        dg.max_N_soln_dof = 0
+        dg.max_N_soln = 0
         dg.N_soln_dof_global = 0
         for igroup = dg.unique_GroupIDs
             occurences = count(==(igroup), dg.EIDtoGroupID)
-            dg.N_soln_global += occurences * dg.le[igroup].N_soln_dof
-            dg.max_N_soln_dof = maximum([dg.max_N_soln_dof, dg.le[igroup].N_soln_dof])
+            dg.N_soln_global += occurences * dg.le[igroup].N_soln
+            dg.max_N_soln = maximum([dg.max_N_soln, dg.le[igroup].N_soln])
         end
-        dg.N_soln_dof_global = dg.N_soln_global * dg.N_state
     end
+    dg.N_soln_dof_global = dg.N_soln_global * dg.N_state
 
     ##### Loop through all elements to build global mappings
     # Incomplete
@@ -412,4 +412,4 @@ init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_limits::Ve
 
 end
 
-test_initialization()
+#test_initialization()

@@ -88,13 +88,13 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     u0 = calculate_initial_solution(dg, param)
     u_hat0 = zeros(dg.N_soln_dof_global)
-    u_local_state = zeros(dg.N_soln)
     for ielem = 1:dg.N_elem
+        u_local_state = zeros(dg.le[dg.EIDtoGroupID[ielem]].N_soln)
         for istate = 1:dg.N_state
-            for inode = 1:dg.N_soln
+            for inode = 1:dg.le[dg.EIDtoGroupID[ielem]].N_soln
                 u_local_state[inode] = u0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_soln[ielem,inode]]]
             end
-            u_hat_local_state = dg.Pi_soln*u_local_state
+            u_hat_local_state = dg.le[dg.EIDtoGroupID[ielem]].Pi_soln*u_local_state
             u_hat0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_basis[ielem,:]]] = u_hat_local_state
         end
     end
@@ -108,7 +108,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         CFL = 0.05
         #xmin = minimum(abs.(x[1,:] .- x[2,:]))
         #dt = abs(CFL / a * xmin /2)
-        dt = CFL * (dg.delta_x / dg.N_soln_per_dim)
+        dt = CFL * (dg.delta_x / dg.max_N_soln^(1/dg.dim))
         Nsteps::Int64 = ceil(finaltime/dt)
         dt = finaltime/Nsteps
         if param.debugmode == true
