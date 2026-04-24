@@ -115,17 +115,19 @@ function build_coords_vectors_1D(ref_vec_1D, dg::DG)
     return (x,y)
 end
 
-function build_local_coords_vectors_2D(ref_vec_x, ref_vec_y,VX, VY)
+function build_local_coords_vectors_2D(ref_vec_x, ref_vec_y,VX, VY, delta_x)
 
-    x_local_1D = VX .+ 0.5* (ref_vec_x .+1) * dg.delta_x
-    x_local = zeros(Np)
+    x_local_1D = VX .+ 0.5* (ref_vec_x .+1) * delta_x
+    y_local_1D = VY .+ 0.5* (ref_vec_y .+1) * delta_x
+    x_local = zeros(length(x_local_1D)*length(y_local_1D))
+    y_local = zeros(size(x_local))
+    Np_x_dim=length(ref_vec_x)
+    Np_y_dim=length(ref_vec_y)
     for irow = 1:Np_y_dim
        #slightly gross indexing because we don't want to use LXIDLYIDtoLID for generality of ref_vec_1D.
        x_local[vec((1:Np_x_dim)' .+ (irow-1)*Np_x_dim)] .= x_local_1D
     end
 
-    y_local_1D = dg.VY .+ 0.5* (ref_vec_y .+1) * dg.delta_x
-    y_local = zeros(size(x_local))
     for icol = 1:Np_x_dim
        y_local[(1:Np_y_dim).*Np_x_dim.-(Np_x_dim-icol)] .= y_local_1D
     end
@@ -145,7 +147,7 @@ function build_coords_vectors_2D(ref_vec_x, ref_vec_y, dg::DG)
         y_index = Int(ceil(ielem/dg.N_elem_per_dim))
         VY = dg.VX[y_index]
 
-        build_local_coords_vectors_2D(ref_vec_x, ref_vec_y,VX, VY)
+        x_local,y_local = build_local_coords_vectors_2D(ref_vec_x, ref_vec_y,VX, VY, dg.delta_x)
 
         x[(ielem - 1) * Np+1:ielem*Np] .= x_local
         y[(ielem - 1) * Np+1:ielem*Np] .= y_local
@@ -291,7 +293,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     LE1 = init_LocalElement(P, dim, N_state,
         solnnodes, basisnodes, quadnodes, quadnodes_overintegration, fluxreconstructionC,
         usespacetime, y_dir_overintegration,
-        jacobian, dg.N_faces)
+        jacobian, dg.N_faces, dg.delta_x, cell_length)
     dg.le = Dict{Int, LocalElement}()
     dg.le[1] = LE1
     display("##### Done local element allocations #####")
@@ -376,7 +378,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
             y_index = Int(ceil(ielem/dg.N_elem_per_dim))
             VY = dg.VX[y_index]
 
-            local_x, local_y = build_local_coords_vectors_2D(dg.le[EIDtoGroupID[elemID]].r_soln, dg.le[EIDtoGroupID[elemID]].r_soln_y, VX, VY)
+            local_x, local_y = build_local_coords_vectors_2D(dg.le[EIDtoGroupID[elemID]].r_soln, dg.le[EIDtoGroupID[elemID]].r_soln_y, VX, VY, dg.delta_x)
             # append to dg.x and dg.y
             #
         end
@@ -391,7 +393,7 @@ end
 function test_initialization()
 
     P = 3
-    dim = 1
+    dim = 2
     N_elem_per_dim = 2
     N_state=1
     domain_x_limits = [0.0,2.0]

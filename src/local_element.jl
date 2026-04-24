@@ -93,7 +93,7 @@ end
 function init_LocalElement(P::Int, dim::Int, N_state::Int,
         solnnodes::String, basisnodes::String, quadnodes::String, quadnodes_overintegration::Int, fluxreconstructionC::Float64,
         usespacetime::Bool, y_dir_overintegration::Int,
-        jacobian::Float64, N_faces::Int)
+        jacobian::Float64, N_faces::Int, delta_x::Float64, cell_length::Float64)
 
 
     display(N_faces)
@@ -102,6 +102,9 @@ function init_LocalElement(P::Int, dim::Int, N_state::Int,
     le.J_soln = jacobian
     le.N_soln_per_dim = P+1
     le.N_quad_per_dim = P + 1 + quadnodes_overintegration
+    
+    le.N_soln_y = le.N_soln_per_dim + y_dir_overintegration
+    le.N_quad_y = le.N_soln_per_dim + y_dir_overintegration
     if dim == 1
         le.N_soln = le.N_soln_per_dim
         le.N_quad = le.N_quad_per_dim
@@ -216,13 +219,13 @@ function init_LocalElement(P::Int, dim::Int, N_state::Int,
         le.W_face[2] = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
         le.C_m = reshape([1.0], 1, 1) #1x1 matrix for generality with higher dim
     elseif dim == 2
-        le.chi_soln = vandermonde2D(le.r_soln,le.r_basis,le.r_soln_y,le.r_basis_y, le)
-        le.chi_quad = vandermonde2D(le.r_quad,le.r_basis,le.r_quad_y,le.r_basis_y, le)
-        le.phi_quad = vandermonde2D(le.r_quad,le.r_quad, le.r_quad_y,le.r_quad_y,le)
-        le.d_phi_quad_d_xi = gradvandermonde2D(1, le.r_quad,le.r_quad, le.r_quad_y,le.r_quad_y,le)
-        le.d_phi_quad_d_eta = gradvandermonde2D(2, le.r_quad,le.r_quad,le.r_quad_y,le.r_quad_y,le)
-        d_chi_quad_d_xi = gradvandermonde2D(1, le.r_quad,le.r_basis,le.r_quad_y,le.r_basis_y, le)
-        d_chi_quad_d_eta = gradvandermonde2D(2, le.r_quad,le.r_basis,le.r_quad_y,le.r_basis_y, le)
+        le.chi_soln = vandermonde2D(le.r_soln,le.r_basis,le.r_soln_y,le.r_basis_y)
+        le.chi_quad = vandermonde2D(le.r_quad,le.r_basis,le.r_quad_y,le.r_basis_y)
+        le.phi_quad = vandermonde2D(le.r_quad,le.r_quad, le.r_quad_y,le.r_quad_y)
+        le.d_phi_quad_d_xi = gradvandermonde2D(1, le.r_quad,le.r_quad, le.r_quad_y,le.r_quad_y)
+        le.d_phi_quad_d_eta = gradvandermonde2D(2, le.r_quad,le.r_quad,le.r_quad_y,le.r_quad_y)
+        d_chi_quad_d_xi = gradvandermonde2D(1, le.r_quad,le.r_basis,le.r_quad_y,le.r_basis_y)
+        d_chi_quad_d_eta = gradvandermonde2D(2, le.r_quad,le.r_basis,le.r_quad_y,le.r_basis_y)
         if reference_cell_01
             display("Note that -1 1 cell is hardcoded in assembleFaceVandermonde2D")
         end
@@ -237,7 +240,7 @@ function init_LocalElement(P::Int, dim::Int, N_state::Int,
         le.W_face[3] = LinearAlgebra.diagm(le.w_quad)
         le.W_face[4] = LinearAlgebra.diagm(le.w_quad)
         le.J_face = jacobian ^ (1/dim) # 1D jacobian on the face of the element.
-        le.C_m = le.delta_x/cell_length * [1 0; 0 1]  # Assuming a cartesian element
+        le.C_m = delta_x/cell_length * [1 0; 0 1]  # Assuming a cartesian element
     end
 
     # for skew-symmetric stiffness operator form
