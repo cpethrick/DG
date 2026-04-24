@@ -289,7 +289,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     #Initialize LocalElement structs for each unique groupID
     #For now, uses the (unique) inputs from the param file
     display("##### Operators for local element 1 #####")
-    display(dg.N_faces)
     LE1 = init_LocalElement(P, dim, N_state,
         solnnodes, basisnodes, quadnodes, quadnodes_overintegration, fluxreconstructionC,
         usespacetime, y_dir_overintegration,
@@ -402,8 +401,8 @@ function test_initialization()
     quadnodes = "GLL"
     quadnodes_overintegration = 0
     fluxreconstructionC = 0.0
-    usespacetime = false
-    y_dir_overintegration = 0
+    usespacetime = true
+    y_dir_overintegration = 1
 
 
 init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_limits::Vector{Float64},

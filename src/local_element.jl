@@ -332,16 +332,10 @@ function init_LocalElement(P::Int, dim::Int, N_state::Int,
     elseif dim==2
         N_face_all = 2*le.N_face + 2*le.N_face_y
     end
-    display("dims")
-    display(le.N_quad)
-    display(N_face_all)
     Q_dimension = le.N_quad+N_face_all
 
-    display(Q_dimension)
     le.QtildemQtildeT = zeros(Q_dimension,Q_dimension,dim) 
     # volume quadrature
-    display("operator")
-    display(le.d_phi_quad_d_xi)
     le.QtildemQtildeT[1:le.N_quad, 1:le.N_quad,1] .= le.W_quad * le.d_phi_quad_d_xi- le.d_phi_quad_d_xi' * le.W_quad
     if dim==2
         le.QtildemQtildeT[1:le.N_quad, 1:le.N_quad,2] .= le.W_quad * le.d_phi_quad_d_eta- le.d_phi_quad_d_eta' * le.W_quad
@@ -386,10 +380,9 @@ function init_LocalElement(P::Int, dim::Int, N_state::Int,
     for idim = 1:dim
         le.QtildemQtildeT[le.N_quad+1:end, 1:le.N_quad, idim] .=  -1.0 * le.QtildemQtildeT[1:le.N_quad,le.N_quad+1:end,idim]'
     end
-    display(le.QtildemQtildeT)
 
-    #display("Skew-symmetric stiffness operator:")
-    #display(le.QtildemQtildeT)
+    display("Skew-symmetric stiffness operator:")
+    display(le.QtildemQtildeT)
     #
     #
     #The following are not used in calculation, but are constructed consistent with defns in the paper
@@ -403,6 +396,5 @@ function init_LocalElement(P::Int, dim::Int, N_state::Int,
     le.L_xi2 = le.MpK_inv * le.chi_face[2]' * le.W_face[2] * le.LFIDtoNormal[2,1]
     le.D_xi = le.MpK_inv * le.chi_soln' * le.W_soln * le.d_phi_quad_d_xi
 
-    display("HERE")
     return le
 end
