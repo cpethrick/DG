@@ -1,4 +1,6 @@
-
+include("FE_basis.jl")
+import FastGaussQuadrature
+import LinearAlgebra
 mutable struct LocalElement
     # Contains DG information which is local to a given element type.
     # Allows for different poly-degrees or bases to be used throughout the domain.
@@ -9,6 +11,8 @@ mutable struct LocalElement
 
     N_soln_per_dim::Int # Number of points per direction per cell; assumes x-direction
     N_soln_y::Int # number of points in the y direction per cell
+    N_soln::Int # total number of points in a 2D cell
+    N_soln_dof::Int # total number of points in a 2D cell
     N_quad_per_dim::Int # Number of points per direction per cell; assumes y-direction
     N_quad_y::Int # Number of points in y direction per cell
     N_quad::Int # Total number of points per cell = N_quad^dim 
@@ -23,6 +27,9 @@ mutable struct LocalElement
     StIDLIDtoLSID::AbstractMatrix{Int} # StID is the state ID, 1:Nstate
                                        # LID is the ID of the node
                                        # LSID ("local storage") indicates the index in the storage vector
+
+    
+    LFIDtoNormal::AbstractMatrix{Int} # Normal of LFID,
     
     # 1D quadratures and weights in x-direction
     r_soln::Vector{Float64}
@@ -85,11 +92,16 @@ end
 
 function init_LocalElement(P::Int, dim::Int, N_state::Int,
         solnnodes::String, basisnodes::String, quadnodes::String, quadnodes_overintegration::Int, fluxreconstructionC::Float64,
-        usespacetime::Bool, y_dir_overintegration::Int)
+        usespacetime::Bool, y_dir_overintegration::Int,
+        jacobian::Float64, N_faces::Int)
 
 
-    le = LocalElem(P,
-                   y_dir_overint)
+    display(N_faces)
+    le = LocalElement(P,
+                   y_dir_overintegration)
+    le.J_soln = jacobian
+    le.N_soln_per_dim = P+1
+    le.N_quad_per_dim = P + 1 + quadnodes_overintegration
     if dim == 1
         le.N_soln = le.N_soln_per_dim
         le.N_quad = le.N_quad_per_dim
@@ -106,10 +118,10 @@ function init_LocalElement(P::Int, dim::Int, N_state::Int,
     le.N_quad_y = le.N_quad_per_dim+y_dir_overintegration
     
     le.N_soln_dof = le.N_soln * N_state
-    :
-    le.StIDLIDtoLSID = zeros(le.N_state, le.N_soln)
+    
+    le.StIDLIDtoLSID = zeros(N_state, le.N_soln)
     ctr = 1
-    for istate = 1:le.N_state
+    for istate = 1:N_state
         for ipoint = 1:le.N_soln
             le.StIDLIDtoLSID[istate,ipoint]=ctr
             ctr+=1
@@ -214,8 +226,8 @@ function init_LocalElement(P::Int, dim::Int, N_state::Int,
         if reference_cell_01
             display("Note that -1 1 cell is hardcoded in assembleFaceVandermonde2D")
         end
-        le.chi_face = assembleFaceVandermonde2D(le.r_basis, le.r_quad, le.r_basis_y, le.r_quad_y,le) #face nodes are 1D flux nodes
-        le.phi_face = assembleFaceVandermonde2D(le.r_quad, le.r_quad, le.r_quad_y, le.r_quad_y,le) #face nodes are 1D flux nodes
+        le.chi_face = assembleFaceVandermonde2D(le.r_basis, le.r_quad, le.r_basis_y, le.r_quad_y,N_faces) #face nodes are 1D flux nodes
+        le.phi_face = assembleFaceVandermonde2D(le.r_quad, le.r_quad, le.r_quad_y, le.r_quad_y,N_faces) #face nodes are 1D flux nodes
         ##### Check here if stuff doesn't work
         le.W_soln = LinearAlgebra.diagm(vec(le.w_soln*le.w_soln_y'))
         le.W_quad = LinearAlgebra.diagm(vec(le.w_quad*le.w_quad_y'))
@@ -230,7 +242,7 @@ function init_LocalElement(P::Int, dim::Int, N_state::Int,
 
     # for skew-symmetric stiffness operator form
     le.chi_vf = le.chi_quad'
-    for iface=1:le.N_faces
+    for iface=1:N_faces
         le.chi_vf = [le.chi_vf le.chi_face[iface]' ]
     end
     
@@ -313,28 +325,50 @@ function init_LocalElement(P::Int, dim::Int, N_state::Int,
 
     
     if dim==1
-        N_face_all = le.N_faces*le.N_face
+        N_face_all = N_faces*le.N_face
     elseif dim==2
         N_face_all = 2*le.N_face + 2*le.N_face_y
     end
+    display("dims")
+    display(le.N_quad)
+    display(N_face_all)
     Q_dimension = le.N_quad+N_face_all
 
+    display(Q_dimension)
     le.QtildemQtildeT = zeros(Q_dimension,Q_dimension,dim) 
     # volume quadrature
+    display("operator")
+    display(le.d_phi_quad_d_xi)
     le.QtildemQtildeT[1:le.N_quad, 1:le.N_quad,1] .= le.W_quad * le.d_phi_quad_d_xi- le.d_phi_quad_d_xi' * le.W_quad
     if dim==2
         le.QtildemQtildeT[1:le.N_quad, 1:le.N_quad,2] .= le.W_quad * le.d_phi_quad_d_eta- le.d_phi_quad_d_eta' * le.W_quad
     end
 
+    # Repeated logic from dg, but useful for setting up operators
+    # Index is local ID, value is local face ID
+    # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
+    if dim == 1
+        le.LFIDtoNormal = reshape([-1; 1], 2, 1) # normal of left face is 1, normal of right face is 1.
+        #dg.LFIDtoLID = reshape([1,dg.N_soln_per_dim], 2,1)
+    elseif dim == 2
+        le.LFIDtoNormal = [-1 0; 1 0; 0 -1; 0 1] #first col. is x, second col. is y
+        #==
+        dg.LFIDtoLID = [(0:dg.N_soln_per_dim-1)' *dg.N_soln_per_dim.+1 ;
+                        (1:dg.N_soln_per_dim)' *dg.N_soln_per_dim;
+                        (1:dg.N_soln_per_dim)';
+                        (1:dg.N_soln_per_dim)' .+ (dg.N_soln-dg.N_soln_per_dim)
+                       ]
+                       ==#
+    end
     # face - only assemble top-right matrix
     if dim==1
-         for iface = 1:le.N_faces
+         for iface = 1:N_faces
             le.QtildemQtildeT[1:le.N_quad,(le.N_quad+1+le.N_face*(iface-1)):(le.N_quad+le.N_face*iface),1] .+= le.phi_face[iface]' * le.W_face[iface] * le.LFIDtoNormal[iface,1] # 1st direction of normal
         end
     elseif dim==2
         N_face_count = [le.N_face_y, le.N_face_y, le.N_face, le.N_face]
         starting_ind = le.N_quad+1
-        for iface = 1:le.N_faces
+        for iface = 1:N_faces
             ending_ind = starting_ind + N_face_count[iface]-1
             le.QtildemQtildeT[1:le.N_quad,
                               starting_ind:ending_ind,
@@ -365,4 +399,7 @@ function init_LocalElement(P::Int, dim::Int, N_state::Int,
     le.L_xi1 = le.MpK_inv * le.chi_face[1]' * le.W_face[1] * le.LFIDtoNormal[1,1]
     le.L_xi2 = le.MpK_inv * le.chi_face[2]' * le.W_face[2] * le.LFIDtoNormal[2,1]
     le.D_xi = le.MpK_inv * le.chi_soln' * le.W_soln * le.d_phi_quad_d_xi
+
+    display("HERE")
+    return le
 end

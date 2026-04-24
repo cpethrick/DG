@@ -3,8 +3,6 @@
 ==============================================================================#
 
 
-include("set_up_dg.jl")
-
 function lagrangep(r_volume,r_basis,j)
     #return coeffs of j-th lagrange polynomial constructed with nodes r and evaluate at nodes r
     #
@@ -77,13 +75,13 @@ function tensor_product_vandermonde2D(r_basis::AbstractVector, r_volume_x::Abstr
 
 end
 
-function vandermonde2D(r_volume::AbstractVector, r_basis::AbstractVector, dg::DG)
+function vandermonde2D(r_volume::AbstractVector, r_basis::AbstractVector)
     # Make 2D VdM matrix from even nodes in each direction
     V1D = vandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
     return tensor_product_vandermonde2D(r_basis, r_volume, r_volume, V1D, V1D)
 end
 
-function vandermonde2D(r_volume_x::AbstractVector, r_basis_x::AbstractVector, r_volume_y::AbstractVector, r_basis_y::AbstractVector, dg::DG)
+function vandermonde2D(r_volume_x::AbstractVector, r_basis_x::AbstractVector, r_volume_y::AbstractVector, r_basis_y::AbstractVector)
     # Make VdM matrix from uneven nodes in x and y
     V1Dx = vandermonde1D(r_volume_x::AbstractVector, r_basis_x::AbstractVector)
     V1Dy = vandermonde1D(r_volume_y::AbstractVector, r_basis_y::AbstractVector)
@@ -126,7 +124,7 @@ function gradvandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
 end
 
 
-function gradvandermonde2D(direction::Int, r_volume::AbstractVector, r_basis::AbstractVector, dg::DG)
+function gradvandermonde2D(direction::Int, r_volume::AbstractVector, r_basis::AbstractVector)
     # grad of VdM in directin 1(x) or 2(y) from even nodes
 
     DVr1D = gradvandermonde1D(r_volume::AbstractVector, r_basis::AbstractVector)
@@ -138,7 +136,7 @@ function gradvandermonde2D(direction::Int, r_volume::AbstractVector, r_basis::Ab
         return tensor_product_vandermonde2D(r_basis, r_volume, r_volume, V1D, DVr1D)
     end
 end
-function gradvandermonde2D(direction::Int, r_volume_x::AbstractVector, r_basis_x::AbstractVector, r_volume_y::AbstractVector, r_basis_y::AbstractVector, dg::DG)
+function gradvandermonde2D(direction::Int, r_volume_x::AbstractVector, r_basis_x::AbstractVector, r_volume_y::AbstractVector, r_basis_y::AbstractVector)
     # grad of VdM in direction 1(x) or 2(y) from UNeven nodes
 
 
@@ -160,7 +158,7 @@ function assembleFaceVandermonde1D(r_f_L::Float64, r_f_R::Float64, r_basis::Abst
     return V_f
 end
 
-function assembleFaceVandermonde2D(r_basis::AbstractVector, r_volume::AbstractVector, dg::DG)
+function assembleFaceVandermonde2D(r_basis::AbstractVector, r_volume::AbstractVector, N_faces)
     
     V_f = Dict{Int64, AbstractArray{Float64}}()
     # stores vandermonde matrices evaluated at -1 and 1
@@ -170,7 +168,7 @@ function assembleFaceVandermonde2D(r_basis::AbstractVector, r_volume::AbstractVe
     
     #This implementation assumes that face points are a subset of volume points.
     
-    for iface = 1:dg.N_faces
+    for iface = 1:N_faces
         if iface == 1
             r_face_y = r_volume
             r_face_x = [-1.0]
@@ -196,7 +194,7 @@ function assembleFaceVandermonde2D(r_basis::AbstractVector, r_volume::AbstractVe
     end
     return V_f
 end
-function assembleFaceVandermonde2D(r_basis_x::AbstractVector, r_volume_x::AbstractVector, r_basis_y::AbstractVector, r_volume_y::AbstractVector,dg::DG)
+function assembleFaceVandermonde2D(r_basis_x::AbstractVector, r_volume_x::AbstractVector, r_basis_y::AbstractVector, r_volume_y::AbstractVector,N_faces::Int)
     
     V_f = Dict{Int64, AbstractArray{Float64}}()
     # stores vandermonde matrices evaluated at -1 and 1
@@ -210,7 +208,7 @@ function assembleFaceVandermonde2D(r_basis_x::AbstractVector, r_volume_x::Abstra
     
     #This implementation assumes that face points are a subset of volume points.
     
-    for iface = 1:dg.N_faces
+    for iface = 1:N_faces
         if iface == 1
             r_face_x = [-1.0]
             r_face_y = r_volume_y

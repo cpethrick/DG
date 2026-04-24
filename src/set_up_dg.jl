@@ -11,14 +11,18 @@ mutable struct DG
     # Category 2:defined from Category 1.
     N_elem::Int
     EIDtoGroupID::Vector{Int} #NEW
+    N_unique_GroupIDs::Int
+    unique_GroupIDs::Vector{Int}
+    max_N_soln_dof::Int
 
-    local_elem::Dict{Int, LocalElement} # keys are groupID, accesses an arbitrary number of LocalElement objects
+    le::Dict{Int, LocalElement} # keys are groupID, accesses an arbitrary number of LocalElement objects
 
     #N_soln_per_dim::Int # Number of points per direction per cell; assumes x-direction
     #N_soln_y::Int # number of points in the y direction per cell
     #N_soln::Int # Total number of points per cell = N_soln^dim 
     #N_soln_dof::Int # Total number of DOFs per cell = N_soln*N_state
     N_soln_dof_global::Int # Global number of DOFs, i.e. length of the solution vector
+    N_soln_global::Int # Global number of points
     #N_quad_per_dim::Int # Number of points per direction per cell; assumes y-direction
     #N_quad_y::Int # Number of points in y direction per cell
     #N_quad::Int # Total number of points per cell = N_quad^dim 
@@ -34,10 +38,10 @@ mutable struct DG
     y::Vector{Float64} # physical y coords, index are global ID.
     
     # Maps
-    #GIDtoLID::Vector{Int} #Index is global ID, values are local IDs
-    #EIDLIDtoGID_basis::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
+    GIDtoLID::Vector{Int} #Index is global ID, values are local IDs
+    EIDLIDtoGID_basis::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
     #                         # dimension is element ID. values are global ID.
-    #EIDLIDtoGID_soln::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
+    EIDLIDtoGID_soln::AbstractMatrix{Int} # Index of first dimension is element ID, index of second
                              # dimension is element ID. values are global ID.
     ##LIDtoLFID::Vector{Int} # Index is local ID, value is local face ID
     ##                       # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
@@ -52,7 +56,7 @@ mutable struct DG
                                                 # dimension is LFID of the edge.
                                                 #
     #### Will update to mortar-element style interface handling
-    #LFIDtoLFIDofexterior::Vector{Int} # which LFID of the exterior cell matches to the index LFID.
+    LFIDtoLFIDofexterior::Vector{Int} # which LFID of the exterior cell matches to the index LFID.
     EIDtoTSID::Vector{Int} # maps element ID (index) to time-slab ID. 
                            # Elements with the same TSID are in the same "row"
                            # and cover the same t (y) vaues.
@@ -91,6 +95,12 @@ function build_coords_vectors(ref_vec_1D, dg::DG)
     end
 end
 
+function build_local_coords_vectors_1D(ref_vec_1D, VX, delta_x)
+    
+    x_local = VX .+ 0.5* (ref_vec_1D .+1) * delta_x
+    return x_local
+
+end
 
 function build_coords_vectors_1D(ref_vec_1D, dg::DG)
 
@@ -99,10 +109,27 @@ function build_coords_vectors_1D(ref_vec_1D, dg::DG)
     Np=length(ref_vec_1D)^dg.dim
     Np_per_dim=length(ref_vec_1D)
     for ielem = 1:dg.N_elem
-        x_local = dg.VX[ielem] .+ 0.5* (ref_vec_1D .+1) * dg.delta_x
+        x_local = build_local_coords_vectors_1D(ref_vec_1D, dg.VX[ielem], dg.delta_x)
         x[(ielem - 1) * Np+1:ielem*Np] .= x_local
     end
     return (x,y)
+end
+
+function build_local_coords_vectors_2D(ref_vec_x, ref_vec_y,VX, VY)
+
+    x_local_1D = VX .+ 0.5* (ref_vec_x .+1) * dg.delta_x
+    x_local = zeros(Np)
+    for irow = 1:Np_y_dim
+       #slightly gross indexing because we don't want to use LXIDLYIDtoLID for generality of ref_vec_1D.
+       x_local[vec((1:Np_x_dim)' .+ (irow-1)*Np_x_dim)] .= x_local_1D
+    end
+
+    y_local_1D = dg.VY .+ 0.5* (ref_vec_y .+1) * dg.delta_x
+    y_local = zeros(size(x_local))
+    for icol = 1:Np_x_dim
+       y_local[(1:Np_y_dim).*Np_x_dim.-(Np_x_dim-icol)] .= y_local_1D
+    end
+    return x_local,y_local
 end
 
 function build_coords_vectors_2D(ref_vec_x, ref_vec_y, dg::DG)
@@ -114,19 +141,11 @@ function build_coords_vectors_2D(ref_vec_x, ref_vec_y, dg::DG)
     Np_y_dim=length(ref_vec_y)
     for ielem = 1:dg.N_elem
         x_index = mod(ielem-1,dg.N_elem_per_dim)+1
-        x_local_1D = dg.VX[x_index] .+ 0.5* (ref_vec_x .+1) * dg.delta_x
-        x_local = zeros(Np)
-        for irow = 1:Np_y_dim
-           #slightly gross indexing because we don't want to use LXIDLYIDtoLID for generality of ref_vec_1D.
-           x_local[vec((1:Np_x_dim)' .+ (irow-1)*Np_x_dim)] .= x_local_1D
-        end
-
+        VX = dg.VX[x_index]
         y_index = Int(ceil(ielem/dg.N_elem_per_dim))
-        y_local_1D = dg.VX[y_index] .+ 0.5* (ref_vec_y .+1) * dg.delta_x
-        y_local = zeros(size(x_local))
-        for icol = 1:Np_x_dim
-           y_local[(1:Np_y_dim).*Np_x_dim.-(Np_x_dim-icol)] .= y_local_1D
-        end
+        VY = dg.VX[y_index]
+
+        build_local_coords_vectors_2D(ref_vec_x, ref_vec_y,VX, VY)
 
         x[(ielem - 1) * Np+1:ielem*Np] .= x_local
         y[(ielem - 1) * Np+1:ielem*Np] .= y_local
@@ -137,6 +156,12 @@ end
 function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_limits::Vector{Float64},
         solnnodes::String, basisnodes::String, quadnodes::String, quadnodes_overintegration::Int, fluxreconstructionC::Float64,
         usespacetime::Bool, y_dir_overintegration::Int)
+
+    # Flag to set reference cell from 0 to 1, matching PHiLiP.
+    reference_cell_01 = false
+    if reference_cell_01 
+        display("WARNING!! 2D will break because y-dim assumes (-1,1) reference cell!!")
+    end
 
     #initialize incomplete DG struct
     dg = DG(dim, N_elem_per_dim, N_state, domain_x_limits)
@@ -149,7 +174,6 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         dg.N_elem = N_elem_per_dim^dim
     end
 
-    dg.N_soln_dof_global = dg.N_soln_dof * dg.N_elem
 
     # Index is local ID, value is local face ID
     # LFID = 1 is left face, LFID = 2 is right face. 0 is not a face.
@@ -250,53 +274,141 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         cell_length = 1.0
     end
     jacobian = (dg.delta_x/cell_length)^dim #reference element is 2 units long
-    dg.J_soln = jacobian
 
 
 
     ## Define group IDs
     # For now, all same group (ones)
-    EIDtoGroupID = ones(size(dg.N_elem))
+    dg.EIDtoGroupID = ones(dg.N_elem)
+
+    dg.N_unique_GroupIDs = length(unique(dg.EIDtoGroupID))
+    dg.unique_GroupIDs = unique(dg.EIDtoGroupID)
 
     #Initialize LocalElement structs for each unique groupID
     #For now, uses the (unique) inputs from the param file
     display("##### Operators for local element 1 #####")
-    dg.local_elem[1] = init_LocalElement(P, dim, N_state,
+    display(dg.N_faces)
+    LE1 = init_LocalElement(P, dim, N_state,
         solnnodes, basisnodes, quadnodes, quadnodes_overintegration, fluxreconstructionC,
-        usespacetime, y_dir_overintegration)
+        usespacetime, y_dir_overintegration,
+        jacobian, dg.N_faces)
+    dg.le = Dict{Int, LocalElement}()
+    dg.le[1] = LE1
+    display("##### Done local element allocations #####")
 
-
+    # Count number of global DOFs for allocating arrasy
+    if dg.N_unique_GroupIDs == 1
+        dg.N_soln_dof_global = dg.le[dg.unique_GroupIDs[1]].N_soln_dof * dg.N_elem
+        dg.max_N_soln_dof = dg.le[dg.unique_GroupIDs[1]].N_soln_dof
+    else
+        dg.max_N_soln_dof = 0
+        dg.N_soln_dof_global = 0
+        for igroup = dg.unique_GroupIDs
+            occurences = count(==(igroup), dg.EIDtoGroupID)
+            dg.N_soln_global += occurences * dg.le[igroup].N_soln_dof
+            dg.max_N_soln_dof = maximum([dg.max_N_soln_dof, dg.le[igroup].N_soln_dof])
+        end
+        dg.N_soln_dof_global = dg.N_soln_global * dg.N_state
+    end
 
     ##### Loop through all elements to build global mappings
     # Incomplete
 
-
-    if dim==1
-        (dg.x, dg.y) = build_coords_vectors_1D(dg.r_soln, dg) 
-    elseif dim==2
-        (dg.x, dg.y) = build_coords_vectors_2D(dg.r_soln, dg.r_soln_y, dg) 
-    end
-
-    # Index is global ID, values are local IDs
-    dg.GIDtoLID = mod.(0:(dg.N_soln*dg.N_elem.-1),dg.N_soln).+1
-    # Index of first dimension is element ID, index of second dimension is element ID
-    # values are global ID
-    #
-    ##### Need to think about what to do with this
-    dg.EIDLIDtoGID_basis = reshape(1:dg.N_soln*dg.N_elem, (dg.N_soln,dg.N_elem))' #note transpose
-    dg.EIDLIDtoGID_soln = reshape(1:dg.N_soln*dg.N_elem, (dg.N_soln,dg.N_elem))' #note transpose
-    
-    dg.StIDGIDtoGSID = zeros(dg.N_state, dg.N_soln*dg.N_elem)
-    ctr = 1
-    for ielem = 1:dg.N_elem
-        for istate = 1:dg.N_state
-            for ipoint = 1:dg.N_soln
-                dg.StIDGIDtoGSID[istate,ipoint+dg.N_soln*(ielem-1)]=ctr
-                ctr+=1
+    if dg.N_unique_GroupIDs == 1 
+        # Index is global ID, values are local IDs
+        N_soln = dg.le[dg.unique_GroupIDs[1]].N_soln
+        dg.GIDtoLID = mod.(0:(N_soln*dg.N_elem.-1),N_soln).+1
+        # Index of first dimension is element ID, index of second dimension is element ID
+        # values are global ID
+        #
+        ##### Need to think about what to do with this
+        dg.EIDLIDtoGID_basis = reshape(1:N_soln*dg.N_elem, (N_soln,dg.N_elem))' #note transpose
+        dg.EIDLIDtoGID_soln = reshape(1:N_soln*dg.N_elem, (N_soln,dg.N_elem))' #note transpose
+        
+        dg.StIDGIDtoGSID = zeros(dg.N_state, N_soln*dg.N_elem)
+        ctr = 1
+        for ielem = 1:dg.N_elem
+            for istate = 1:dg.N_state
+                for ipoint = 1:N_soln
+                    dg.StIDGIDtoGSID[istate,ipoint+N_soln*(ielem-1)]=ctr
+                    ctr+=1
+                end
             end
         end
+    else
+        dg.GIDtoLID = zeros(length(dg.N_soln_dof_global))
+        dg.EIDLIDtoGID_basis = zeros(dg.N_elem, dg.max_N_soln_dof) # size is based on largest number in all groups
+        current_starting_ind = 1
+        dg.StIDGIDtoGSID = zeros(dg.N_state, dg.N_soln_dof_global)
+        ctr_StIDGIDtoGSID=1
+        for ielem in 1:dg.N_elem
+            N_dof_local = dg.le[EIDtoGroupID[ielem]].N_soln_dof
+            dg.GIDtoLID[current_starting_ind:current_starting_ind+N_dof_local] = 1:N_dof_local
+
+            dg.EIDLIDtoGID_basis[ielem, :] = [current_starting_ind:current_starting_ind+N_dof_local, zeros(dg.max_N_soln_dof-N_dof_local)]
+
+            for istate = 1:dg.N_state
+                for ipoint = 1:dg.N_soln
+                    dg.StIDGIDtoGSID[istate,ipoint+current_starting_ind-1]=ctr_StIDGIDtoGSID
+                    ctr_StIDGIDtoGSID+=1
+                end
+            end
+            current_starting_ind+=N_dof_local
+
+
+        end
+        dg.EIDLIDtoGID_soln = dg.EIDLIDtoGID_basis
     end
+
+    if dg.N_unique_GroupIDs == 1
+        # Uniform elements
+        if dim==1
+            (dg.x, dg.y) = build_coords_vectors_1D(dg.le[dg.unique_GroupIDs[1]].r_soln, dg) 
+        elseif dim==2
+            (dg.x, dg.y) = build_coords_vectors_2D(dg.le[dg.unique_GroupIDs[1]].r_soln, dg.le[dg.unique_GroupIDs[1]].r_soln_y, dg) 
+        end
+    else
+        # Loop through all elements
+        for  elemID in 1:dg.N_elem
+        
+            x_index = mod(ielem-1,dg.N_elem_per_dim)+1
+            VX = dg.VX[x_index]
+            y_index = Int(ceil(ielem/dg.N_elem_per_dim))
+            VY = dg.VX[y_index]
+
+            local_x, local_y = build_local_coords_vectors_2D(dg.le[EIDtoGroupID[elemID]].r_soln, dg.le[EIDtoGroupID[elemID]].r_soln_y, VX, VY)
+            # append to dg.x and dg.y
+            #
+        end
+    end
+
+
 
     return dg
 end
 
+
+function test_initialization()
+
+    P = 3
+    dim = 1
+    N_elem_per_dim = 2
+    N_state=1
+    domain_x_limits = [0.0,2.0]
+    solnnodes = "GLL"
+    basisnodes = "GLL"
+    quadnodes = "GLL"
+    quadnodes_overintegration = 0
+    fluxreconstructionC = 0.0
+    usespacetime = false
+    y_dir_overintegration = 0
+
+
+init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_limits::Vector{Float64},
+        solnnodes::String, basisnodes::String, quadnodes::String, quadnodes_overintegration::Int, fluxreconstructionC::Float64,
+        usespacetime::Bool, y_dir_overintegration::Int)
+
+
+end
+
+test_initialization()
