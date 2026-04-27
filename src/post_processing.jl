@@ -15,20 +15,20 @@ function write_to_file(u_hat,fname="u_hat_stored.csv")
         close(f)
 end
 
-function make_1D_MpK_face(iface, dg::DG, param::PhysicsAndFluxParams)
+function make_1D_MpK_face(iface, le::LocalElement, dg::DG, param::PhysicsAndFluxParams)
     if dg.dim==1
         display("This probably will break in 1D")
     elseif iface < 3
-        r_quad = dg.r_quad_y
+        r_quad = le.r_quad_y
     else
-        r_quad = dg.r_quad
+        r_quad = le.r_quad
     end
     phi_face_1D = vandermonde1D(r_quad,r_quad)
     d_phi_face_d_xi_1D = gradvandermonde1D(r_quad,r_quad)
-    W_1D = dg.W_face[iface]
-    J_1D = dg.J_face
+    W_1D = le.W_face[iface]
+    J_1D = le.J_face
     M_1D = phi_face_1D' * W_1D * J_1D * phi_face_1D
-    D_xi_1D_P = (inv(phi_face_1D' * W_1D * phi_face_1D) * (phi_face_1D' * W_1D * d_phi_face_d_xi_1D))^dg.P
+    D_xi_1D_P = (inv(phi_face_1D' * W_1D * phi_face_1D) * (phi_face_1D' * W_1D * d_phi_face_d_xi_1D))^le.P
 
     K_1D = param.fluxreconstructionC * (D_xi_1D_P)' * M_1D * D_xi_1D_P
 
@@ -44,8 +44,9 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
 
     integrated_state_initial = 0.0
     integrated_state_final = 0.0
-    ones_hat = dg.Pi_soln  * ones(dg.N_soln)
     for ielem = 1:dg.N_elem
+        le = dg.le[dg.EIDtoGroupID[ielem]]
+        ones_hat = le.Pi_soln  * ones(le.N_soln)
         if param.usespacetime
             # for spacetime, we want to consider initial as t=0 (bottom surface of the computational domain) and final as t=t_f (top surface)
             if ielem < dg.N_elem_per_dim+1
@@ -53,17 +54,17 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
                 #u_face = dg.chi_f[:,:,3] * u_hat[(ielem-1)*dg.N_soln+1:(ielem)*dg.N_soln]
 
                 # Find initial energy from the Dirichlet BC on lower face
-                x_local = dg.VX[ielem] .+ 0.5* (dg.r_quad.+1) * dg.delta_x
+                x_local = dg.VX[ielem] .+ 0.5* (le.r_quad.+1) * dg.delta_x
                 y_local = zeros(size(x_local)) # leave zero as this is the lower face
                 u_face = calculate_solution_on_Dirichlet_boundary(x_local, y_local,dg, param)
 
-                integrated_state_initial += ones_hat' * dg.MpK * dg.M_inv * dg.chi_face[3]' *dg.J_face* dg.W_face[3] * u_face
+                integrated_state_initial += ones_hat' * le.MpK * le.M_inv * le.chi_face[3]' *le.J_face* le.W_face[3] * u_face
 
             elseif ielem > dg.N_elem_per_dim^dim - dg.N_elem_per_dim
                 # face on top
                 # The next line does u_face =  chi_face[4] * u_hat but in a separate function for generality with N_state>1.
-                u_face = project(dg.chi_face[4], u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], true, dg, param)
-                integrated_state_final += ones_hat' * dg.MpK * dg.M_inv * dg.chi_face[4]' * dg.J_face * dg.W_face[4] * u_face
+                u_face = project(le.chi_face[4], u_hat[(ielem-1)*le.N_soln_dof+1:(ielem)*le.N_soln_dof], true,le, dg, param)
+                integrated_state_final += ones_hat' * le.MpK * le.M_inv * le.chi_face[4]' * le.J_face * le.W_face[4] * u_face
             end
         end
     end
@@ -89,11 +90,11 @@ function calculate_integrated_numerical_entropy(u_hat,le, dg::DG, param::Physics
         return u_hat' * le.M * u_hat
     end
 end
-function integrate_entropy_on_temporal_face(u_face, iface, dg::DG, param::PhysicsAndFluxParams)
+function integrate_entropy_on_temporal_face(u_face, iface, le::LocalElement, dg::DG, param::PhysicsAndFluxParams)
 
     if cmp(param.pde_type, "burgers1D")==0
         # We can use 1D M+K to integrate.
-        MpK_1D = make_1D_MpK_face(iface,dg,param)
+        MpK_1D = make_1D_MpK_face(iface,le,dg,param)
         entropy_integration = 0.5 * u_face' * (MpK_1D) * u_face
     else
         # Integrate in L2.
@@ -105,8 +106,8 @@ function integrate_entropy_on_temporal_face(u_face, iface, dg::DG, param::Physic
     return entropy_integration
 end
 
-function calculate_projection_error_local_burgers(u_face_interior, u_face_Dirichlet, iface, dg::DG, param::PhysicsAndFluxParams)
-    MpK = make_1D_MpK_face(iface,dg,param)
+function calculate_projection_error_local_burgers(u_face_interior, u_face_Dirichlet, iface, le::LocalElement,  dg::DG, param::PhysicsAndFluxParams)
+    MpK = make_1D_MpK_face(iface,le, dg,param)
     phi_face_interior = 0.5 * u_face_interior' * MpK * u_face_interior
     phi_face_Dirichlet = 0.5*u_face_Dirichlet' * MpK * u_face_Dirichlet
     phi_jump = phi_face_interior - phi_face_Dirichlet
@@ -115,10 +116,10 @@ function calculate_projection_error_local_burgers(u_face_interior, u_face_Dirich
 
     return phi_jump - vjumpTtimesu 
 end
-function calculate_projection_error_local(u_face_interior, u_face_Dirichlet, iface, dg::DG, param::PhysicsAndFluxParams)
+function calculate_projection_error_local(u_face_interior, u_face_Dirichlet, iface, le::LocalElement, dg::DG, param::PhysicsAndFluxParams)
 
     if cmp(param.pde_type,"burgers1D")==0
-        return calculate_projection_error_local_burgers(u_face_interior, u_face_Dirichlet, iface, dg::DG, param::PhysicsAndFluxParams)
+        return calculate_projection_error_local_burgers(u_face_interior, u_face_Dirichlet, iface, le, dg::DG, param::PhysicsAndFluxParams)
     end
 
     # get entropy potential and entropy variables at the face (interior soln)
@@ -131,12 +132,14 @@ function calculate_projection_error_local(u_face_interior, u_face_Dirichlet, ifa
     v_jump = v_face_interior - v_face_Dirichlet
 
     vjumpTtimesu = zeros(size(phi_face_Dirichlet))
-    for inode = 1:dg.N_soln_per_dim
-        node_indices = dg.N_soln_per_dim*(1:dg.N_state) .- dg.N_soln_per_dim .+ inode
+    for inode = 1:le.N_soln_per_dim
+        # This works because N_sol_per_dim is x-direction 
+        # and we are interested in timeslab face
+        node_indices = le.N_soln_per_dim*(1:dg.N_state) .- le.N_soln_per_dim .+ inode
         vjumpTtimesu[inode] += (v_jump[node_indices])' * u_face_Dirichlet[node_indices]
     end
 
-    return (phi_jump - vjumpTtimesu)' * dg.W_face[iface] * dg.J_face * ones(size(phi_jump))
+    return (phi_jump - vjumpTtimesu)' * le.W_face[iface] * le.J_face * ones(size(phi_jump))
 end
 
 function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::PhysicsAndFluxParams)
@@ -147,27 +150,34 @@ function calculate_projection_corrected_entropy_change(u_hat, dg::DG, param::Phy
     entropy_initial = entropy_integration_at_surfaces[1,1]
 
     for ielem = 1:dg.N_elem
+        le = dg.le[dg.EIDtoGroupID[ielem]]
         itslab = dg.EIDtoTSID[ielem]
-        u_hat_local = u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof]
+        #u_hat_local = u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof]
+        u_hat_local = zeros(Float64, le.N_soln_dof)
+        for inode = 1:le.N_soln
+            for istate = 1:dg.N_state
+                u_hat_local[le.StIDLIDtoLSID[istate,inode]] = u_hat[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_basis[ielem,inode]]]
+            end
+        end
         if itslab == 1
             # face on bottom (t=0)
             
             # get initial condition
-            x_local = dg.VX[ielem] .+ 0.5* (dg.r_quad.+1) * dg.delta_x
+            x_local = dg.VX[ielem] .+ 0.5* (le.r_quad.+1) * dg.delta_x
             y_local = zeros(size(x_local)) # leave zero as this is the lower face
             u_face_Dirichlet = calculate_solution_on_Dirichlet_boundary(x_local, y_local, dg,param)
-            u_face_interior = project(dg.chi_face[3],  u_hat_local,true,dg,param)
+            u_face_interior = project(le.chi_face[3],  u_hat_local,true,le,dg,param)
 
-            entropy_integration_at_surfaces[1,1] += integrate_entropy_on_temporal_face(u_face_Dirichlet,3, dg, param)
-            projection_error += calculate_projection_error_local(u_face_interior,u_face_Dirichlet, 3, dg,param)#(phi_jump - vjumpTtimesu)' * dg.W_face * dg.J_face * ones(size(phi_jump))
+            entropy_integration_at_surfaces[1,1] += integrate_entropy_on_temporal_face(u_face_Dirichlet,3, le, dg, param)
+            projection_error += calculate_projection_error_local(u_face_interior,u_face_Dirichlet, 3, le,dg,param)#(phi_jump - vjumpTtimesu)' * dg.W_face * dg.J_face * ones(size(phi_jump))
         else
             # face on bottom of element
-            u_face_bottom_interior = project(dg.chi_face[3],  u_hat_local,true,dg,param)
-            entropy_integration_at_surfaces[1,itslab]+= integrate_entropy_on_temporal_face(u_face_bottom_interior,3, dg,param)
+            u_face_bottom_interior = project(le.chi_face[3],  u_hat_local,true,le, dg,param)
+            entropy_integration_at_surfaces[1,itslab]+= integrate_entropy_on_temporal_face(u_face_bottom_interior,3,le, dg,param)
         end
 
-        u_face_top = project(dg.chi_face[4], u_hat_local, true, dg, param)
-        entropy_integration_at_surfaces[2,itslab]+= integrate_entropy_on_temporal_face(u_face_top,4, dg,param)
+        u_face_top = project(le.chi_face[4], u_hat_local, true, le, dg, param)
+        entropy_integration_at_surfaces[2,itslab]+= integrate_entropy_on_temporal_face(u_face_top,4,le, dg,param)
     
     end
 
@@ -285,8 +295,8 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
         if dim==1
             chi_overint = vandermonde1D(r_overint,le.r_basis)
         elseif dim==2
-            chi_overint = vandermonde2D(r_overint, le.r_basis, dg)
-            chi_overint = vandermonde2D(r_overint, le.r_basis, r_overint, le.r_basis_y, dg)
+            chi_overint = vandermonde2D(r_overint, le.r_basis)
+            chi_overint = vandermonde2D(r_overint, le.r_basis, r_overint, le.r_basis_y)
         end
         #Extract only first state here
         u_hat_local = zeros(le.N_soln)
@@ -359,7 +369,7 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
         entropy_change = proj_corrected_error
 
         if dg.N_state == 1
-            conservation=calculate_conservation_spacetime(u_hat, dg, param)
+            conservation=calculate_conservation_spacetime(u_hat,dg, param)
         end
     else
         display("Warning: conservation check is not implemented for MoL!")

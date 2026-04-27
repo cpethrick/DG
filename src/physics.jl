@@ -193,27 +193,27 @@ function transform_physical_to_reference(f_physical, direction,le, dg::DG)
     return le.C_m[direction,direction] * f_physical 
 end
 
-function entropy_project(chi_project, u_hat, dg::DG, param::PhysicsAndFluxParams)
+function entropy_project(chi_project, u_hat, le::LocalElement, dg::DG, param::PhysicsAndFluxParams)
     # chi_project is the basis functions evaluated at the desired projection points
     # (i.e., volume or face pts)
     # Per eq 42 in Alex Euler preprint
 
-    u_volume_nodes = zeros(dg.N_soln_dof)
+    u_volume_nodes = zeros(le.N_soln_dof)
     # at SOLUTION nodes.
     for istate = 1:dg.N_state
-        u_volume_nodes[dg.StIDLIDtoLSID[istate, :]] = dg.chi_soln * u_hat[dg.StIDLIDtoLSID[istate, :]]
+        u_volume_nodes[le.StIDLIDtoLSID[istate, :]] = le.chi_soln * u_hat[le.StIDLIDtoLSID[istate, :]]
     end
 
     v_volume = get_entropy_variables(u_volume_nodes, param)
-    v_hat = zeros(dg.N_soln_dof)
+    v_hat = zeros(le.N_soln_dof)
     for istate = 1:dg.N_state
-        v_hat[dg.StIDLIDtoLSID[istate, :]] = dg.Pi_soln * v_volume[dg.StIDLIDtoLSID[istate, :]]
+        v_hat[le.StIDLIDtoLSID[istate, :]] = le.Pi_soln * v_volume[le.StIDLIDtoLSID[istate, :]]
     end
 
     N_nodes_proj = size(chi_project)[1]
     v_projected_nodes = zeros(N_nodes_proj* dg.N_state)
     for istate = 1:dg.N_state
-        v_projected_nodes[(1:N_nodes_proj) .+ (istate-1)*N_nodes_proj] = chi_project * v_hat[dg.StIDLIDtoLSID[istate, :]]
+        v_projected_nodes[(1:N_nodes_proj) .+ (istate-1)*N_nodes_proj] = chi_project * v_hat[le.StIDLIDtoLSID[istate, :]]
     end
 
     projected_soln = get_solution_variables(v_projected_nodes, param)
@@ -222,7 +222,7 @@ function entropy_project(chi_project, u_hat, dg::DG, param::PhysicsAndFluxParams
 end
 
 
-function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_type::Int, dg::DG, param::PhysicsAndFluxParams)
+function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_type::Int, le::LocalElement, dg::DG, param::PhysicsAndFluxParams)
     # bc_type is int indicating the type of boundary
     # bc_type > 0 indicates boundary to another element (face within the domain
     #             or a periodic boundary condition), assigned according to 
@@ -252,11 +252,11 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
                 if n_face[direction] == -1
                     # face is bottom. Use the information from the external element
                     # which corresponds to the past
-                    f_numerical = uP_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
+                    f_numerical = uP_face[(1:le.N_face) .+ (istate-1) * le.N_face]
                 elseif n_face[direction] == 1
                     # face is bottom. Use internal solution
                     # which corresonds to the past
-                    f_numerical = uM_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
+                    f_numerical = uM_face[(1:le.N_face) .+ (istate-1) * le.N_face]
                 end # if face normal ==0,  leave f_numercal as zeros.
             end
         elseif cmp(param.pde_type, "linear_adv_1D")==0
@@ -289,10 +289,10 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
 
     elseif bc_type == 0
         # Dirichlet: uP_face has been set to be the analtical value in get_solution_at_face()
-        f_numerical = uP_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
+        f_numerical = uP_face[(1:le.N_face) .+ (istate-1) * le.N_face]
     elseif bc_type == -1
         # Outflow: return interior soln
-        f_numerical = uM_face[(1:dg.N_face) .+ (istate-1) * dg.N_face]
+        f_numerical = uM_face[(1:le.N_face) .+ (istate-1) * le.N_face]
     else
         display("Warning: Numerical flux boundary type not recognized!")
     end
@@ -499,7 +499,7 @@ function calculate_two_point_flux(ui,uj, direction, dg::DG, param::PhysicsAndFlu
     return flux_physical
 end
 
-function calculate_two_point_flux(ui,uj, direction, istate::Int64, dg::DG, param::PhysicsAndFluxParams)
+function calculate_two_point_flux(ui,uj, direction, istate::Int64, le::LocalElement, dg::DG, param::PhysicsAndFluxParams)
     f=0
     if cmp(param.pde_type, "euler1D") != 0
         # Redirect to scalar-valued version
@@ -707,7 +707,7 @@ function calculate_euler_exact_solution_Friedrich(t, x, y, Np, dg)
         rhov_local = 2 .+ sin.(2 * π * (x_local - time_local))
         E_local = (2 .+ sin.(2 * π * (x_local - time_local))).^2
         # Indexing: 1:Np .+ Np*3*(ielem-1) .+ (istate-1)*Np
-        u_exact[ (1:Np) .+ Np*3*(ielem-1) .+ (1-1)*Np] = rho_local
+        u_exact[(1:Np) .+ Np*3*(ielem-1) .+ (1-1)*Np] = rho_local
         u_exact[(1:Np) .+ Np*3*(ielem-1) .+ (2-1)*Np]= rhov_local
         u_exact[(1:Np) .+ Np*3*(ielem-1) .+ (3-1)*Np]= E_local
 

@@ -48,16 +48,6 @@ include("test_scripts.jl")
 include("cost_tracking.jl")
 
 
-function calculate_integrated_numerical_entropy(u_hat, dg::DG, param::PhysicsAndFluxParams)
-    
-    if cmp(param.pde_type, "euler1D")==0
-        u = project(dg.chi_soln,u_hat,false,dg, param)
-        s = get_numerical_entropy_function(u, param)
-        return s' * dg.W_soln * dg.J_soln * ones(size(s))
-    else
-        return u_hat' * dg.M * u_hat
-    end
-end
 
 function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
     # N_elem_per_dim is number of elements PER DIM
@@ -300,3 +290,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
 end
 
 main()
+main("spacetime_burgers_OOA.csv")

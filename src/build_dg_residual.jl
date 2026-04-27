@@ -39,7 +39,7 @@ end
 
 function calculate_face_term(iface,istate, f_hat, u_hat, uM, uP, direction, le::LocalElement, dg::DG, param::PhysicsAndFluxParams)
 
-    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction,1,dg, param) #pass s.t. numerical flux chosen by problem physics.
+    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction,1,le, dg, param) #pass s.t. numerical flux chosen by problem physics.
 
     face_flux::AbstractVector{Float64} = le.phi_face[iface] * f_hat
     use_split::Bool = param.alpha_split < 1 && (direction == 1 || (direction == 2 && !param.usespacetime))
@@ -69,11 +69,14 @@ end
 
 function calculate_face_numerical_flux_term(ielem, istate, iface, u_hat, uM, uP, direction, dg::DG, param::PhysicsAndFluxParams)
     # For the skew-symmetric stiffness operator, only the numerical flux part is needed.
+    #
 
+
+    le = dg.le[dg.EIDtoGroupID[ielem]]
     # EIDofexterior is used to detect the type of numerical flux to apply.
     EID_of_exterior = dg.EIDLFIDtoEIDofexterior[ielem,iface]
-    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction, EID_of_exterior, dg, param)
-    face_term = dg.chi_face[iface]' * dg.W_face[iface] * dg.LFIDtoNormal[iface, direction] * (f_numerical)
+    f_numerical = calculate_numerical_flux(uM,uP,dg.LFIDtoNormal[iface,:], istate, direction, EID_of_exterior, le, dg, param)
+    face_term = le.chi_face[iface]' * le.W_face[iface] * dg.LFIDtoNormal[iface, direction] * (f_numerical)
 
     return face_term
 end
@@ -190,59 +193,61 @@ function calculate_dim_cellwise_residual(ielem, istate, u_hat,u_hat_local,direct
     return rhs_local_state
 end
 
-function calculate_volume_terms_skew_symm(istate,u_hat_local, direction, dg::DG, param::PhysicsAndFluxParams)
+function calculate_volume_terms_skew_symm(istate,u_hat_local, direction,le::LocalElement, dg::DG, param::PhysicsAndFluxParams)
 
     #u_local is only on volume nodes. Need to append u on face nodes.
     
     if dg.dim==1
-        u_vf = zeros(dg.N_quad+dg.N_faces*dg.N_face, dg.N_state) # columns are states.
+        u_vf = zeros(le.N_quad+dg.N_faces*le.N_face, dg.N_state) # columns are states.
     else
-        u_vf = zeros(dg.N_quad+2*dg.N_face+2*dg.N_face_y, dg.N_state)
+        u_vf = zeros(le.N_quad+2*le.N_face+2*le.N_face_y, dg.N_state)
     end
 
-    u_tilde_volume = entropy_project(dg.chi_quad, u_hat_local, dg, param)
+    u_tilde_volume = entropy_project(le.chi_quad, u_hat_local,le, dg, param)
     for istate = 1:dg.N_state
-        u_vf[1:dg.N_quad, istate] = u_tilde_volume[(1:dg.N_quad) .+ (istate-1) * dg.N_quad]
+        u_vf[1:le.N_quad, istate] = u_tilde_volume[(1:le.N_quad) .+ (istate-1) * le.N_quad]
     end
     face_ind_start=0
     for iface = 1:dg.N_faces
-        u_tilde_face =  entropy_project(dg.chi_face[iface], u_hat_local, dg, param)
+        u_tilde_face =  entropy_project(le.chi_face[iface], u_hat_local, le, dg, param)
         if dg.dim==1
             N_face=1
             display("Check that nothing got messsed dup for 1D")
         elseif iface < 3
-            N_face = dg.N_face_y
+            N_face = le.N_face_y
         else
-            N_face = dg.N_face
+            N_face = le.N_face
         end
         for istate = 1:dg.N_state
-            u_vf[(1:N_face) .+ dg.N_quad .+ face_ind_start, istate] = u_tilde_face[(1:N_face) .+ (istate-1) * N_face]
+            u_vf[(1:N_face) .+ le.N_quad .+ face_ind_start, istate] = u_tilde_face[(1:N_face) .+ (istate-1) * N_face]
         end
         face_ind_start += N_face
     end
 
     
-    reference_two_point_flux = zeros(dg.N_quad+dg.N_faces*dg.N_face,dg.N_quad+dg.N_faces*dg.N_face)
+    #reference_two_point_flux = zeros(dg.N_quad+dg.N_faces*dg.N_face,dg.N_quad+dg.N_faces*dg.N_face)
+    reference_two_point_flux = zeros(size(u_vf)[1],size(u_vf)[1])
     # Efficiency note: Some terms of QtildemQtildeT are zero, so those shouldn' be computed.
     # Can also take advantage of symmetry.
     for i =1:size(u_vf)[1]
         ui = u_vf[i,:]
         for j = 1:size(u_vf)[1]
             uj=u_vf[j,:]
-            two_pt_flux = calculate_two_point_flux(ui, uj, direction,istate, dg, param)
+            two_pt_flux = calculate_two_point_flux(ui, uj, direction,istate, le, dg, param)
             reference_two_point_flux[i,j] = two_pt_flux[1]
         end
     end
 
-    volume_term = dg.chi_vf * hadamard_product(dg.QtildemQtildeT[:,:,direction], reference_two_point_flux, size(u_vf)[1], size(u_vf)[1]) * ones(size(u_vf)[1])
+    volume_term = le.chi_vf * hadamard_product(le.QtildemQtildeT[:,:,direction], reference_two_point_flux, size(u_vf)[1], size(u_vf)[1]) * ones(size(u_vf)[1])
 
     return volume_term
 end
 
 function calculate_dim_cellwise_residual_skew_symm(ielem,istate,u_hat,u_hat_local,direction, dg::DG, param::PhysicsAndFluxParams)
-    rhs_local = zeros(Float64, dg.N_soln)
+    le = dg.le[dg.EIDtoGroupID[ielem]]
+    rhs_local = zeros(Float64, le.N_soln)
 
-    rhs_local .+= calculate_volume_terms_skew_symm(istate, u_hat_local,direction, dg, param)
+    rhs_local .+= calculate_volume_terms_skew_symm(istate, u_hat_local,direction, le, dg, param)
     
     for iface in 1:dg.N_faces
         uM = get_solution_at_face(true, ielem, iface, u_hat, u_hat_local, dg, param)
