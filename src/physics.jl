@@ -189,8 +189,8 @@ function get_total_energy_ideal_gas(pressure, rho, rhov)
     return pressure/(1.4-1) + 0.5 * rhov * rhov / rho
 end
 
-function transform_physical_to_reference(f_physical, direction, dg::DG)
-    return dg.C_m[direction,direction] * f_physical 
+function transform_physical_to_reference(f_physical, direction,le, dg::DG)
+    return le.C_m[direction,direction] * f_physical 
 end
 
 function entropy_project(chi_project, u_hat, dg::DG, param::PhysicsAndFluxParams)
@@ -299,7 +299,7 @@ function calculate_numerical_flux(uM_face,uP_face,n_face, istate, direction, bc_
 
     if dg.dim == 2
         # in 1D, C_m = 1 so we don't need this step
-        f_numerical = transform_physical_to_reference(f_numerical, direction, dg)
+        f_numerical = transform_physical_to_reference(f_numerical, direction,le, dg)
     end
     return f_numerical
 
@@ -520,7 +520,7 @@ function calculate_two_point_flux(ui,uj, direction, istate::Int64, dg::DG, param
     end
 
     if dg.dim == 2
-        return transform_physical_to_reference(flux_physical, direction, dg)
+        return transform_physical_to_reference(flux_physical, direction,le, dg)
     else
         return flux_physical
     end
@@ -528,7 +528,7 @@ end
 
 
 function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
-    f = zeros(dg.N_quad)
+    f = zeros(length(u))
 
     if direction == 2 && param.usespacetime
         f .+= u
@@ -542,16 +542,16 @@ function calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
 
 end
 
-function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFluxParams)
+function calculate_flux(u, direction, istate::Int64, le::LocalElement, dg::DG, param::PhysicsAndFluxParams)
     f=0
     if cmp(param.pde_type, "euler1D") != 0
         # Redirect to scalar-valued version
         f = calculate_flux(u, direction, dg::DG, param::PhysicsAndFluxParams)
     elseif direction == 1 && cmp(param.pde_type, "euler1D") == 0
-        f = zeros(dg.N_soln) # calculated for one state at a time
+        f = zeros(le.N_soln) # calculated for one state at a time
         u_node = zeros(dg.N_state)
-        for inode = 1:dg.N_soln
-            u_node = u[dg.StIDLIDtoLSID[:,inode]]
+        for inode = 1:le.N_soln
+            u_node = u[le.StIDLIDtoLSID[:,inode]]
             if istate == 1
                 f_node = u_node[2]
             elseif istate == 2
@@ -570,7 +570,7 @@ function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFl
         end
     elseif direction == 2  && cmp(param.pde_type, "euler1D") == 0
         # Time - physical flux will just be advective.
-        f = u[dg.StIDLIDtoLSID[istate,:]]
+        f = u[le.StIDLIDtoLSID[istate,:]]
     end
 
     # No pde_type check as the only vector-valued PDE is Euler
@@ -578,18 +578,18 @@ function calculate_flux(u, direction, istate::Int64, dg::DG, param::PhysicsAndFl
         
     if dg.dim == 2
         # in 1D, C_m = 1 so we don't need this step
-        f = transform_physical_to_reference(f, direction, dg)
+        f = transform_physical_to_reference(f, direction,le, dg)
     end
-    f_hat = dg.Pi_quad * f
+    f_hat = le.Pi_quad * f
 
     return f_hat#,f_f
 end
 
-function calculate_face_terms_nonconservative(chi_face, u_hat, direction, dg::DG, param::PhysicsAndFluxParams)
+function calculate_face_terms_nonconservative(chi_face, u_hat, direction, le::LocalElement, dg::DG, param::PhysicsAndFluxParams)
     if cmp(param.pde_type,"burgers2D")==0 || (cmp(param.pde_type,"burgers1D")==0 && direction == 1)
         u_physical = chi_face*u_hat
         f_physical =  0.5 * (u_physical) .* (u_physical)
-        f_reference = transform_physical_to_reference(f_physical, direction, dg)
+        f_reference = transform_physical_to_reference(f_physical, direction,le, dg)
     else
         display("Warning: Nonconservative is only defined for Burgers!")
         return 0*(chi_face*u_hat)

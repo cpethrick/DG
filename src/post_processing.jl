@@ -79,6 +79,16 @@ function calculate_conservation_spacetime(u_hat, dg::DG, param::PhysicsAndFluxPa
     return conservation
 end
 
+function calculate_integrated_numerical_entropy(u_hat,le, dg::DG, param::PhysicsAndFluxParams)
+    
+    if cmp(param.pde_type, "euler1D")==0
+        u = project(dg.chi_soln,u_hat,false, le, dg, param)
+        s = get_numerical_entropy_function(u, param)
+        return s' * le.W_soln * le.J_soln * ones(size(s))
+    else
+        return u_hat' * le.M * u_hat
+    end
+end
 function integrate_entropy_on_temporal_face(u_face, iface, dg::DG, param::PhysicsAndFluxParams)
 
     if cmp(param.pde_type, "burgers1D")==0
@@ -254,30 +264,34 @@ end
 
 function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::PhysicsAndFluxParams, return_overint_vecs=false)
     dim = dg.dim
-    Np_overint_per_dim = dg.N_soln_per_dim+10
+    Np_overint_per_dim = round(Int,dg.max_N_soln^(1/dg.dim)+10)
     Np_overint = (Np_overint_per_dim)^dim
     r_overint, w_overint = FastGaussQuadrature.gausslobatto(Np_overint_per_dim)
     (x_overint, y_overint) = build_coords_vectors(r_overint, dg)
-    if dim==1
-        chi_overint = vandermonde1D(r_overint,dg.r_basis)
-        W_overint = LinearAlgebra.diagm(w_overint) # diagonal matrix holding quadrature weights
-        J_overint = LinearAlgebra.diagm(ones(size(r_overint))*dg.J_soln[1]) #assume constant jacobian
-    elseif dim==2
-        chi_overint = vandermonde2D(r_overint, dg.r_basis, dg)
-        chi_overint = vandermonde2D(r_overint, dg.r_basis, r_overint, dg.r_basis_y, dg)
-        W_overint = LinearAlgebra.diagm(vec(w_overint*w_overint'))
-        J_overint = LinearAlgebra.diagm(ones(length(r_overint)^dim)*dg.J_soln[1]) #assume constant jacobian
-    end
 
     u_exact_overint = calculate_exact_solution(x_overint, y_overint,Np_overint, current_time, dg, param) 
     u_calc_final_overint = zeros(size(x_overint))
     u0_overint = zeros(size(x_overint))
-    u_calc_final = zeros(dg.N_soln*dg.N_elem)
+    u_calc_final = zeros(dg.N_soln_global)
+    if dim==1
+        W_overint = LinearAlgebra.diagm(w_overint) # diagonal matrix holding quadrature weights
+        J_overint = LinearAlgebra.diagm(ones(size(r_overint))*dg.le[dg.unique_GroupIDs[1]].J_soln) #assume constant jacobian
+    elseif dim==2
+        W_overint = LinearAlgebra.diagm(vec(w_overint*w_overint'))
+        J_overint = LinearAlgebra.diagm(ones(length(r_overint)^dim)*dg.le[dg.unique_GroupIDs[1]].J_soln) #assume constant jacobian
+    end
     for ielem = 1:dg.N_elem
+        le = dg.le[dg.EIDtoGroupID[ielem]]
+        if dim==1
+            chi_overint = vandermonde1D(r_overint,le.r_basis)
+        elseif dim==2
+            chi_overint = vandermonde2D(r_overint, le.r_basis, dg)
+            chi_overint = vandermonde2D(r_overint, le.r_basis, r_overint, le.r_basis_y, dg)
+        end
         #Extract only first state here
-        u_hat_local = zeros(dg.N_soln)
+        u_hat_local = zeros(le.N_soln)
         u0_hat_local = zeros(size(u_hat_local)) 
-        for inode = 1:dg.N_soln
+        for inode = 1:le.N_soln
             # only istate = 1, which is velocity for lin adv or burgers
             # and density for euler
             u_hat_local[inode] = u_hat[dg.StIDGIDtoGSID[1,dg.EIDLIDtoGID_basis[ielem,inode]]]
@@ -285,7 +299,7 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
         end
         u_calc_final_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u_hat_local
         u0_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u0_hat_local
-        u_calc_final[(ielem-1)*dg.N_soln+1:(ielem)*dg.N_soln] .= dg.chi_soln* u_hat_local
+        u_calc_final[(ielem-1)*le.N_soln+1:(ielem)*le.N_soln] .= le.chi_soln* u_hat_local
     end
     u_diff = u_calc_final_overint .- u_exact_overint
 
@@ -323,11 +337,12 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
     entropy_final_calc = 0
     entropy_initial = 0
     for ielem = 1:dg.N_elem
+        le = dg.le[dg.EIDtoGroupID[ielem]]
         L2_error += (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])
 
         if !param.usespacetime
-            entropy_final_calc += calculate_integrated_numerical_entropy(u_hat[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], dg, param)
-            entropy_initial += calculate_integrated_numerical_entropy(u_hat0[(ielem-1)*dg.N_soln_dof+1:(ielem)*dg.N_soln_dof], dg, param)
+            entropy_final_calc += calculate_integrated_numerical_entropy(u_hat[(ielem-1)*le.N_soln_dof+1:(ielem)*le.N_soln_dof], le, dg, param)
+            entropy_initial += calculate_integrated_numerical_entropy(u_hat0[(ielem-1)*le.N_soln_dof+1:(ielem)*le.N_soln_dof], le, dg, param)
         end
         
     end
