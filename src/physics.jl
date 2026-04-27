@@ -606,12 +606,21 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
         #u0 = cos.(π * (x))
         if cmp(param.pde_type,  "euler1D")==0
 
-            if cmp(param.solution_initialization, "smooth_gassner")==0
-                u0 = calculate_euler_exact_solution_Gassner(-1, x, y, dg.N_soln, dg) .+ 0.1
-            elseif cmp(param.solution_initialization, "smooth_friedrich")==0
-                u0 = calculate_euler_exact_solution_Friedrich(-1, x, y, dg.N_soln, dg) .+ 0.1
-            elseif cmp(param.solution_initialization, "disc")==0
-                u0 = initial_condition_Friedrichs_4_6(x, dg.N_soln)
+            u0 = zeros(dg.N_soln_dof_global)
+            display(dg.N_soln_dof_global)
+            for ielem in 1:dg.N_elem
+                x_local = dg.x[dg.EIDLIDtoGID_soln[ielem,:]]
+                y_local = dg.y[dg.EIDLIDtoGID_soln[ielem,:]]
+                display(x_local)
+                le = dg.le[dg.EIDtoGroupID[ielem]]
+                if cmp(param.solution_initialization, "smooth_gassner")==0
+                    display(calculate_euler_exact_solution_Gassner(-1, x_local, y_local, le.N_soln, dg) .+ 0.1)
+                    u0[dg.StIDGIDtoGSID[:,dg.EIDLIDtoGID_soln[ielem,:]]] = calculate_euler_exact_solution_Gassner(-1, x_local, y_local, le.N_soln, dg) .+ 0.1
+                elseif cmp(param.solution_initialization, "smooth_friedrich")==0
+                    u0[dg.StIDGIDtoGSID[:,dg.EIDLIDtoGID_soln[ielem,:]]] = calculate_euler_exact_solution_Friedrich(-1, x_local, y_local, le.N_soln, dg) .+ 0.1
+                elseif cmp(param.solution_initialization, "disc")==0
+                    u0[dg.StIDGIDtoGSID[:,dg.EIDLIDtoGID_soln[ielem,:]]] = initial_condition_Friedrichs_4_6(x_local, le.N_soln)
+                end
             end
         else
             u0 = ones(dg.N_soln_dof_global)
@@ -779,7 +788,7 @@ function calculate_source_terms(istate::Int, x::AbstractVector{Float64},y::Abstr
             time = t* ones(size(x))
         end
         # ordering is [elem1st1; elem1st2; elem1st3; elem2st1; elem2st2; ...]
-        Q = zeros(dg.N_soln)
+        Q = zeros(length(x))
         gamm1=0.4
         #for ielem in 1:dg.N_elem
         if cmp(param.solution_initialization, "smooth_friedrich")==0
@@ -835,11 +844,11 @@ function calculate_solution_on_Dirichlet_boundary(x::AbstractVector{Float64},y::
         ==#
     elseif cmp(param.pde_type, "euler1D") == 0
         if cmp(param.solution_initialization,"smooth_gassner")==0
-            return calculate_euler_exact_solution_Gassner(0, x, y, dg.N_face, dg)
+            return calculate_euler_exact_solution_Gassner(0, x, y, length(x), dg)
         elseif cmp(param.solution_initialization, "smooth_friedrich")==0
-            return calculate_euler_exact_solution_Friedrich(0, x, y, dg.N_face, dg)
+            return calculate_euler_exact_solution_Friedrich(0, x, y, length(x), dg)
         elseif cmp(param.solution_initialization, "disc")==0
-            return initial_condition_Friedrichs_4_6(x, dg.N_face)
+            return initial_condition_Friedrichs_4_6(x, length(x))
         end
 
     else

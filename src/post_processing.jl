@@ -100,7 +100,7 @@ function integrate_entropy_on_temporal_face(u_face, iface, le::LocalElement, dg:
         # Integrate in L2.
 
         s_vec = get_numerical_entropy_function(u_face,param)
-        entropy_integration = s_vec' * dg.W_face[iface] * dg.J_face * ones(size(s_vec))
+        entropy_integration = s_vec' * le.W_face[iface] * le.J_face * ones(size(s_vec))
     end
 
     return entropy_integration

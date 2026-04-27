@@ -299,11 +299,11 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
 
     # Count number of global DOFs for allocating arrasy
     if dg.N_unique_GroupIDs == 1
-        dg.N_soln_global = dg.le[dg.unique_GroupIDs[1]].N_soln_dof * dg.N_elem
+        dg.N_soln_global = dg.le[dg.unique_GroupIDs[1]].N_soln * dg.N_elem
         dg.max_N_soln = dg.le[dg.unique_GroupIDs[1]].N_soln
     else
         dg.max_N_soln = 0
-        dg.N_soln_dof_global = 0
+        dg.N_soln_global = 0
         for igroup = dg.unique_GroupIDs
             occurences = count(==(igroup), dg.EIDtoGroupID)
             dg.N_soln_global += occurences * dg.le[igroup].N_soln
