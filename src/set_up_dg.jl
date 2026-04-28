@@ -282,6 +282,13 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     ## Define group IDs
     # For now, all same group (ones)
     dg.EIDtoGroupID = ones(dg.N_elem)
+    for ielem in 1:dg.N_elem
+        if dg.VX[ielem] < 0.5
+            dg.EIDtoGroupID[ielem] = 1
+        else
+            dg.EIDtoGroupID[ielem] = 3
+        end
+    end
 
     dg.N_unique_GroupIDs = length(unique(dg.EIDtoGroupID))
     dg.unique_GroupIDs = unique(dg.EIDtoGroupID)
@@ -293,8 +300,14 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         solnnodes, basisnodes, quadnodes, quadnodes_overintegration, fluxreconstructionC,
         usespacetime, y_dir_overintegration,
         jacobian, dg.N_faces, dg.delta_x, cell_length)
+    display("##### Operators for local element 3 #####")
+    LE2 = init_LocalElement(P, dim, N_state,
+        solnnodes, basisnodes, quadnodes, quadnodes_overintegration, fluxreconstructionC,
+        usespacetime, y_dir_overintegration,
+        jacobian, dg.N_faces, dg.delta_x, cell_length)
     dg.le = Dict{Int, LocalElement}()
     dg.le[1] = LE1
+    dg.le[3] = LE2
     display("##### Done local element allocations #####")
 
     # Count number of global DOFs for allocating arrasy
@@ -337,24 +350,28 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
             end
         end
     else
-        dg.GIDtoLID = zeros(length(dg.N_soln_dof_global))
-        dg.EIDLIDtoGID_basis = zeros(dg.N_elem, dg.max_N_soln_dof) # size is based on largest number in all groups
+        dg.GIDtoLID = zeros(dg.N_soln_dof_global)
+        dg.EIDLIDtoGID_basis = zeros(dg.N_elem, dg.max_N_soln) # size is based on largest number in all groups
         current_starting_ind = 1
         dg.StIDGIDtoGSID = zeros(dg.N_state, dg.N_soln_dof_global)
         ctr_StIDGIDtoGSID=1
         for ielem in 1:dg.N_elem
-            N_dof_local = dg.le[EIDtoGroupID[ielem]].N_soln_dof
-            dg.GIDtoLID[current_starting_ind:current_starting_ind+N_dof_local] = 1:N_dof_local
+            N_soln_local = dg.le[dg.EIDtoGroupID[ielem]].N_soln
+            display(N_soln_local)
+            dg.GIDtoLID[current_starting_ind:current_starting_ind+N_soln_local-1] = 1:N_soln_local
 
-            dg.EIDLIDtoGID_basis[ielem, :] = [current_starting_ind:current_starting_ind+N_dof_local, zeros(dg.max_N_soln_dof-N_dof_local)]
+            display("current_starting_ind")
+            display(dg.max_N_soln)
+            display([Array(current_starting_ind:current_starting_ind+N_soln_local-1); zeros(dg.max_N_soln-N_soln_local)])
+            dg.EIDLIDtoGID_basis[ielem, :] = [Array(current_starting_ind:current_starting_ind+N_soln_local-1); zeros(dg.max_N_soln-N_soln_local)]
 
             for istate = 1:dg.N_state
-                for ipoint = 1:dg.N_soln
+                for ipoint = 1:N_soln_local
                     dg.StIDGIDtoGSID[istate,ipoint+current_starting_ind-1]=ctr_StIDGIDtoGSID
                     ctr_StIDGIDtoGSID+=1
                 end
             end
-            current_starting_ind+=N_dof_local
+            current_starting_ind+=N_soln_local
 
 
         end
@@ -370,16 +387,18 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         end
     else
         # Loop through all elements
+        dg.x=[]
+        dg.y=[]
         for  elemID in 1:dg.N_elem
         
-            x_index = mod(ielem-1,dg.N_elem_per_dim)+1
+            x_index = mod(elemID-1,dg.N_elem_per_dim)+1
             VX = dg.VX[x_index]
-            y_index = Int(ceil(ielem/dg.N_elem_per_dim))
+            y_index = Int(ceil(elemID/dg.N_elem_per_dim))
             VY = dg.VX[y_index]
 
-            local_x, local_y = build_local_coords_vectors_2D(dg.le[EIDtoGroupID[elemID]].r_soln, dg.le[EIDtoGroupID[elemID]].r_soln_y, VX, VY, dg.delta_x)
-            # append to dg.x and dg.y
-            #
+            local_x, local_y = build_local_coords_vectors_2D(dg.le[dg.EIDtoGroupID[elemID]].r_soln, dg.le[dg.EIDtoGroupID[elemID]].r_soln_y, VX, VY, dg.delta_x)
+            dg.x = [dg.x; local_x]
+            dg.y = [dg.y; local_y]
         end
     end
 
