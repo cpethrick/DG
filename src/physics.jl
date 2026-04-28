@@ -599,8 +599,6 @@ end
 
 function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
 
-    display("====INIT====")
-
     x = dg.x
     y = dg.y
 
@@ -610,32 +608,16 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
 
             u0 = zeros(dg.N_soln_dof_global)
             for ielem in 1:dg.N_elem
-                display("ielem")
-                display(ielem)
                 x_local = dg.x[dg.EIDLIDtoGID_soln[ielem,:]]
                 y_local = dg.y[dg.EIDLIDtoGID_soln[ielem,:]]
-                display(x_local)
-                display(y_local)
                 le = dg.le[dg.EIDtoGroupID[ielem]]
                 if cmp(param.solution_initialization, "smooth_gassner")==0
-                    display("Resulting initialization")
-                    display(calculate_euler_exact_solution_Gassner(-1, x_local, y_local, le.N_soln, dg) .+ 0.1)
-                    display("IDs")
-                    display(dg.EIDLIDtoGID_soln[ielem,:])
-                    display(dg.StIDGIDtoGSID[:,dg.EIDLIDtoGID_soln[ielem,:]])
                     # note the transpose
                     u0[dg.StIDGIDtoGSID[:,dg.EIDLIDtoGID_soln[ielem,:]]'] = calculate_euler_exact_solution_Gassner(-1, x_local, y_local, le.N_soln, dg) .+ 0.1
-                    display("Current u0")
-                    display(u0)
                 elseif cmp(param.solution_initialization, "smooth_friedrich")==0
                     # note the transpose
                     u0[dg.StIDGIDtoGSID[:,dg.EIDLIDtoGID_soln[ielem,:]]'] = calculate_euler_exact_solution_Friedrich(-1, x_local, y_local, le.N_soln, dg) .+ 0.1
                 elseif cmp(param.solution_initialization, "disc")==0
-                    display("Resulting initialization")
-                    display(initial_condition_Friedrichs_4_6(x_local, le.N_soln))
-                    display("IDs")
-                    display(dg.EIDLIDtoGID_soln[ielem,:])
-                    display(dg.StIDGIDtoGSID[:,dg.EIDLIDtoGID_soln[ielem,:]])
                     # note the transpose
                     u0[dg.StIDGIDtoGSID[:,dg.EIDLIDtoGID_soln[ielem,:]]'] = initial_condition_Friedrichs_4_6(x_local, le.N_soln)
                 end

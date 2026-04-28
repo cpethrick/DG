@@ -84,7 +84,7 @@ end
 
 function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_global, u_hat_local, dg::DG, param::PhysicsAndFluxParams)
     if dg.N_unique_GroupIDs > 1
-        display("More than 1 group ID will break get_solution_at_face()")
+        #display("More than 1 group ID will break get_solution_at_face()")
     end
 
     le = dg.le[dg.EIDtoGroupID[ielem]]

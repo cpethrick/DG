@@ -282,7 +282,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     ## Define group IDs
     # For now, all same group (ones)
     dg.EIDtoGroupID = ones(dg.N_elem)
-    for ielem in 1:dg.N_elem
+    for ielem in 1:dg.N_elem_per_dim
         if dg.VX[ielem] < 0.5
             dg.EIDtoGroupID[ielem] = 1
         else
@@ -357,12 +357,8 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         ctr_StIDGIDtoGSID=1
         for ielem in 1:dg.N_elem
             N_soln_local = dg.le[dg.EIDtoGroupID[ielem]].N_soln
-            display(N_soln_local)
             dg.GIDtoLID[current_starting_ind:current_starting_ind+N_soln_local-1] = 1:N_soln_local
 
-            display("current_starting_ind")
-            display(dg.max_N_soln)
-            display([Array(current_starting_ind:current_starting_ind+N_soln_local-1); zeros(dg.max_N_soln-N_soln_local)])
             dg.EIDLIDtoGID_basis[ielem, :] = [Array(current_starting_ind:current_starting_ind+N_soln_local-1); zeros(dg.max_N_soln-N_soln_local)]
 
             for istate = 1:dg.N_state
