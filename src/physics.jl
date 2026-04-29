@@ -608,18 +608,21 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
 
             u0 = zeros(dg.N_soln_dof_global)
             for ielem in 1:dg.N_elem
-                x_local = dg.x[dg.EIDLIDtoGID_soln[ielem,:]]
-                y_local = dg.y[dg.EIDLIDtoGID_soln[ielem,:]]
+                x_local = dg.x[filter(!iszero,dg.EIDLIDtoGID_soln[ielem,:])]
+                y_local = dg.y[filter(!iszero,dg.EIDLIDtoGID_soln[ielem,:])]
                 le = dg.le[dg.EIDtoGroupID[ielem]]
                 if cmp(param.solution_initialization, "smooth_gassner")==0
                     # note the transpose
-                    u0[dg.StIDGIDtoGSID[:,dg.EIDLIDtoGID_soln[ielem,:]]'] = calculate_euler_exact_solution_Gassner(-1, x_local, y_local, le.N_soln, dg) .+ 0.1
+                    u0[dg.StIDGIDtoGSID[:,filter(!iszero,dg.EIDLIDtoGID_soln[ielem,:])]'] =  
+                                    calculate_euler_exact_solution_Gassner(-1, x_local, y_local, le.N_soln, dg) .+ 0.1
                 elseif cmp(param.solution_initialization, "smooth_friedrich")==0
                     # note the transpose
-                    u0[dg.StIDGIDtoGSID[:,dg.EIDLIDtoGID_soln[ielem,:]]'] = calculate_euler_exact_solution_Friedrich(-1, x_local, y_local, le.N_soln, dg) .+ 0.1
+                    u0[dg.StIDGIDtoGSID[:,filter(!iszero,dg.EIDLIDtoGID_soln[ielem,:])]'] = 
+                                    calculate_euler_exact_solution_Friedrich(-1, x_local, y_local, le.N_soln, dg) .+ 0.1
                 elseif cmp(param.solution_initialization, "disc")==0
                     # note the transpose
-                    u0[dg.StIDGIDtoGSID[:,dg.EIDLIDtoGID_soln[ielem,:]]'] = initial_condition_Friedrichs_4_6(x_local, le.N_soln)
+                    u0[dg.StIDGIDtoGSID[:,filter(!iszero,dg.EIDLIDtoGID_soln[ielem,:])]'] = 
+                                    initial_condition_Friedrichs_4_6(x_local, le.N_soln)
                 end
             end
         else
@@ -641,6 +644,7 @@ function calculate_initial_solution(dg::DG, param::PhysicsAndFluxParams)
     else
         #u0 = 0.2* sin.(π * x) .+ 0.01
         u0 = 2*sin.(π * (x+y)) .+ 1.01
+        u0 = cos.(π * (x))
     end
     return u0
 end

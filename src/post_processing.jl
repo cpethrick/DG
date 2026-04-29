@@ -240,7 +240,10 @@ function display_plots(x_overint_1D,x_overint,y_overint,u0_overint_1D, u_calc_fi
         ax.yaxis.grid(true, which="major", color="k")
     end
     PyPlot.plot(x_overint, y_overint,"o", color="yellowgreen", label="overintegration", markersize=0.25)
-    PyPlot.plot(dg.x, dg.y, "o", color="darkolivegreen", label="volume nodes")
+    marker_list = ['v', '^', 'o', '+', 's', 'p', '*']
+    for igroup in dg.unique_GroupIDs
+        PyPlot.plot(dg.x[dg.GroupIDtoGID[igroup]], dg.y[dg.GroupIDtoGID[igroup]], "o", color="C"*string(igroup), markersize = 10-2*igroup,label="volume nodes")
+    end
     pltname = string("grid", dg.N_elem_per_dim, ".pdf")
     PyPlot.savefig(pltname)
 
@@ -309,7 +312,8 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
         end
         u_calc_final_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u_hat_local
         u0_overint[(ielem-1)*Np_overint+1:(ielem)*Np_overint] .= chi_overint * u0_hat_local
-        u_calc_final[(ielem-1)*le.N_soln+1:(ielem)*le.N_soln] .= le.chi_soln* u_hat_local
+        #u_calc_final[(ielem-1)*le.N_soln+1:(ielem)*le.N_soln] .= le.chi_soln* u_hat_local
+        u_calc_final[filter(!iszero,dg.EIDLIDtoGID_soln[ielem,:])] .= le.chi_soln* u_hat_local
     end
     u_diff = u_calc_final_overint .- u_exact_overint
 
@@ -351,8 +355,10 @@ function post_process(u_hat, current_time::Float64, u_hat0, dg::DG, param::Physi
         L2_error += (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint]') * W_overint * J_overint * (u_diff[(ielem-1)*Np_overint+1:(ielem)*Np_overint])
 
         if !param.usespacetime
-            entropy_final_calc += calculate_integrated_numerical_entropy(u_hat[(ielem-1)*le.N_soln_dof+1:(ielem)*le.N_soln_dof], le, dg, param)
-            entropy_initial += calculate_integrated_numerical_entropy(u_hat0[(ielem-1)*le.N_soln_dof+1:(ielem)*le.N_soln_dof], le, dg, param)
+            #entropy_final_calc += calculate_integrated_numerical_entropy(u_hat[(ielem-1)*le.N_soln_dof+1:(ielem)*le.N_soln_dof], le, dg, param)
+            #entropy_initial += calculate_integrated_numerical_entropy(u_hat0[(ielem-1)*le.N_soln_dof+1:(ielem)*le.N_soln_dof], le, dg, param)
+            entropy_final_calc += calculate_integrated_numerical_entropy(u_hat[filter(!iszero,dg.EIDLIDtoGID_basis[ielem,:])], le, dg, param)
+            entropy_initial += calculate_integrated_numerical_entropy(u_hat0[filter(!iszero,dg.EIDLIDtoGID_basis[ielem,:])], le, dg, param)
         end
         
     end

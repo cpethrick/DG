@@ -10,7 +10,8 @@ mutable struct DG
 
     # Category 2:defined from Category 1.
     N_elem::Int
-    EIDtoGroupID::Vector{Int} #NEW
+    EIDtoGroupID::Vector{Int}
+    GroupIDtoGID::Dict{Int,Vector{Int}}
     N_unique_GroupIDs::Int
     unique_GroupIDs::Vector{Int}
     max_N_soln::Int
@@ -32,7 +33,8 @@ mutable struct DG
     N_faces::Int
     #N_face::Int # points on each face parallel to x-axis. I assume that the face nodes are 1D flux nodes.
     #N_face_y::Int # points on each face parallel to y-axis. I assume that the face nodes are 1D flux nodes.
-    VX::Vector{Float64} # Array of points defining the extremes of each element along one dimension
+    VX::Vector{Float64} # Array of points defining the extremes of each element along X dimension
+    VY::Vector{Float64} # Array of points defining the extremes of each element along Y dimension - if 1D, this will be zeros
     delta_x::Float64 # length of evenly-spaced Cartesian elements
     x::Vector{Float64} # physical x coords, index are global ID.
     y::Vector{Float64} # physical y coords, index are global ID.
@@ -265,8 +267,12 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         end
     end
 
-
     dg.VX = range(domain_x_limits[1],domain_x_limits[2], dg.N_elem_per_dim+1) |> collect
+    if dim==2
+        dg.VY = dg.VX
+    else
+        dg.VY = zeros(length(dg.VX))
+    end
     display("Elements per dim:")
     display(dg.N_elem_per_dim)
     dg.delta_x = dg.VX[2]-dg.VX[1]
@@ -282,11 +288,11 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
     ## Define group IDs
     # For now, all same group (ones)
     dg.EIDtoGroupID = ones(dg.N_elem)
-    for ielem in 1:dg.N_elem_per_dim
-        if dg.VX[ielem] < 0.5
+    for ielem in 1:dg.N_elem
+        if (ielem+1) % dg.N_elem_per_dim < 0.4*dg.N_elem_per_dim
             dg.EIDtoGroupID[ielem] = 1
         else
-            dg.EIDtoGroupID[ielem] = 3
+            dg.EIDtoGroupID[ielem] = 2
         end
     end
 
@@ -301,13 +307,13 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         usespacetime, y_dir_overintegration,
         jacobian, dg.N_faces, dg.delta_x, cell_length)
     display("##### Operators for local element 3 #####")
-    LE2 = init_LocalElement(P, dim, N_state,
+    LE2 = init_LocalElement(P+1, dim, N_state,
         solnnodes, basisnodes, quadnodes, quadnodes_overintegration, fluxreconstructionC,
         usespacetime, y_dir_overintegration,
         jacobian, dg.N_faces, dg.delta_x, cell_length)
     dg.le = Dict{Int, LocalElement}()
     dg.le[1] = LE1
-    dg.le[3] = LE2
+    dg.le[2] = LE2
     display("##### Done local element allocations #####")
 
     # Count number of global DOFs for allocating arrasy
@@ -374,6 +380,7 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         dg.EIDLIDtoGID_soln = dg.EIDLIDtoGID_basis
     end
 
+    dg.GroupIDtoGID = Dict{Int, Vector{Int}}()
     if dg.N_unique_GroupIDs == 1
         # Uniform elements
         if dim==1
@@ -381,20 +388,33 @@ function init_DG(P::Int, dim::Int, N_elem_per_dim::Int, N_state::Int, domain_x_l
         elseif dim==2
             (dg.x, dg.y) = build_coords_vectors_2D(dg.le[dg.unique_GroupIDs[1]].r_soln, dg.le[dg.unique_GroupIDs[1]].r_soln_y, dg) 
         end
+        dg.GroupIDtoGID[dg.unique_GroupIDs[1]] = 1:dg.N_soln_global
     else
+        for igroup in dg.unique_GroupIDs
+            dg.GroupIDtoGID[igroup] = []
+        end
         # Loop through all elements
         dg.x=[]
         dg.y=[]
-        for  elemID in 1:dg.N_elem
+        for  ielem in 1:dg.N_elem
         
-            x_index = mod(elemID-1,dg.N_elem_per_dim)+1
+            x_index = mod(ielem-1,dg.N_elem_per_dim)+1
             VX = dg.VX[x_index]
-            y_index = Int(ceil(elemID/dg.N_elem_per_dim))
-            VY = dg.VX[y_index]
+            y_index = Int(ceil(ielem/dg.N_elem_per_dim))
+            VY = dg.VY[y_index]
 
-            local_x, local_y = build_local_coords_vectors_2D(dg.le[dg.EIDtoGroupID[elemID]].r_soln, dg.le[dg.EIDtoGroupID[elemID]].r_soln_y, VX, VY, dg.delta_x)
+            if dim==2
+                local_x, local_y = build_local_coords_vectors_2D(dg.le[dg.EIDtoGroupID[ielem]].r_soln, dg.le[dg.EIDtoGroupID[ielem]].r_soln_y, VX, VY, dg.delta_x)
+            else
+                local_x = build_local_coords_vectors_1D(dg.le[dg.EIDtoGroupID[ielem]].r_soln, VX, dg.delta_x)
+                local_y = zeros(size(local_x))
+            end
             dg.x = [dg.x; local_x]
             dg.y = [dg.y; local_y]
+
+            # append this element's GIDs to the group's list of GIDs
+            dg.GroupIDtoGID[dg.EIDtoGroupID[ielem]] = [dg.GroupIDtoGID[dg.EIDtoGroupID[ielem]]; filter(!iszero,dg.EIDLIDtoGID_soln[ielem,:])]
+
         end
     end
 

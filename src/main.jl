@@ -78,6 +78,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
 
     u0 = calculate_initial_solution(dg, param)
     u_hat0 = zeros(dg.N_soln_dof_global)
+    display(u0)
+    display(dg.x)
     for ielem = 1:dg.N_elem
         u_local_state = zeros(dg.le[dg.EIDtoGroupID[ielem]].N_soln)
         for istate = 1:dg.N_state
@@ -85,7 +87,7 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
                 u_local_state[inode] = u0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_soln[ielem,inode]]]
             end
             u_hat_local_state = dg.le[dg.EIDtoGroupID[ielem]].Pi_soln*u_local_state
-            u_hat0[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_basis[ielem,:]]] = u_hat_local_state
+            u_hat0[dg.StIDGIDtoGSID[istate,filter(!iszero,dg.EIDLIDtoGID_basis[ielem,:])]] = u_hat_local_state
         end
     end
 
@@ -106,6 +108,8 @@ function setup_and_solve(N_elem_per_dim,P,param::PhysicsAndFluxParams)
         end
         display("Beginning time loop")
         (u_hat,current_time) = physicaltimesolve(u_hat0, dt, Nsteps, dg, param)
+        #u_hat = u_hat0
+        #current_time=0.0
         display("Done time loop")
         L2_error, Linf_error, entropy_change = post_process(u_hat, current_time, u_hat0, dg, param) 
     elseif param.read_soln_from_file
@@ -290,4 +294,4 @@ function main(paramfile::AbstractString="default_parameters.csv")
 end
 
 main()
-main("spacetime_euler_OOA.csv")
+main("spacetime_euler_entropy_stability.csv")

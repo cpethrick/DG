@@ -95,18 +95,25 @@ function get_solution_at_face(find_interior_values::Bool, ielem, iface, u_hat_gl
         # Select the appropriate elem to find values from
         elem = dg.EIDLFIDtoEIDofexterior[ielem,iface]
         if elem > 0
+            le_elem = dg.le[dg.EIDtoGroupID[elem]]
             # Select the appropriate face of the neighboring elem
             face = dg.LFIDtoLFIDofexterior[iface]
             # find solution from the element whose ID was found 
             #Find local solution of the element of interest if we seek an exterior value
-            u_hat_local_exterior_elem = zeros(le.N_soln_dof)
-            for inode = 1:le.N_soln
-                for istate = 1:dg.N_state
-                    u_hat_local_exterior_elem[le.StIDLIDtoLSID[istate,inode]] = u_hat_global[dg.StIDGIDtoGSID[istate,dg.EIDLIDtoGID_basis[elem,inode]]]
-                end
+            u_hat_local_exterior_elem = zeros(le_elem.N_soln_dof)
+            for istate = 1:dg.N_state
+                u_hat_local_exterior_elem[le_elem.StIDLIDtoLSID[istate,:]] = u_hat_global[dg.StIDGIDtoGSID[istate,filter(!iszero,dg.EIDLIDtoGID_basis[elem,:])]]
             end
             # interpolate to face
-            u_face = project(le.chi_face[face], u_hat_local_exterior_elem, param.use_skew_symmetric_stiffness_operator, le,dg, param)
+            if (dg.EIDtoGroupID[ielem] != dg.EIDtoGroupID[elem] && dg.dim==2)
+                # in 2D, need to build a different projection for this interface.
+                # For entropy stability, we need the special mortar element treatment.
+                chi_face = assembleFaceVandermonde2D(le_elem.r_basis, le.r_quad, le_elem.r_basis_y, le.r_quad_y,4)[face]
+            else
+                chi_face = le_elem.chi_face[face]
+            end
+
+            u_face = project(chi_face, u_hat_local_exterior_elem, param.use_skew_symmetric_stiffness_operator, le_elem,dg, param)
         elseif elem == 0 
             # elemID of 0 corresponds to Dirichlet boundary (weak imposition).
             # Find x and y coords of the face and pass to a physics function
